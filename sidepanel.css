@@ -302,6 +302,12 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 
 /* ---------- tabs ---------- */
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--surface-raised); }
+
+/* Each tab's blocks (toggle, search, list…) get the same breathing room, and a thin rule
+   separates the input area from the list below it. */
+[role="tabpanel"] { display: flex; flex-direction: column; gap: var(--space-3); }
+[role="tabpanel"][hidden] { display: none; }
+.section-divider { border: 0; border-top: 1px solid var(--surface-raised); margin: var(--space-2) 0 0; width: 100%; }
 .tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink-muted); padding: var(--space-2) var(--space-3); font-weight: 600; }
 .tab:hover:not(:disabled) { color: var(--accent); border-color: transparent; }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -318,6 +324,7 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 .sess-info { flex: 1; min-width: 0; cursor: pointer; }
 .sess-title { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sess-meta { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.projection-card .sess-meta { margin-top: 6px; }
 .icon-btn { border: none; background: none; padding: 4px; color: var(--ink-muted); }
 .icon-btn:hover:not(:disabled) { color: var(--accent); }
 .icon-btn.del:hover:not(:disabled) { color: var(--accent-red); }
