@@ -19,9 +19,13 @@ initTrackingToggle();
 refreshLockStatus();
 refreshInstances();
 refreshProjections();
+let lastUnmatchedHostsKey = null;
 async function refreshUnmatchedHosts() {
   const response = await send({ type: "GET_UNMATCHED_HOSTS" });
   if (!response || !response.ok) return;
+  const key = response.hosts.join("\n");
+  if (key === lastUnmatchedHostsKey) return; // unchanged: keep the DOM (and any button mid-click) as is
+  lastUnmatchedHostsKey = key;
   const container = document.getElementById("unmatchedHosts");
   container.innerHTML = "";
   for (const host of response.hosts) {

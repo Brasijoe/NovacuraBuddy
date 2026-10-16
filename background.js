@@ -60,7 +60,7 @@ function init() {
     const text = await (await fetch(chrome.runtime.getURL("lib/excluded-projections.txt"))).text();
     excludedSet = ProjectionFilter.parseExcludedList(text);
     await restorePersistedState();
-    RecorderCapture.init();
+    await RecorderCapture.init().catch((e) => logError("Recorder init failed:", e));
     // Without this, a Designer tab already open and idle before the worker starts/restarts stays
     // invisible until its next tabs.onUpdated fires — which a tab that's just sitting there open
     // may never do — leaving Create/Activate stuck disabled for a reason the user can't act on.
@@ -76,10 +76,8 @@ async function isTrackingEnabled() {
 }
 
 async function recordUnmatchedHost(hostname) {
-  const { [DISMISSED_HOSTS_KEY]: dismissed = [] } = await chrome.storage.session.get(DISMISSED_HOSTS_KEY);
-  if (dismissed.includes(hostname)) return;
-  const { [UNMATCHED_HOSTS_KEY]: hosts = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
-  if (hosts.includes(hostname)) return;
+  const { [DISMISSED_HOSTS_KEY]: dismissed = [], [UNMATCHED_HOSTS_KEY]: hosts = [] } = await chrome.storage.session.get([DISMISSED_HOSTS_KEY, UNMATCHED_HOSTS_KEY]);
+  if (dismissed.includes(hostname) || hosts.includes(hostname)) return;
   await chrome.storage.session.set({ [UNMATCHED_HOSTS_KEY]: [...hosts, hostname] });
 }
 
@@ -278,7 +276,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // The listener already returns true, so the async reply is allowed.
         RecorderCapture.handleMessage(message, (response) => {
           if (message.type === "STOP_RECORDING" && response && response.unmatchedHosts) {
-            response.unmatchedHosts.forEach((host) => recordUnmatchedHost(host));
+            response.unmatchedHosts.forEach((host) => enqueueTrackingWrite(() => recordUnmatchedHost(host)));
           }
           sendResponse(response);
         });
@@ -314,8 +312,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const savedKey = await instanceStore.saveInstance(message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
           // The instance now exists, so its "not set up yet" notice is obsolete.
           const savedHost = new URL(savedKey || message.baseUrl).hostname;
-          const { [UNMATCHED_HOSTS_KEY]: pending = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
-          await chrome.storage.session.set({ [UNMATCHED_HOSTS_KEY]: pending.filter((h) => h !== savedHost) });
+          await enqueueTrackingWrite(async () => {
+            const { [UNMATCHED_HOSTS_KEY]: pending = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
+            await chrome.storage.session.set({ [UNMATCHED_HOSTS_KEY]: pending.filter((h) => h !== savedHost) });
+          });
           return sendResponse({ ok: true });
         }
         case "TEST_INSTANCE": {
@@ -324,15 +324,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
           return sendResponse({ ok: true });
         }
+        case "RENAME_INSTANCE":
+          await instanceStore.renameInstance(message.baseUrl, message.name);
+          return sendResponse({ ok: true });
         case "DELETE_INSTANCE":
           await instanceStore.deleteInstance(message.baseUrl);
           return sendResponse({ ok: true });
         case "DISMISS_UNMATCHED_HOST": {
           // Remember the dismissal too, or the Tracker listener would re-add the host on its next IFS call.
-          const { [UNMATCHED_HOSTS_KEY]: hosts = [], [DISMISSED_HOSTS_KEY]: dismissed = [] } = await chrome.storage.session.get([UNMATCHED_HOSTS_KEY, DISMISSED_HOSTS_KEY]);
-          await chrome.storage.session.set({
-            [UNMATCHED_HOSTS_KEY]: hosts.filter((h) => h !== message.host),
-            [DISMISSED_HOSTS_KEY]: dismissed.includes(message.host) ? dismissed : [...dismissed, message.host],
+          await enqueueTrackingWrite(async () => {
+            const { [UNMATCHED_HOSTS_KEY]: hosts = [], [DISMISSED_HOSTS_KEY]: dismissed = [] } = await chrome.storage.session.get([UNMATCHED_HOSTS_KEY, DISMISSED_HOSTS_KEY]);
+            await chrome.storage.session.set({
+              [UNMATCHED_HOSTS_KEY]: hosts.filter((h) => h !== message.host),
+              [DISMISSED_HOSTS_KEY]: dismissed.includes(message.host) ? dismissed : [...dismissed, message.host],
+            });
           });
           return sendResponse({ ok: true });
         }

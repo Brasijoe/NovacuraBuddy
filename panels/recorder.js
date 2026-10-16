@@ -101,11 +101,11 @@ function initRecorderPanel() {
     const res = await actionOrShowError({ type: "START_RECORDING" });
     if (res && res.warning) showError(res.warning, true);
     updateRecorderStatus();
-    startRecorderPolling();
+    if (res) startRecorderPolling();
   };
   document.getElementById("stopBtn").onclick = async () => {
     const res = await actionOrShowError({ type: "STOP_RECORDING" });
-    stopRecorderPolling();
+    if (res) stopRecorderPolling();
     updateRecorderStatus();
     renderSessions();
     if (typeof refreshUnmatchedHosts === "function") refreshUnmatchedHosts();
