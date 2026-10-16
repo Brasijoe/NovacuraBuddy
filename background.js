@@ -285,14 +285,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const { masterPassword, fields, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
       switch (message.type) {
-        case "GET_FLOW_TOKEN": {
-          const token = flowToken.get();
-          if (!token) return sendResponse({ ok: false, error: "No Novacura Flow session found yet — open or click into a build.novacura.com tab first." });
-          return sendResponse({ ok: true, token });
-        }
+        // The Traffic Explorer's token comes from IFS Buddy's own capture (recorder-capture.js),
+        // unchanged; the Tracker keeps using its webRequest-sniffed flowToken.
+        case "GET_FLOW_TOKEN":
+          return sendResponse({ ok: true, token: await RecorderCapture.captureFlowAuthToken() });
         case "CLEAR_FLOW_TOKEN":
-          flowToken.clear();
-          await chrome.storage.session.remove(FLOW_TOKEN_PERSIST_KEY);
+          await chrome.storage.session.remove("flowAuthToken");
           return sendResponse({ ok: true });
         case "LIST_INSTANCES":
           return sendResponse({ ok: true, instances: await instanceStore.listInstances() });
