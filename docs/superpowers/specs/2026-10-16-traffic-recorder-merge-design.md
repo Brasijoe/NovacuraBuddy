@@ -112,10 +112,12 @@ functions; the recorder's message types are routed to it unchanged: `START_RECOR
 state lives in `chrome.storage.session` (`isRecording`, `currentCalls`, `callCounter`) and
 finalized sessions in `chrome.storage.local` (`sessions`), exactly as in IFS Buddy.
 
-**Flow Connect token for the Explorer** — `GET_FLOW_TOKEN` is answered from the token the
-extension already sniffs via `webRequest` (with its JWT-expiry handling) instead of IFS Buddy's
-separate debugger attach to a Designer tab. If no token has been seen yet, the error says to open
-or click into a `build.novacura.com` tab, like the Tracker's. `CLEAR_FLOW_TOKEN` clears it.
+**Flow Connect token for the Explorer** — `GET_FLOW_TOKEN` uses IFS Buddy's own capture, copied
+verbatim (debugger on the Flow tab, reload, first Bearer of that load, 45-min cache in
+`chrome.storage.session.flowAuthToken`); `CLEAR_FLOW_TOKEN` clears that cache. (First implemented
+from the Tracker's webRequest sniffer instead — live 2026-10-16 that token got a 403 from the
+admin-connector API, "Could not load connectors", so it was reverted to IFS Buddy's capture.) The
+Tracker keeps its own sniffed token.
 
 ## 6. Unknown IFS instance
 
