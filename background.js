@@ -2,6 +2,7 @@ importScripts(
   "lib/credential-crypto.js",
   "lib/projection-filter.js",
   "lib/ifs-instances.js",
+  "lib/recorder-capture.js",
   "lib/projection-search.js",
   "lib/flow-connect-rest.js",
   "lib/tracking.js",
@@ -25,6 +26,7 @@ function log(...args) { console.log(LOG_PREFIX, ...args); }
 function logError(...args) { console.error(LOG_PREFIX, ...args); }
 
 const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
+globalThis.__recorderInstanceStore = instanceStore; // RecorderCapture lists instances from the shared store
 const flowToken = FlowToken.createTokenCache(45 * 60 * 1000);
 let excludedSet = ProjectionFilter.parseExcludedList(""); // populated once `ready` resolves
 let designerTabState = null; // { tabId, orgId, itemId, packageId, packageResolved }
@@ -57,6 +59,7 @@ function init() {
     const text = await (await fetch(chrome.runtime.getURL("lib/excluded-projections.txt"))).text();
     excludedSet = ProjectionFilter.parseExcludedList(text);
     await restorePersistedState();
+    RecorderCapture.init();
     // Without this, a Designer tab already open and idle before the worker starts/restarts stays
     // invisible until its next tabs.onUpdated fires — which a tab that's just sitting there open
     // may never do — leaving Create/Activate stuck disabled for a reason the user can't act on.
@@ -266,9 +269,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // A restarted worker must finish restoring the persisted Connect token and Designer tab
       // before answering — otherwise the panel's first poll after every restart saw neither.
       await ready;
+      if (RecorderCapture.isRecorderMessage(message.type)) {
+        // The recorder answers these itself; this router must not answer them too (the old
+        // default branch replied "Unknown message type", racing the recorder's real reply).
+        // The listener already returns true, so the async reply is allowed.
+        RecorderCapture.handleMessage(message, (response) => {
+          if (message.type === "STOP_RECORDING" && response && response.unmatchedHosts) {
+            response.unmatchedHosts.forEach((host) => recordUnmatchedHost(host));
+          }
+          sendResponse(response);
+        });
+        return;
+      }
       const { masterPassword, fields, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
       switch (message.type) {
+        case "GET_FLOW_TOKEN": {
+          const token = flowToken.get();
+          if (!token) return sendResponse({ ok: false, error: "No Novacura Flow session found yet — open or click into a build.novacura.com tab first." });
+          return sendResponse({ ok: true, token });
+        }
+        case "CLEAR_FLOW_TOKEN":
+          flowToken.clear();
+          await chrome.storage.session.remove(FLOW_TOKEN_PERSIST_KEY);
+          return sendResponse({ ok: true });
         case "LIST_INSTANCES":
           return sendResponse({ ok: true, instances: await instanceStore.listInstances() });
         case "GET_LOCK_STATUS":
