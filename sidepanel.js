@@ -1,14 +1,48 @@
 function send(message) {
-  return new Promise((resolve) => chrome.runtime.sendMessage(message, resolve));
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError || !response) {
+        resolve({ ok: false, error: (chrome.runtime.lastError && chrome.runtime.lastError.message) || "No response from the extension's background page — try again." });
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
+function showError(message) {
+  const el = document.getElementById("error");
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function clearError() {
+  const el = document.getElementById("error");
+  el.hidden = true;
+  el.textContent = "";
+}
+
+/** Runs an action, surfacing its error (if any) in the banner instead of letting it vanish —
+ *  spec §11 requires every failure to be surfaced; this is the only place in the UI that can. */
+async function sendOrShowError(message) {
+  const response = await send(message);
+  if (!response.ok) {
+    showError(response.error || "Something went wrong.");
+    return null;
+  }
+  clearError();
+  return response;
 }
 
 let currentBaseUrl = null;
+let searchResultNames = []; // survive refreshProjections' periodic re-render; cleared only by a new search
 
 async function refreshInstances() {
-  const { instances } = await send({ type: "LIST_INSTANCES" });
+  const response = await sendOrShowError({ type: "LIST_INSTANCES" });
+  if (!response) return;
   const list = document.getElementById("instanceList");
   list.innerHTML = "";
-  for (const instance of instances) {
+  for (const instance of response.instances) {
     const li = document.createElement("li");
     li.textContent = `${instance.name} (${instance.baseUrl})`;
     const selectBtn = document.createElement("button");
@@ -16,18 +50,37 @@ async function refreshInstances() {
     selectBtn.onclick = () => { currentBaseUrl = instance.baseUrl; refreshProjections(); };
     const deleteBtn = document.createElement("button");
     deleteBtn.textContent = "Delete";
-    deleteBtn.onclick = async () => { await send({ type: "DELETE_INSTANCE", baseUrl: instance.baseUrl }); refreshInstances(); };
+    deleteBtn.onclick = async () => { await sendOrShowError({ type: "DELETE_INSTANCE", baseUrl: instance.baseUrl }); refreshInstances(); };
     li.append(selectBtn, deleteBtn);
     list.appendChild(li);
   }
-  if (!currentBaseUrl && instances.length) currentBaseUrl = instances[0].baseUrl;
+  if (!currentBaseUrl && response.instances.length) currentBaseUrl = response.instances[0].baseUrl;
 }
 
 document.getElementById("instanceForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await send({
+  const baseUrl = document.getElementById("instanceBaseUrl").value;
+
+  // chrome.permissions.request() only works from inside a real user gesture — this submit handler
+  // is one, the background service worker's onMessage handler is not. Requesting it here, before
+  // telling the background to store anything, is the only place in the whole extension this can
+  // succeed from.
+  let origin;
+  try {
+    origin = new URL(baseUrl).origin + "/*";
+  } catch (err) {
+    showError(`"${baseUrl}" isn't a valid URL.`);
+    return;
+  }
+  const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin] }, resolve));
+  if (!granted) {
+    showError(`Permission for ${origin} was not granted — tracking for this instance won't work until it is.`);
+    return;
+  }
+
+  const response = await sendOrShowError({
     type: "SAVE_INSTANCE",
-    baseUrl: document.getElementById("instanceBaseUrl").value,
+    baseUrl,
     masterPassword: document.getElementById("masterPassword").value,
     fields: {
       name: document.getElementById("instanceName").value,
@@ -37,13 +90,19 @@ document.getElementById("instanceForm").addEventListener("submit", async (e) => 
       secretPayload: { clientSecret: document.getElementById("instanceClientSecret").value }
     }
   });
+  if (!response) return;
   e.target.reset();
   refreshInstances();
 });
 
 document.getElementById("trackingToggle").addEventListener("change", (e) => {
-  send({ type: "SET_TRACKING_ENABLED", enabled: e.target.checked });
+  sendOrShowError({ type: "SET_TRACKING_ENABLED", enabled: e.target.checked });
 });
+
+async function initTrackingToggle() {
+  const response = await sendOrShowError({ type: "GET_TRACKING_ENABLED" });
+  if (response) document.getElementById("trackingToggle").checked = response.enabled;
+}
 
 function statusLabel(status) {
   return { not_created: "Not created", created: "Created", activated: "Activated", activated_stale: "Activated — update available" }[status] || status;
@@ -52,10 +111,13 @@ function statusLabel(status) {
 const masterPasswordOf = () => document.getElementById("masterPassword").value;
 
 async function renderProjectionRow(container, name) {
-  const [{ status, assetId, headVersionId }, { open }] = await Promise.all([
-    send({ type: "GET_MODULE_STATUS", projectionName: name }),
-    send({ type: "GET_DESIGNER_STATUS" })
+  const [statusResponse, designerResponse] = await Promise.all([
+    sendOrShowError({ type: "GET_MODULE_STATUS", projectionName: name }),
+    sendOrShowError({ type: "GET_DESIGNER_STATUS" })
   ]);
+  if (!statusResponse || !designerResponse) return;
+  const { status, assetId, headVersionId } = statusResponse;
+  const { open } = designerResponse;
 
   const li = document.createElement("li");
   const label = document.createElement("span");
@@ -72,7 +134,7 @@ async function renderProjectionRow(container, name) {
     btn.textContent = "Create";
     btn.disabled = !open;
     btn.title = disabledTitle;
-    btn.onclick = () => send({ type: "CREATE_MODULE", baseUrl: currentBaseUrl, projectionName: name, masterPassword: masterPasswordOf() }).then(refreshProjections);
+    btn.onclick = () => sendOrShowError({ type: "CREATE_MODULE", baseUrl: currentBaseUrl, projectionName: name, masterPassword: masterPasswordOf() }).then(refreshProjections);
     actions.appendChild(btn);
   } else {
     if (status === "created") {
@@ -80,15 +142,17 @@ async function renderProjectionRow(container, name) {
       activateBtn.textContent = "Activate";
       activateBtn.disabled = !open;
       activateBtn.title = disabledTitle;
-      activateBtn.onclick = () => send({ type: "ACTIVATE_MODULE", assetId, headVersionId }).then(refreshProjections);
+      activateBtn.onclick = () => sendOrShowError({ type: "ACTIVATE_MODULE", assetId, headVersionId }).then(refreshProjections);
       actions.appendChild(activateBtn);
     }
-    const reloadBtn = document.createElement("button");
-    reloadBtn.textContent = "Reload & Activate";
-    reloadBtn.disabled = !open;
-    reloadBtn.title = disabledTitle;
-    reloadBtn.onclick = () => send({ type: "RELOAD_AND_ACTIVATE", baseUrl: currentBaseUrl, projectionName: name, masterPassword: masterPasswordOf() }).then(refreshProjections);
-    actions.appendChild(reloadBtn);
+    if (status !== "activated") {
+      const reloadBtn = document.createElement("button");
+      reloadBtn.textContent = "Reload & Activate";
+      reloadBtn.disabled = !open;
+      reloadBtn.title = disabledTitle;
+      reloadBtn.onclick = () => sendOrShowError({ type: "RELOAD_AND_ACTIVATE", baseUrl: currentBaseUrl, projectionName: name, masterPassword: masterPasswordOf() }).then(refreshProjections);
+      actions.appendChild(reloadBtn);
+    }
   }
 
   li.append(label, badge, actions);
@@ -97,20 +161,28 @@ async function renderProjectionRow(container, name) {
 
 async function refreshProjections() {
   if (!currentBaseUrl) return;
-  const { tracked } = await send({ type: "GET_TRACKED", baseUrl: currentBaseUrl });
+  const response = await sendOrShowError({ type: "GET_TRACKED", baseUrl: currentBaseUrl });
+  if (!response) return;
   const container = document.getElementById("projectionList");
   container.innerHTML = "";
-  const sorted = tracked.slice().sort((a, b) => b.firstSeenAt - a.firstSeenAt);
-  for (const row of sorted) {
-    await renderProjectionRow(container, row.projectionName);
+
+  const trackedNames = response.tracked.slice().sort((a, b) => b.firstSeenAt - a.firstSeenAt).map((row) => row.projectionName);
+  const trackedUpper = new Set(trackedNames.map((n) => n.toUpperCase()));
+  // Union with any names found via search, so the 5s poll below never makes a searched-but-not-yet-
+  // traced row disappear mid-read.
+  const extraSearchNames = searchResultNames.filter((n) => !trackedUpper.has(n.toUpperCase()));
+
+  for (const name of [...trackedNames, ...extraSearchNames]) {
+    await renderProjectionRow(container, name);
   }
 }
 
 async function refreshUnmatchedHosts() {
-  const { hosts } = await send({ type: "GET_UNMATCHED_HOSTS" });
+  const response = await sendOrShowError({ type: "GET_UNMATCHED_HOSTS" });
+  if (!response) return;
   const container = document.getElementById("unmatchedHosts");
   container.innerHTML = "";
-  for (const host of hosts) {
+  for (const host of response.hosts) {
     const p = document.createElement("p");
     p.textContent = `Traced calls to "${host}" don't match any saved instance. `;
     const btn = document.createElement("button");
@@ -127,10 +199,14 @@ async function refreshUnmatchedHosts() {
 document.getElementById("searchBtn").addEventListener("click", async () => {
   const term = document.getElementById("searchTerm").value.trim();
   if (!term || !currentBaseUrl) return;
-  const { meta } = await send({ type: "SEARCH_PROJECTION", baseUrl: currentBaseUrl, term, masterPassword: masterPasswordOf() });
-  if (meta) await renderProjectionRow(document.getElementById("projectionList"), meta.ProjectionName);
+  const response = await sendOrShowError({ type: "SEARCH_PROJECTION", baseUrl: currentBaseUrl, term, masterPassword: masterPasswordOf() });
+  if (!response) return;
+  searchResultNames = response.results.map((r) => r.ProjectionName);
+  if (searchResultNames.length === 0) showError(`No projection found matching "${term}".`);
+  refreshProjections();
 });
 
+initTrackingToggle();
 refreshInstances();
 refreshProjections();
 refreshUnmatchedHosts();
