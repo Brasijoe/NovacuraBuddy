@@ -484,3 +484,30 @@ test("pickListDisplayFields falls back to the first PascalCase field when none l
   assert.equal(pickListDisplayFields(["luname", "Contract", "OrderNo"], "OrderNo").largeField, "Contract");
   assert.equal(pickListDisplayFields(["luname", "keyref"], "OrderNo").largeField, "luname"); // nothing PascalCase available at all
 });
+
+test("the recorder's instance functions read and write the shared Basic Data store", async () => {
+  const local = {}, session = {};
+  const area = (backing) => ({
+    async get(keys) { const out = {}; for (const k of [].concat(keys)) if (k in backing) out[k] = backing[k]; return out; },
+    async set(obj) { Object.assign(backing, obj); }
+  });
+  global.chrome = { storage: { local: area(local), session: area(session) } };
+  global.CredentialCrypto = require("../lib/credential-crypto.js");
+  global.IfsInstances = require("../lib/ifs-instances.js");
+  global.fetch = async () => ({ ok: true, json: async () => ({ access_token: "tok", expires_in: 3600 }) });
+  delete require.cache[require.resolve("./ifs-modules.js")];
+  try {
+    const mod = require("./ifs-modules.js");
+
+    const key = await mod.ensureMasterKey(async () => "pw");
+    await mod.saveIfsInstance("https://ifs.example.com", "client_credentials", "https://ifs.example.com/token", "client-1", { clientSecret: "s" }, key);
+
+    assert.deepEqual(Object.keys(local.ifsInstances), ["https://ifs.example.com"]);
+    assert.equal(local.ifsInstances["https://ifs.example.com"].name, "ifs.example.com", "named, not a nameless duplicate");
+    assert.equal((await mod.getIfsInstance("https://ifs.example.com/")).clientId, "client-1");
+    assert.equal(await mod.getIfsAuthToken("https://ifs.example.com", key), "tok");
+  } finally {
+    delete global.chrome; delete global.fetch; delete global.CredentialCrypto; delete global.IfsInstances;
+    delete require.cache[require.resolve("./ifs-modules.js")];
+  }
+});

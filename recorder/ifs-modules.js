@@ -4,10 +4,6 @@
    and orchestration.
    ============================================================ */
 (function () {
-  const IFS_INSTANCES_KEY = "ifsInstances";
-  const CRED_SALT_KEY = "credentialSalt";
-  const CRED_VERIFIER_KEY = "credentialVerifier";
-  const SESSION_KEY_STORAGE = "credentialSessionKey";
   const CONFIRMED_MAPPINGS_KEY = "confirmedFieldMappings";
   // Semi-self-learning dependency mappings (feature request, 2026-08-08): a mapping only
   // auto-applies (skips the review modal) once the user has confirmed it this many times.
@@ -287,79 +283,31 @@
     return result;
   }
 
-  let cachedMasterKey = null; // in-memory CryptoKey cache for this page's lifetime
-
-  async function getSessionKey() {
-    if (cachedMasterKey) return cachedMasterKey;
-    const { [SESSION_KEY_STORAGE]: exported } = await chrome.storage.session.get(SESSION_KEY_STORAGE);
-    if (exported) {
-      cachedMasterKey = await CredentialCrypto.importKeyRaw(exported);
-      return cachedMasterKey;
+  /* --- Basic Data seam (NovacuraBuddy) ---
+   * IFS instances, credentials and the master password come from the extension's shared
+   * Basic Data store (lib/ifs-instances.js), which the Projection Tracker uses too. Same storage
+   * keys as before; the store adds canonical instance keys, names, trimming and the connection
+   * check. The prompts below (promptMasterPassword / promptIfsCredentials) stay the recorder's own
+   * UI and hand their results to the store. Created lazily: chrome.* doesn't exist at require time
+   * under Node. */
+  let sharedStore = null;
+  function basicData() {
+    if (!sharedStore) {
+      sharedStore = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
     }
-    return null;
+    return sharedStore;
   }
 
-  async function setSessionKey(key) {
-    cachedMasterKey = key;
-    const exported = await CredentialCrypto.exportKeyRaw(key);
-    await chrome.storage.session.set({ [SESSION_KEY_STORAGE]: exported });
-  }
-
-  async function hasMasterPasswordBeenSet() {
-    const { [CRED_SALT_KEY]: salt } = await chrome.storage.local.get(CRED_SALT_KEY);
-    return !!salt;
-  }
-
-  /** Returns a ready-to-use master key, prompting via promptFn only if not already cached this session.
-   *  Retries on a wrong master password (re-prompting with an inline error) rather than throwing on the
-   *  first bad attempt — the caller may already have created irreversible side effects (e.g. a Flow asset)
-   *  before this is called, so a single mistyped password shouldn't force starting over. Cancelling the
-   *  prompt (promptFn resolving null) still aborts immediately. */
   async function ensureMasterKey(promptFn) {
-    const existing = await getSessionKey();
-    if (existing) return existing;
-
-    const isFirstTime = !(await hasMasterPasswordBeenSet());
-    let errorMessage;
-    while (true) {
-      const password = await promptFn(isFirstTime, errorMessage);
-      if (password == null) throw new Error("Master password entry cancelled.");
-
-      if (isFirstTime) {
-        const salt = CredentialCrypto.generateSalt();
-        const key = await CredentialCrypto.deriveKey(password, salt);
-        const verifier = await CredentialCrypto.makeVerifier(key);
-        await chrome.storage.local.set({ [CRED_SALT_KEY]: salt, [CRED_VERIFIER_KEY]: verifier });
-        await setSessionKey(key);
-        return key;
-      }
-
-      const { [CRED_SALT_KEY]: salt, [CRED_VERIFIER_KEY]: verifier } = await chrome.storage.local.get([CRED_SALT_KEY, CRED_VERIFIER_KEY]);
-      const key = await CredentialCrypto.deriveKey(password, salt);
-      const ok = await CredentialCrypto.checkVerifier(key, verifier);
-      if (ok) {
-        await setSessionKey(key);
-        return key;
-      }
-      errorMessage = "Incorrect master password, try again.";
-    }
+    return basicData().ensureMasterKey(promptFn);
   }
 
   async function getIfsInstance(ifsBaseUrl) {
-    const { [IFS_INSTANCES_KEY]: instances = {} } = await chrome.storage.local.get(IFS_INSTANCES_KEY);
-    return instances[ifsBaseUrl] || null;
+    return basicData().getInstance(ifsBaseUrl);
   }
 
   async function saveIfsInstance(ifsBaseUrl, authMethod, tokenEndpoint, clientId, secretPayload, masterKey) {
-    const encryptedSecret = await CredentialCrypto.encryptText(masterKey, JSON.stringify(secretPayload));
-    const { [IFS_INSTANCES_KEY]: instances = {} } = await chrome.storage.local.get(IFS_INSTANCES_KEY);
-    instances[ifsBaseUrl] = { authMethod, tokenEndpoint, clientId, encryptedSecret };
-    await chrome.storage.local.set({ [IFS_INSTANCES_KEY]: instances });
-  }
-
-  async function getDecryptedSecret(instance, masterKey) {
-    const json = await CredentialCrypto.decryptText(masterKey, instance.encryptedSecret);
-    return JSON.parse(json);
+    await basicData().saveInstance(ifsBaseUrl, { authMethod, tokenEndpoint, clientId, secretPayload }, masterKey);
   }
 
   /* --- Master Password Modal --- */
@@ -482,47 +430,12 @@
   }
 
   /* --- IFS Cloud OAuth token --- */
-  const ifsTokenCache = {}; // ifsBaseUrl -> { token, expiresAt }
-
   async function getIfsAuthToken(ifsBaseUrl, masterKey) {
-    const cached = ifsTokenCache[ifsBaseUrl];
-    if (cached && cached.expiresAt > Date.now()) return cached.token;
-
-    const instance = await getIfsInstance(ifsBaseUrl);
-    if (!instance) throw new Error(`No stored IFS credentials for ${ifsBaseUrl}.`);
-    const secret = await getDecryptedSecret(instance, masterKey);
-
-    const params = new URLSearchParams();
-    params.set("client_id", instance.clientId);
-    if (instance.authMethod === "client_credentials") {
-      params.set("grant_type", "client_credentials");
-      params.set("client_secret", secret.clientSecret);
-    } else {
-      params.set("grant_type", "password");
-      if (secret.clientSecret) params.set("client_secret", secret.clientSecret);
-      params.set("username", secret.username);
-      params.set("password", secret.password);
-    }
-
-    const res = await fetch(instance.tokenEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString()
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`IFS token request failed (${res.status})${text ? ": " + text : ""}`);
-    }
-    const data = await res.json();
-    if (!data.access_token || !data.expires_in) {
-      throw new Error("IFS token response was missing access_token or expires_in.");
-    }
-    ifsTokenCache[ifsBaseUrl] = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
-    return data.access_token;
+    return basicData().getIfsAuthToken(ifsBaseUrl, masterKey);
   }
 
   function clearIfsAuthToken(ifsBaseUrl) {
-    delete ifsTokenCache[ifsBaseUrl];
+    basicData().clearIfsAuthToken(ifsBaseUrl);
   }
 
   /* --- IFS Cloud API calls --- */
@@ -2162,7 +2075,12 @@
       CONFIRMED_MAPPING_THRESHOLD,
       applyOptionalFieldWorkaround,
       applyAnyTypedFieldWorkaround,
-      pickListDisplayFields
+      pickListDisplayFields,
+      ensureMasterKey,
+      getIfsInstance,
+      saveIfsInstance,
+      getIfsAuthToken,
+      clearIfsAuthToken
     };
   }
 })();
