@@ -222,7 +222,8 @@ async function handleActivateModule({ assetId, headVersionId }) {
 // exists only for Chrome's callback-based onMessage).
 browser.runtime.onMessage.addListener(async (message) => {
   try {
-    log("Message:", message.type, message);
+    const { masterPassword, fields, ...safeMessage } = message;
+    log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
     switch (message.type) {
       case "LIST_INSTANCES":
         return { ok: true, instances: await instanceStore.listInstances() };

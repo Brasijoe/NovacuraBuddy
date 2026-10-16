@@ -246,7 +246,8 @@ async function handleActivateModule({ assetId, headVersionId }) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
-      log("Message:", message.type, message);
+      const { masterPassword, fields, ...safeMessage } = message;
+      log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
       switch (message.type) {
         case "LIST_INSTANCES":
           return sendResponse({ ok: true, instances: await instanceStore.listInstances() });
