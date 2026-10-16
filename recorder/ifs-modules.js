@@ -1774,22 +1774,34 @@
     const masterKey = await ensureMasterKey(promptMasterPassword);
     let instance = await getIfsInstance(ifsBaseUrl);
 
+    // The shared store's saveInstance runs a connection check and throws on bad credentials;
+    // re-prompt (prefilled with what was just entered) instead of aborting. Cancel still throws.
+    async function promptAndSaveIfsCredentials(initialPrefill) {
+      let prefill = initialPrefill;
+      while (true) {
+        const result = await promptIfsCredentials(ifsBaseUrl, prefill);
+        if (!result) throw new Error("IFS credential setup cancelled.");
+        try {
+          await saveIfsInstance(ifsBaseUrl, result.authMethod, result.tokenEndpoint, result.clientId, result.secretPayload, masterKey);
+          return;
+        } catch (saveErr) {
+          prefill = result;
+        }
+      }
+    }
+
     while (true) {
       if (instance) {
         try {
           await getIfsAuthToken(ifsBaseUrl, masterKey);
           return masterKey;
         } catch (err) {
-          const result = await promptIfsCredentials(ifsBaseUrl, instance);
-          if (!result) throw new Error("IFS credential setup cancelled.");
-          await saveIfsInstance(ifsBaseUrl, result.authMethod, result.tokenEndpoint, result.clientId, result.secretPayload, masterKey);
+          await promptAndSaveIfsCredentials(instance);
           clearIfsAuthToken(ifsBaseUrl);
           instance = await getIfsInstance(ifsBaseUrl);
         }
       } else {
-        const result = await promptIfsCredentials(ifsBaseUrl, null);
-        if (!result) throw new Error("IFS credential setup cancelled.");
-        await saveIfsInstance(ifsBaseUrl, result.authMethod, result.tokenEndpoint, result.clientId, result.secretPayload, masterKey);
+        await promptAndSaveIfsCredentials(null);
         instance = await getIfsInstance(ifsBaseUrl);
       }
     }
