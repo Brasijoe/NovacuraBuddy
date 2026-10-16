@@ -19,7 +19,7 @@ function statusLabel(status) {
 // --- Incremental row rendering: the panel polls every 5s, and rebuilding the whole list on
 // every tick (the original innerHTML="" approach) made the UI visibly flicker/refresh. Rows are
 // built once and mutated in place; only genuinely new/removed names touch the DOM tree shape.
-const rowElements = new Map(); // upper-cased name -> { name, status, actions, lastStatus }
+const rowElements = new Map(); // upper-cased name -> { name, status, metaText, actions, lastStatus }
 const projectionListEl = document.getElementById("projectionList");
 
 function resetProjectionList() {
@@ -30,19 +30,26 @@ function resetProjectionList() {
 
 function buildProjectionRow() {
   const row = document.createElement("li");
-  row.className = "projection-row";
+  row.className = "sess-item projection-card";
 
-  const name = document.createElement("span");
-  name.className = "proj-name";
-
+  const info = document.createElement("div");
+  info.className = "sess-info";
+  const name = document.createElement("div");
+  name.className = "sess-title proj-name";
+  const meta = document.createElement("div");
+  meta.className = "sess-meta";
   const status = document.createElement("span");
   status.className = "status";
+  const metaText = document.createElement("span");
+  metaText.className = "proj-meta-text";
+  meta.append(status, metaText);
+  info.append(name, meta);
 
   const actions = document.createElement("span");
   actions.className = "proj-actions";
 
-  row.append(name, status, actions);
-  return { row, name, status, actions, lastStatus: null };
+  row.append(info, actions);
+  return { row, name, status, metaText, actions, lastStatus: null };
 }
 
 function renderActions(entry, { name, status, assetId, headVersionId, open }) {
@@ -124,6 +131,7 @@ async function refreshProjections() {
       : "";
   hint.hidden = !hint.textContent;
 
+  const trackedByName = new Map(trackedResponse.tracked.map((t) => [t.projectionName.toUpperCase(), t]));
   const trackedNames = trackedResponse.tracked.slice().sort((a, b) => b.firstSeenAt - a.firstSeenAt).map((row) => row.projectionName);
   const trackedUpper = new Set(trackedNames.map((n) => n.toUpperCase()));
   const extraSearchNames = searchResultNames.filter((n) => !trackedUpper.has(n.toUpperCase()));
@@ -154,6 +162,11 @@ async function refreshProjections() {
       const key = name.toUpperCase();
       rowElements.get(key).status.title = (statusesResponse ? "" : "Could not check status — see the error above.");
     }
+    const tracked = trackedByName.get(name.toUpperCase());
+    const entry = rowElements.get(name.toUpperCase());
+    entry.metaText.textContent = tracked
+      ? ` · ${tracked.hitCount} hit${tracked.hitCount === 1 ? "" : "s"} · first seen ${new Date(tracked.firstSeenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+      : " · from search";
   }
 }
 

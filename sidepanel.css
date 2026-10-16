@@ -242,17 +242,9 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  column-gap: var(--space-3);
-}
-
-.projection-row { display: contents; }
-
-.projection-row > * {
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .proj-name {
@@ -265,6 +257,7 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 }
 
 .proj-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+.projection-card .proj-actions { flex-shrink: 0; }
 
 /* Status pill — modelled on the deck's own Badge component: solid accent fill for the
    "arrived" state, a quiet outline for everything still in progress. Reads as a position on a
