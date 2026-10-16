@@ -106,6 +106,8 @@ browser.webRequest.onBeforeRequest.addListener(
 // own M72+ opt-in for seeing restricted headers like Authorization via webRequest; Firefox's
 // implementation has never gated Authorization behind a separate flag, and passing an extraInfoSpec
 // string Firefox doesn't recognize is a risk not worth taking for no benefit.
+let diagnosticLogsLeft = 8;
+
 browser.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     const token = FlowToken.extractBearerToken(details.requestHeaders);
@@ -113,6 +115,10 @@ browser.webRequest.onBeforeSendHeaders.addListener(
       if (!flowToken.get()) log("Captured a Novacura Flow session token from", details.url);
       flowToken.set(token);
       persistFlowToken(token);
+    } else if (diagnosticLogsLeft > 0 && details.type === "xmlhttprequest") {
+      diagnosticLogsLeft--;
+      const headerNames = (details.requestHeaders || []).map((h) => h.name);
+      log("No Authorization header seen on", details.url, "— headers present:", headerNames.join(", ") || "(none)");
     }
     return {};
   },
@@ -248,6 +254,12 @@ browser.runtime.onMessage.addListener(async (message) => {
         const { [key]: list = [] } = await browser.storage.session.get(key);
         return { ok: true, tracked: list };
       }
+      case "CLEAR_TRACKED": {
+        const key = TRACKED_PROJECTIONS_PREFIX + message.baseUrl;
+        await browser.storage.session.remove(key);
+        log("Cleared tracked projections for", message.baseUrl);
+        return { ok: true };
+      }
       case "SEARCH_PROJECTION": {
         const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
         const token = await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
@@ -256,20 +268,30 @@ browser.runtime.onMessage.addListener(async (message) => {
       }
       case "GET_DESIGNER_STATUS":
         return { ok: true, open: !!designerTabState, hasFlowToken: !!flowToken.get() };
-      case "GET_MODULE_STATUS": {
-        if (!designerTabState) return { ok: true, status: "not_created", assetId: null, headVersionId: null };
+      case "GET_MODULE_STATUSES": {
+        if (!designerTabState) {
+          const statuses = {};
+          for (const name of message.projectionNames) statuses[name] = { status: "not_created", assetId: null, headVersionId: null };
+          return { ok: true, statuses };
+        }
         const tab = captureDesignerTab();
         const packageId = await resolvePackageIdFor(tab);
         const flowFetch = boundFlowFetch();
-        const moduleAsset = await FlowModules.findExistingModule({ flowFetch, orgId: tab.orgId, packageId, projectionName: message.projectionName });
-        const designerData = await FlowDesignerTab.getDesignerData({ flowFetch, orgId: tab.orgId, itemId: tab.itemId });
-        const status = FlowDesignerTab.computeModuleStatus(moduleAsset, designerData.assets);
-        return {
-          ok: true,
-          status,
-          assetId: moduleAsset ? moduleAsset.id : null,
-          headVersionId: moduleAsset ? moduleAsset.mainBranch.headVersionId : null
-        };
+        const [assets, designerData] = await Promise.all([
+          FlowModules.listAssets({ flowFetch, orgId: tab.orgId, packageId }),
+          FlowDesignerTab.getDesignerData({ flowFetch, orgId: tab.orgId, itemId: tab.itemId })
+        ]);
+        const statuses = {};
+        for (const name of message.projectionNames) {
+          const moduleAsset = FlowModules.findModuleInList(assets, name);
+          statuses[name] = {
+            status: FlowDesignerTab.computeModuleStatus(moduleAsset, designerData.assets),
+            assetId: moduleAsset ? moduleAsset.id : null,
+            headVersionId: moduleAsset ? moduleAsset.mainBranch.headVersionId : null
+          };
+        }
+        log("Computed status for", message.projectionNames.length, "projection(s) in one pass");
+        return { ok: true, statuses };
       }
       case "CREATE_MODULE":
         return { ok: true, result: await handleCreateModule(message) };

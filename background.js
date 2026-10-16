@@ -120,6 +120,11 @@ chrome.webRequest.onBeforeRequest.addListener(
   { urls: ["<all_urls>"] }
 );
 
+// Diagnostic only, capped — if token capture stays broken, this is the thing to read: does Chrome
+// even deliver an Authorization header to this listener for Connect's own XHR/fetch calls at all,
+// or is a header present but under a name/shape extractBearerToken doesn't recognize?
+let diagnosticLogsLeft = 8;
+
 chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     const token = FlowToken.extractBearerToken(details.requestHeaders);
@@ -127,6 +132,10 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
       if (!flowToken.get()) log("Captured a Novacura Flow session token from", details.url);
       flowToken.set(token);
       persistFlowToken(token);
+    } else if (diagnosticLogsLeft > 0 && details.type === "xmlhttprequest") {
+      diagnosticLogsLeft--;
+      const headerNames = (details.requestHeaders || []).map((h) => h.name);
+      log("No Authorization header seen on", details.url, "— headers present:", headerNames.join(", ") || "(none)");
     }
     return {};
   },
@@ -269,6 +278,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const { [key]: list = [] } = await chrome.storage.session.get(key);
           return sendResponse({ ok: true, tracked: list });
         }
+        case "CLEAR_TRACKED": {
+          const key = TRACKED_PROJECTIONS_PREFIX + message.baseUrl;
+          await chrome.storage.session.remove(key);
+          log("Cleared tracked projections for", message.baseUrl);
+          return sendResponse({ ok: true });
+        }
         case "SEARCH_PROJECTION": {
           const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
           const token = await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
@@ -277,20 +292,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "GET_DESIGNER_STATUS":
           return sendResponse({ ok: true, open: !!designerTabState, hasFlowToken: !!flowToken.get() });
-        case "GET_MODULE_STATUS": {
-          if (!designerTabState) return sendResponse({ ok: true, status: "not_created", assetId: null, headVersionId: null });
+        case "GET_MODULE_STATUSES": {
+          // One pass for the whole tracked list, not one round-trip per row: findExistingModule
+          // alone re-GETs the package's entire asset list every call, and getDesignerData re-GETs
+          // the whole flow's designer JSON every call — with N tracked rows that was N×(at least 2)
+          // sequential Connect REST calls on every 5s poll, which is exactly why Create/the list felt
+          // slow and inconsistent (a transient failure partway through the sequential loop flashed
+          // the error banner for that one poll). Fetch both lists ONCE here, match every name
+          // against them locally.
+          if (!designerTabState) {
+            const statuses = {};
+            for (const name of message.projectionNames) statuses[name] = { status: "not_created", assetId: null, headVersionId: null };
+            return sendResponse({ ok: true, statuses });
+          }
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
           const flowFetch = boundFlowFetch();
-          const moduleAsset = await FlowModules.findExistingModule({ flowFetch, orgId: tab.orgId, packageId, projectionName: message.projectionName });
-          const designerData = await FlowDesignerTab.getDesignerData({ flowFetch, orgId: tab.orgId, itemId: tab.itemId });
-          const status = FlowDesignerTab.computeModuleStatus(moduleAsset, designerData.assets);
-          return sendResponse({
-            ok: true,
-            status,
-            assetId: moduleAsset ? moduleAsset.id : null,
-            headVersionId: moduleAsset ? moduleAsset.mainBranch.headVersionId : null
-          });
+          const [assets, designerData] = await Promise.all([
+            FlowModules.listAssets({ flowFetch, orgId: tab.orgId, packageId }),
+            FlowDesignerTab.getDesignerData({ flowFetch, orgId: tab.orgId, itemId: tab.itemId })
+          ]);
+          const statuses = {};
+          for (const name of message.projectionNames) {
+            const moduleAsset = FlowModules.findModuleInList(assets, name);
+            statuses[name] = {
+              status: FlowDesignerTab.computeModuleStatus(moduleAsset, designerData.assets),
+              assetId: moduleAsset ? moduleAsset.id : null,
+              headVersionId: moduleAsset ? moduleAsset.mainBranch.headVersionId : null
+            };
+          }
+          log("Computed status for", message.projectionNames.length, "projection(s) in one pass");
+          return sendResponse({ ok: true, statuses });
         }
         case "CREATE_MODULE":
           return sendResponse({ ok: true, result: await handleCreateModule(message) });

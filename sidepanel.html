@@ -5,39 +5,49 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
-    <div id="error" class="error" hidden></div>
+    <div id="error" class="banner banner-error" hidden></div>
 
-    <section id="instances">
-      <h2>IFS Instances</h2>
-      <ul id="instanceList"></ul>
-      <form id="instanceForm">
+    <header class="topbar">
+      <div class="current-instance" id="currentInstanceLabel" title="Currently selected IFS instance">
+        <span class="dot" id="designerDot"></span>
+        <span id="currentInstanceName">No instance selected</span>
+      </div>
+      <label class="toggle" title="Pause or resume tracking">
+        <input type="checkbox" id="trackingToggle" />
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Tracking</span>
+      </label>
+    </header>
+
+    <details id="instancesDrawer" class="drawer">
+      <summary>Instances</summary>
+      <ul id="instanceList" class="instance-list"></ul>
+      <form id="instanceForm" class="instance-form">
         <input id="instanceName" placeholder="Name" required />
         <input id="instanceBaseUrl" placeholder="https://ifs.example.com" required />
         <input id="instanceTokenEndpoint" placeholder="Token endpoint" required />
         <input id="instanceClientId" placeholder="Client ID" required />
         <input id="instanceClientSecret" placeholder="Client secret" type="password" required />
         <input id="masterPassword" placeholder="Master password" type="password" required />
-        <button type="submit">Add instance</button>
+        <button type="submit" class="btn-primary">Add instance</button>
       </form>
-    </section>
+    </details>
 
-    <section id="tracking">
-      <label><input type="checkbox" id="trackingToggle" /> Tracking enabled</label>
-    </section>
-
-    <section id="search">
+    <div class="search-row">
       <input id="searchTerm" placeholder="Search a projection…" />
       <button id="searchBtn">Search</button>
-    </section>
+    </div>
 
-    <section id="unmatchedHosts"></section>
+    <div id="unmatchedHosts"></div>
 
-    <section id="designerStatus"></section>
-
-    <section id="projections">
-      <h2>Traced / found projections</h2>
-      <ul id="projectionList"></ul>
-    </section>
+    <main>
+      <h2>Tracked projections</h2>
+      <div class="list-toolbar">
+        <span class="list-count" id="listCount"></span>
+        <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
+      </div>
+      <ul id="projectionList" class="projection-list"></ul>
+    </main>
 
     <script src="sidepanel.js"></script>
   </body>
