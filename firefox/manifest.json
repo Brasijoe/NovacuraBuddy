@@ -1,0 +1,34 @@
+{
+  "manifest_version": 2,
+  "name": "IFS Projection Tracker",
+  "version": "0.1.0",
+  "description": "Traces IFS Cloud projection calls and turns them into Novacura Flow Connect modules.",
+  "permissions": ["storage", "webRequest", "tabs", "https://build.novacura.com/*"],
+  "optional_permissions": ["<all_urls>"],
+  "background": {
+    "scripts": [
+      "lib/credential-crypto.js",
+      "lib/projection-filter.js",
+      "lib/ifs-instances.js",
+      "lib/projection-search.js",
+      "lib/flow-connect-rest.js",
+      "lib/tracking.js",
+      "lib/flow-designer-tab.js",
+      "lib/flow-modules.js",
+      "lib/flow-token.js",
+      "background.js"
+    ]
+  },
+  "sidebar_action": {
+    "default_panel": "sidebar.html",
+    "default_title": "IFS Projection Tracker",
+    "default_icon": "icons/icon48.png"
+  },
+  "content_scripts": [
+    { "matches": ["https://build.novacura.com/*"], "js": ["content/designer.js"], "run_at": "document_idle" }
+  ],
+  "browser_specific_settings": {
+    "gecko": { "id": "ifs-projection-tracker@novacura.local", "strict_min_version": "109.0" }
+  },
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}
