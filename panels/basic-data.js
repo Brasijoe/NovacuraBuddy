@@ -29,6 +29,38 @@ async function refreshInstances() {
     };
     li.appendChild(testBtn);
 
+    const renameBtn = document.createElement("button");
+    renameBtn.textContent = "Rename";
+    renameBtn.className = "btn-ghost";
+    renameBtn.title = "Rename this instance";
+    renameBtn.onclick = (e) => {
+      e.stopPropagation();
+      const input = document.createElement("input");
+      input.className = "rename-input";
+      input.value = instance.name;
+      input.onclick = (ev) => ev.stopPropagation();
+      name.replaceWith(input);
+      input.focus();
+      input.select();
+
+      let done = false;
+      const finish = async (commit) => {
+        if (done) return;
+        done = true;
+        const val = input.value.trim();
+        if (commit && val && val !== instance.name) {
+          await actionOrShowError({ type: "RENAME_INSTANCE", baseUrl: instance.baseUrl, name: val });
+        }
+        refreshInstances();
+      };
+      input.onkeydown = (ev) => {
+        if (ev.key === "Enter") finish(true);
+        else if (ev.key === "Escape") finish(false);
+      };
+      input.onblur = () => finish(true);
+    };
+    li.appendChild(renameBtn);
+
     const deleteBtn = document.createElement("button");
     deleteBtn.textContent = "Delete";
     deleteBtn.className = "btn-ghost";
