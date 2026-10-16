@@ -17,6 +17,11 @@
       <span id="lockStatus" class="status" hidden></span>
     </header>
 
+    <div class="search-row" id="unlockRow" hidden>
+      <input id="unlockPassword" type="password" placeholder="Master password (unlocks saved IFS credentials)" />
+      <button id="unlockBtn">Unlock</button>
+    </div>
+
     <nav class="tabs" role="tablist">
       <button id="tab-tracker" class="tab" role="tab">Projection Tracker</button>
       <button id="tab-recorder" class="tab" role="tab">Traffic Recorder</button>
@@ -50,11 +55,6 @@
     <section id="panel-recorder" role="tabpanel" hidden></section>
 
     <section id="panel-basic-data" role="tabpanel" hidden>
-      <div class="search-row" id="unlockRow" hidden>
-        <input id="unlockPassword" type="password" placeholder="Master password (unlocks saved IFS credentials)" />
-        <button id="unlockBtn">Unlock</button>
-      </div>
-
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
         <input id="instanceName" placeholder="Name" required />
