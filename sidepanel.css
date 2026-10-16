@@ -112,8 +112,10 @@ input:focus-visible { border-color: var(--accent); }
 }
 .banner[hidden] { display: none; }
 .banner-error { background: #fff0ef; color: #7a1f17; border: 1px solid var(--accent-red); }
+.banner-success { background: #eef4ff; color: #0b3f99; border: 1px solid var(--accent); }
 @media (prefers-color-scheme: dark) {
   .banner-error { background: rgba(255, 51, 51, 0.12); color: #ffb4ac; }
+  .banner-success { background: rgba(12, 101, 244, 0.15); color: #bed7ff; }
 }
 
 /* ---------- top bar ---------- */
@@ -278,6 +280,8 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 }
 .status-not_created { color: var(--ink-muted); border-color: var(--surface-raised); }
 .status-unknown { color: var(--neutral); border-color: var(--surface-raised); border-style: dashed; }
+.status-locked { color: var(--accent-orange); border-color: var(--accent-orange); }
+.status-unlocked { color: var(--accent); border-color: var(--accent-soft); }
 .status-created { color: var(--accent); border-color: var(--accent-soft); }
 .status-activated { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .status-activated_stale { background: var(--accent-orange); border-color: var(--accent-orange); color: var(--on-accent); }

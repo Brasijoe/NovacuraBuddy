@@ -10,7 +10,7 @@ const TRACKING_ENABLED_KEY = "trackingEnabled";
 const TRACKED_PROJECTIONS_PREFIX = "tracked:"; // + baseUrl, browser.storage.session
 const UNMATCHED_HOSTS_KEY = "unmatchedHosts";
 const FLOW_TOKEN_PERSIST_KEY = "flowTokenPersist"; // { token, expiresAt }, browser.storage.session
-const DESIGNER_TAB_PERSIST_KEY = "designerTabPersist"; // { tabId, orgId, itemId, packageId }
+const DESIGNER_TAB_PERSIST_KEY = "designerTabPersist"; // { tabId, orgId, itemId, packageId, packageResolved }
 
 const LOG_PREFIX = "[IFS Projection Tracker]";
 function log(...args) { console.log(LOG_PREFIX, ...args); }
@@ -19,19 +19,19 @@ function logError(...args) { console.error(LOG_PREFIX, ...args); }
 const instanceStore = IfsInstances.createIfsInstanceStore({ local: browser.storage.local, session: browser.storage.session });
 const flowToken = FlowToken.createTokenCache(45 * 60 * 1000);
 let excludedSet = ProjectionFilter.parseExcludedList(""); // populated once `ready` resolves
-let designerTabState = null; // { tabId, orgId, itemId, packageId }
+let designerTabState = null; // { tabId, orgId, itemId, packageId, packageResolved }
 
 async function restorePersistedState() {
   const { [FLOW_TOKEN_PERSIST_KEY]: tokenState } = await browser.storage.session.get(FLOW_TOKEN_PERSIST_KEY);
   if (tokenState && tokenState.expiresAt > Date.now()) {
-    flowToken.set(tokenState.token); // restarts the 45-minute window from now — an approximation, not exact TTL continuity
+    flowToken.set(tokenState.token); // expiry comes from the token's own JWT `exp`, so a restart doesn't extend it
   }
   const { [DESIGNER_TAB_PERSIST_KEY]: tabState } = await browser.storage.session.get(DESIGNER_TAB_PERSIST_KEY);
   if (tabState) designerTabState = tabState;
 }
 
 async function persistFlowToken(token) {
-  await browser.storage.session.set({ [FLOW_TOKEN_PERSIST_KEY]: { token, expiresAt: Date.now() + 45 * 60 * 1000 } });
+  await browser.storage.session.set({ [FLOW_TOKEN_PERSIST_KEY]: { token, expiresAt: flowToken.expiresAt() } });
 }
 
 async function persistDesignerTabState() {
@@ -129,7 +129,15 @@ browser.webRequest.onBeforeSendHeaders.addListener(
 // Scoped to the active tab of the focused window — see the Chrome build's background.js for the
 // full rationale (buttons should reflect whichever tab is actually in front right now).
 async function refreshDesignerTabState() {
-  const [activeTab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+  // Only normal browser windows count: focusing a DevTools window (e.g. this worker's console),
+  // a popup, or leaving the browser must not make the Designer tab look closed.
+  let activeTab = null;
+  try {
+    const win = await browser.windows.getLastFocused({ windowTypes: ["normal"] });
+    [activeTab] = await browser.tabs.query({ active: true, windowId: win.id });
+  } catch {
+    activeTab = null; // no normal window open at all
+  }
   const parsed = activeTab && FlowDesignerTab.parseDesignerTabUrl(activeTab.url);
   if (!parsed) {
     if (designerTabState) log("Active tab is no longer a Designer tab — disabling Create/Activate.");
@@ -143,7 +151,8 @@ async function refreshDesignerTabState() {
     tabId: activeTab.id,
     orgId: parsed.orgId,
     itemId: parsed.itemId,
-    packageId: samePlace ? designerTabState.packageId : null
+    packageId: samePlace ? designerTabState.packageId : null,
+    packageResolved: samePlace ? !!designerTabState.packageResolved : false
   };
   await persistDesignerTabState();
 }
@@ -151,7 +160,9 @@ async function refreshDesignerTabState() {
 browser.tabs.onActivated.addListener(() => refreshDesignerTabState());
 browser.tabs.onUpdated.addListener(() => refreshDesignerTabState());
 browser.tabs.onRemoved.addListener(() => refreshDesignerTabState());
-browser.windows.onFocusChanged.addListener(() => refreshDesignerTabState());
+browser.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId !== browser.windows.WINDOW_ID_NONE) refreshDesignerTabState();
+});
 
 function boundFlowFetch() {
   const token = flowToken.get();
@@ -160,14 +171,15 @@ function boundFlowFetch() {
 }
 
 async function resolvePackageIdFor(tab) {
-  if (tab.packageId) return tab.packageId;
-  log("Resolving packageId for orgId=", tab.orgId, "itemId=", tab.itemId, "(searching every package's assets+products)...");
+  if (tab.packageResolved) return tab.packageId;
+  log("Resolving packageId for orgId=", tab.orgId, "itemId=", tab.itemId, "from the Designer's packageInfo...");
   const packageId = await FlowDesignerTab.resolvePackageId({ flowFetch: boundFlowFetch(), orgId: tab.orgId, itemId: tab.itemId });
-  if (!packageId) throw new Error("Could not find which package the open flow belongs to.");
-  log("Resolved packageId =", packageId);
+  log(packageId ? `Resolved packageId = ${packageId}` : "Open flow is not in a package — using global assets (App Library).");
   tab.packageId = packageId;
+  tab.packageResolved = true;
   if (designerTabState && designerTabState.orgId === tab.orgId && designerTabState.itemId === tab.itemId) {
     designerTabState.packageId = packageId;
+    designerTabState.packageResolved = true;
     await persistDesignerTabState();
   }
   return packageId;
@@ -198,21 +210,32 @@ async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
   log("Module asset id =", asset.id, "— committing module code...");
   const newBranch = await FlowModules.commitModuleCode({ flowFetch, orgId: tab.orgId, packageId, assetId: asset.id, flowScriptCode: code });
   log("CREATE_MODULE done: assetId=", asset.id, "headVersionId=", newBranch.headVersionId);
-  return { assetId: asset.id, headVersionId: newBranch.headVersionId };
+  return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || projectionName };
 }
 
-async function handleActivateModule({ assetId, headVersionId }) {
+async function handleActivateModule({ assetId, headVersionId, projectionName }) {
   log("ACTIVATE_MODULE start: assetId=", assetId, "headVersionId=", headVersionId);
   const tab = captureDesignerTab();
   const flowFetch = boundFlowFetch();
-  await FlowDesignerTab.activateModule({ flowFetch, orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId });
-  log("ACTIVATE_MODULE done — attempting the Designer refresh-button click...");
+  await FlowDesignerTab.activateModule({ flowFetch, orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId, moduleName: projectionName });
+  log("ACTIVATE_MODULE done — refreshing the Designer so the module shows up...");
   try {
     const response = await browser.tabs.sendMessage(tab.tabId, { type: "CLICK_REFRESH" });
-    log("Refresh-button click result:", response);
-    return { refreshed: !!(response && response.clicked) };
+    if (response && response.clicked) {
+      log("Clicked the Designer's own reload button.");
+      return { refreshed: true };
+    }
+    log("Designer reload button not usable (", (response && response.reason) || "no response", ") — reloading the tab instead.");
   } catch (e) {
-    log("Refresh-button click did not run (content script not reachable):", e.message);
+    log("Designer content script not reachable (", e.message, ") — reloading the tab instead.");
+  }
+  // Fallback: a full tab reload. Safe here: our save already went through with the Designer's
+  // own lock, so its next save would have hit a 412 without a reload anyway.
+  try {
+    await browser.tabs.reload(tab.tabId);
+    return { refreshed: true };
+  } catch (e) {
+    log("Tab reload failed:", e.message);
     return { refreshed: false };
   }
 }
@@ -222,11 +245,19 @@ async function handleActivateModule({ assetId, headVersionId }) {
 // exists only for Chrome's callback-based onMessage).
 browser.runtime.onMessage.addListener(async (message) => {
   try {
+    // A restarted background must finish restoring the persisted Connect token and Designer tab
+    // before answering — otherwise the panel's first poll after every restart saw neither.
+    await ready;
     const { masterPassword, fields, ...safeMessage } = message;
     log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
     switch (message.type) {
       case "LIST_INSTANCES":
         return { ok: true, instances: await instanceStore.listInstances() };
+      case "GET_LOCK_STATUS":
+        return { ok: true, ...(await instanceStore.getLockStatus()) };
+      case "UNLOCK":
+        await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
+        return { ok: true };
       case "SAVE_INSTANCE": {
         // sidebar.js's submit handler requests the host permission itself, from the real user
         // gesture — browser.permissions.request() has the same "must be called during a user
@@ -235,7 +266,19 @@ browser.runtime.onMessage.addListener(async (message) => {
         const origin = new URL(message.baseUrl).origin + "/*";
         const granted = await browser.permissions.contains({ origins: [origin] });
         if (!granted) return { ok: false, error: `Permission for ${origin} was not granted — tracking for this instance won't work.` };
+        // Connection check first: an instance whose credentials IFS rejects is never saved.
+        try {
+          await IfsInstances.requestIfsToken(message.fields, message.fields.secretPayload);
+        } catch (e) {
+          throw new Error(`Connection check failed, instance not saved — ${e.message}`);
+        }
         await instanceStore.saveInstance(message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
+        return { ok: true };
+      }
+      case "TEST_INSTANCE": {
+        const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
+        instanceStore.clearIfsAuthToken(message.baseUrl); // always a real round-trip, never the cache
+        await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
         return { ok: true };
       }
       case "DELETE_INSTANCE":
@@ -272,7 +315,7 @@ browser.runtime.onMessage.addListener(async (message) => {
       case "GET_MODULE_STATUSES": {
         if (!designerTabState) {
           const statuses = {};
-          for (const name of message.projectionNames) statuses[name] = { status: "not_created", assetId: null, headVersionId: null };
+          for (const name of message.projectionNames) statuses[name] = { status: "no_designer", assetId: null, headVersionId: null };
           return { ok: true, statuses };
         }
         const tab = captureDesignerTab();
@@ -294,11 +337,10 @@ browser.runtime.onMessage.addListener(async (message) => {
         log("Computed status for", message.projectionNames.length, "projection(s) in one pass");
         return { ok: true, statuses };
       }
-      case "CREATE_MODULE":
-        return { ok: true, result: await handleCreateModule(message) };
       case "ACTIVATE_MODULE":
+      case "CREATE_MODULE": // Create always activates in the open flow too
       case "RELOAD_AND_ACTIVATE":
-        if (message.type === "RELOAD_AND_ACTIVATE") {
+        if (message.type !== "ACTIVATE_MODULE") {
           const created = await handleCreateModule(message);
           return { ok: true, result: await handleActivateModule(created) };
         }
@@ -308,7 +350,7 @@ browser.runtime.onMessage.addListener(async (message) => {
     }
   } catch (e) {
     logError("Message", message.type, "failed:", e.message, e.stack);
-    if (/\(401\)/.test(e.message)) flowToken.clear();
-    return { ok: false, error: e.message };
+    if (e.service === "connect" && e.status === 401) flowToken.clear();
+    return { ok: false, error: e.message, needsMasterPassword: e.code === "MASTER_PASSWORD_REQUIRED" };
   }
 });

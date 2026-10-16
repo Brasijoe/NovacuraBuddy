@@ -18,7 +18,7 @@ const TRACKING_ENABLED_KEY = "trackingEnabled";
 const TRACKED_PROJECTIONS_PREFIX = "tracked:"; // + baseUrl, chrome.storage.session
 const UNMATCHED_HOSTS_KEY = "unmatchedHosts";
 const FLOW_TOKEN_PERSIST_KEY = "flowTokenPersist"; // { token, expiresAt }, chrome.storage.session
-const DESIGNER_TAB_PERSIST_KEY = "designerTabPersist"; // { tabId, orgId, itemId, packageId }
+const DESIGNER_TAB_PERSIST_KEY = "designerTabPersist"; // { tabId, orgId, itemId, packageId, packageResolved }
 
 const LOG_PREFIX = "[IFS Projection Tracker]";
 function log(...args) { console.log(LOG_PREFIX, ...args); }
@@ -27,7 +27,7 @@ function logError(...args) { console.error(LOG_PREFIX, ...args); }
 const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
 const flowToken = FlowToken.createTokenCache(45 * 60 * 1000);
 let excludedSet = ProjectionFilter.parseExcludedList(""); // populated once `ready` resolves
-let designerTabState = null; // { tabId, orgId, itemId, packageId }
+let designerTabState = null; // { tabId, orgId, itemId, packageId, packageResolved }
 
 // MV3 kills this service worker after ~30s idle, wiping every top-level `let` above. Both the
 // sniffed Connect token and the resolved Designer-tab state are persisted to chrome.storage.session
@@ -37,14 +37,14 @@ let designerTabState = null; // { tabId, orgId, itemId, packageId }
 async function restorePersistedState() {
   const { [FLOW_TOKEN_PERSIST_KEY]: tokenState } = await chrome.storage.session.get(FLOW_TOKEN_PERSIST_KEY);
   if (tokenState && tokenState.expiresAt > Date.now()) {
-    flowToken.set(tokenState.token); // restarts the 45-minute window from now — an approximation, not exact TTL continuity
+    flowToken.set(tokenState.token); // expiry comes from the token's own JWT `exp`, so a restart doesn't extend it
   }
   const { [DESIGNER_TAB_PERSIST_KEY]: tabState } = await chrome.storage.session.get(DESIGNER_TAB_PERSIST_KEY);
   if (tabState) designerTabState = tabState;
 }
 
 async function persistFlowToken(token) {
-  await chrome.storage.session.set({ [FLOW_TOKEN_PERSIST_KEY]: { token, expiresAt: Date.now() + 45 * 60 * 1000 } });
+  await chrome.storage.session.set({ [FLOW_TOKEN_PERSIST_KEY]: { token, expiresAt: flowToken.expiresAt() } });
 }
 
 async function persistDesignerTabState() {
@@ -148,7 +148,15 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
 // switching away to a completely different tab, which is confusing: the buttons act on whichever
 // tab is actually in front of the user right now.
 async function refreshDesignerTabState() {
-  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  // Only normal browser windows count: focusing a DevTools window (e.g. this worker's console),
+  // a popup, or leaving the browser must not make the Designer tab look closed.
+  let activeTab = null;
+  try {
+    const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+    [activeTab] = await chrome.tabs.query({ active: true, windowId: win.id });
+  } catch {
+    activeTab = null; // no normal window open at all
+  }
   const parsed = activeTab && FlowDesignerTab.parseDesignerTabUrl(activeTab.url);
   if (!parsed) {
     if (designerTabState) log("Active tab is no longer a Designer tab — disabling Create/Activate.");
@@ -160,13 +168,14 @@ async function refreshDesignerTabState() {
   if (!samePlace) log("Active Designer tab:", parsed);
   // Keep the already-resolved packageId when it's still the same org+item — this cache is spec
   // §7's whole point ("a one-time cost per Designer tab, not per action"); re-deriving it on every
-  // tab-state refresh (which fires often while just browsing) would defeat it and cost
-  // 1+2×packageCount REST calls each time for no reason.
+  // tab-state refresh (which fires often while just browsing) would defeat it.
+  // `packageResolved` is separate from `packageId` because null is a real answer: a global flow.
   designerTabState = {
     tabId: activeTab.id,
     orgId: parsed.orgId,
     itemId: parsed.itemId,
-    packageId: samePlace ? designerTabState.packageId : null
+    packageId: samePlace ? designerTabState.packageId : null,
+    packageResolved: samePlace ? !!designerTabState.packageResolved : false
   };
   await persistDesignerTabState();
 }
@@ -174,7 +183,9 @@ async function refreshDesignerTabState() {
 chrome.tabs.onActivated.addListener(() => refreshDesignerTabState());
 chrome.tabs.onUpdated.addListener(() => refreshDesignerTabState());
 chrome.tabs.onRemoved.addListener(() => refreshDesignerTabState());
-chrome.windows.onFocusChanged.addListener(() => refreshDesignerTabState());
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId !== chrome.windows.WINDOW_ID_NONE) refreshDesignerTabState();
+});
 
 function boundFlowFetch() {
   const token = flowToken.get();
@@ -186,14 +197,15 @@ function boundFlowFetch() {
 // `designerTabState` — so a navigation mid-await can't turn a later property read into a raw
 // TypeError. Still updates the live state's cache opportunistically when it's still the same tab.
 async function resolvePackageIdFor(tab) {
-  if (tab.packageId) return tab.packageId;
-  log("Resolving packageId for orgId=", tab.orgId, "itemId=", tab.itemId, "(searching every package's assets+products)...");
+  if (tab.packageResolved) return tab.packageId;
+  log("Resolving packageId for orgId=", tab.orgId, "itemId=", tab.itemId, "from the Designer's packageInfo...");
   const packageId = await FlowDesignerTab.resolvePackageId({ flowFetch: boundFlowFetch(), orgId: tab.orgId, itemId: tab.itemId });
-  if (!packageId) throw new Error("Could not find which package the open flow belongs to.");
-  log("Resolved packageId =", packageId);
+  log(packageId ? `Resolved packageId = ${packageId}` : "Open flow is not in a package — using global assets (App Library).");
   tab.packageId = packageId;
+  tab.packageResolved = true;
   if (designerTabState && designerTabState.orgId === tab.orgId && designerTabState.itemId === tab.itemId) {
     designerTabState.packageId = packageId;
+    designerTabState.packageResolved = true;
     await persistDesignerTabState();
   }
   return packageId;
@@ -224,21 +236,32 @@ async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
   log("Module asset id =", asset.id, "— committing module code...");
   const newBranch = await FlowModules.commitModuleCode({ flowFetch, orgId: tab.orgId, packageId, assetId: asset.id, flowScriptCode: code });
   log("CREATE_MODULE done: assetId=", asset.id, "headVersionId=", newBranch.headVersionId);
-  return { assetId: asset.id, headVersionId: newBranch.headVersionId };
+  return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || projectionName };
 }
 
-async function handleActivateModule({ assetId, headVersionId }) {
+async function handleActivateModule({ assetId, headVersionId, projectionName }) {
   log("ACTIVATE_MODULE start: assetId=", assetId, "headVersionId=", headVersionId);
   const tab = captureDesignerTab();
   const flowFetch = boundFlowFetch();
-  await FlowDesignerTab.activateModule({ flowFetch, orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId });
-  log("ACTIVATE_MODULE done — attempting the Designer refresh-button click...");
+  await FlowDesignerTab.activateModule({ flowFetch, orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId, moduleName: projectionName });
+  log("ACTIVATE_MODULE done — refreshing the Designer so the module shows up...");
   try {
     const response = await chrome.tabs.sendMessage(tab.tabId, { type: "CLICK_REFRESH" });
-    log("Refresh-button click result:", response);
-    return { refreshed: !!(response && response.clicked) };
+    if (response && response.clicked) {
+      log("Clicked the Designer's own reload button.");
+      return { refreshed: true };
+    }
+    log("Designer reload button not usable (", (response && response.reason) || "no response", ") — reloading the tab instead.");
   } catch (e) {
-    log("Refresh-button click did not run (content script not reachable):", e.message);
+    log("Designer content script not reachable (", e.message, ") — reloading the tab instead.");
+  }
+  // Fallback: a full tab reload. Safe here: our save already went through with the Designer's
+  // own lock, so its next save would have hit a 412 without a reload anyway.
+  try {
+    await chrome.tabs.reload(tab.tabId);
+    return { refreshed: true };
+  } catch (e) {
+    log("Tab reload failed:", e.message);
     return { refreshed: false };
   }
 }
@@ -246,11 +269,19 @@ async function handleActivateModule({ assetId, headVersionId }) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
+      // A restarted worker must finish restoring the persisted Connect token and Designer tab
+      // before answering — otherwise the panel's first poll after every restart saw neither.
+      await ready;
       const { masterPassword, fields, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
       switch (message.type) {
         case "LIST_INSTANCES":
           return sendResponse({ ok: true, instances: await instanceStore.listInstances() });
+        case "GET_LOCK_STATUS":
+          return sendResponse({ ok: true, ...(await instanceStore.getLockStatus()) });
+        case "UNLOCK":
+          await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
+          return sendResponse({ ok: true });
         case "SAVE_INSTANCE": {
           // The host permission must already be granted by the time this runs — sidepanel.js
           // requests it from the submit handler's own user gesture, since chrome.permissions.request()
@@ -259,7 +290,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const origin = new URL(message.baseUrl).origin + "/*";
           const granted = await chrome.permissions.contains({ origins: [origin] });
           if (!granted) return sendResponse({ ok: false, error: `Permission for ${origin} was not granted — tracking for this instance won't work.` });
+          // Connection check first: an instance whose credentials IFS rejects is never saved.
+          try {
+            await IfsInstances.requestIfsToken(message.fields, message.fields.secretPayload);
+          } catch (e) {
+            throw new Error(`Connection check failed, instance not saved — ${e.message}`);
+          }
           await instanceStore.saveInstance(message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
+          return sendResponse({ ok: true });
+        }
+        case "TEST_INSTANCE": {
+          const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
+          instanceStore.clearIfsAuthToken(message.baseUrl); // always a real round-trip, never the cache
+          await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
           return sendResponse({ ok: true });
         }
         case "DELETE_INSTANCE":
@@ -303,7 +346,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           // against them locally.
           if (!designerTabState) {
             const statuses = {};
-            for (const name of message.projectionNames) statuses[name] = { status: "not_created", assetId: null, headVersionId: null };
+            for (const name of message.projectionNames) statuses[name] = { status: "no_designer", assetId: null, headVersionId: null };
             return sendResponse({ ok: true, statuses });
           }
           const tab = captureDesignerTab();
@@ -325,11 +368,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           log("Computed status for", message.projectionNames.length, "projection(s) in one pass");
           return sendResponse({ ok: true, statuses });
         }
-        case "CREATE_MODULE":
-          return sendResponse({ ok: true, result: await handleCreateModule(message) });
         case "ACTIVATE_MODULE":
+        case "CREATE_MODULE": // Create always activates in the open flow too
         case "RELOAD_AND_ACTIVATE":
-          if (message.type === "RELOAD_AND_ACTIVATE") {
+          if (message.type !== "ACTIVATE_MODULE") {
             const created = await handleCreateModule(message);
             return sendResponse({ ok: true, result: await handleActivateModule(created) });
           }
@@ -339,8 +381,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
     } catch (e) {
       logError("Message", message.type, "failed:", e.message, e.stack);
-      if (/\(401\)/.test(e.message)) flowToken.clear();
-      sendResponse({ ok: false, error: e.message });
+      if (e.service === "connect" && e.status === 401) flowToken.clear();
+      sendResponse({ ok: false, error: e.message, needsMasterPassword: e.code === "MASTER_PASSWORD_REQUIRED" });
     }
   })();
   return true; // keep the message channel open for the async response

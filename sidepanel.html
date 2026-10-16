@@ -5,7 +5,9 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
-    <div id="error" class="banner banner-error" hidden></div>
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+    <div id="designerHint" class="banner" hidden></div>
 
     <header class="topbar">
       <div class="current-instance" id="currentInstanceLabel" title="Currently selected IFS instance">
@@ -17,6 +19,7 @@
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span class="toggle-label">Tracking</span>
       </label>
+      <span id="lockStatus" class="status" hidden></span>
     </header>
 
     <details id="instancesDrawer" class="drawer">
@@ -32,6 +35,11 @@
         <button type="submit" class="btn-primary">Add instance</button>
       </form>
     </details>
+
+    <div class="search-row" id="unlockRow" hidden>
+      <input id="unlockPassword" type="password" placeholder="Master password (unlocks saved IFS credentials)" />
+      <button id="unlockBtn">Unlock</button>
+    </div>
 
     <div class="search-row">
       <input id="searchTerm" placeholder="Search a projection…" />
