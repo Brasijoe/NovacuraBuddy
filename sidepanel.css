@@ -309,3 +309,21 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 .tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink-muted); padding: var(--space-2) var(--space-3); font-weight: 600; }
 .tab:hover:not(:disabled) { color: var(--accent); border-color: transparent; }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------- recorder ---------- */
+.recorder-controls { display: flex; gap: var(--space-2); }
+.status-bar { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; color: var(--ink-muted); }
+.status-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--neutral); }
+.status-bar.recording { color: var(--accent-orange); font-weight: 600; }
+.status-bar.recording .status-indicator { background: var(--accent-orange); }
+.session-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.sess-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-raised); }
+.sess-item:hover { border-color: var(--accent-soft); }
+.sess-info { flex: 1; min-width: 0; cursor: pointer; }
+.sess-title { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sess-meta { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.icon-btn { border: none; background: none; padding: 4px; color: var(--ink-muted); }
+.icon-btn:hover:not(:disabled) { color: var(--accent); }
+.icon-btn.del:hover:not(:disabled) { color: var(--accent-red); }
+input.rename-input { width: 100%; }
+.empty-state { color: var(--ink-muted); font-size: 12px; padding: var(--space-3); text-align: center; }

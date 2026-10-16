@@ -19,4 +19,5 @@ initTrackingToggle();
 refreshLockStatus();
 refreshInstances();
 refreshProjections();
+initRecorderPanel();
 setInterval(() => { refreshProjections(); refreshLockStatus(); }, 5000);

@@ -52,7 +52,16 @@
       </main>
     </section>
 
-    <section id="panel-recorder" role="tabpanel" hidden></section>
+    <section id="panel-recorder" role="tabpanel" hidden>
+      <div class="recorder-controls">
+        <button id="startBtn" class="btn-primary">● Start</button>
+        <button id="stopBtn" disabled>■ Stop</button>
+        <button id="viewerBtn" title="Open Full Viewer">Open viewer</button>
+      </div>
+      <div id="recStatusBar" class="status-bar"><span class="status-indicator"></span><span id="recStatusText">Ready to record</span></div>
+      <h2>Recorded Sessions</h2>
+      <div id="sessionList" class="session-list"></div>
+    </section>
 
     <section id="panel-basic-data" role="tabpanel" hidden>
       <ul id="instanceList" class="instance-list"></ul>
@@ -70,6 +79,7 @@
     <script src="panels/common.js"></script>
     <script src="panels/tracker.js"></script>
     <script src="panels/basic-data.js"></script>
+    <script src="panels/recorder.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>
