@@ -10,6 +10,10 @@ importScripts(
   "lib/flow-token.js"
 );
 
+// Without this, the toolbar icon has no default_popup and MV3 does nothing on click — the panel
+// only opens via Chrome's own side-panel menu, which most users won't find unprompted.
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
 const TRACKING_ENABLED_KEY = "trackingEnabled";
 const TRACKED_PROJECTIONS_PREFIX = "tracked:"; // + baseUrl, chrome.storage.session
 const UNMATCHED_HOSTS_KEY = "unmatchedHosts";
