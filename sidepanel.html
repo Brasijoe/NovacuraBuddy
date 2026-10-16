@@ -1,8 +1,42 @@
 <!doctype html>
 <html>
-  <head><meta charset="utf-8"><link rel="stylesheet" href="sidepanel.css"></head>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
   <body>
-    <div id="app">Loading…</div>
+    <section id="instances">
+      <h2>IFS Instances</h2>
+      <ul id="instanceList"></ul>
+      <form id="instanceForm">
+        <input id="instanceName" placeholder="Name" required />
+        <input id="instanceBaseUrl" placeholder="https://ifs.example.com" required />
+        <input id="instanceTokenEndpoint" placeholder="Token endpoint" required />
+        <input id="instanceClientId" placeholder="Client ID" required />
+        <input id="instanceClientSecret" placeholder="Client secret" type="password" required />
+        <input id="masterPassword" placeholder="Master password" type="password" required />
+        <button type="submit">Add instance</button>
+      </form>
+    </section>
+
+    <section id="tracking">
+      <label><input type="checkbox" id="trackingToggle" /> Tracking enabled</label>
+    </section>
+
+    <section id="search">
+      <input id="searchTerm" placeholder="Search a projection…" />
+      <button id="searchBtn">Search</button>
+    </section>
+
+    <section id="unmatchedHosts"></section>
+
+    <section id="designerStatus"></section>
+
+    <section id="projections">
+      <h2>Traced / found projections</h2>
+      <ul id="projectionList"></ul>
+    </section>
+
     <script src="sidepanel.js"></script>
   </body>
 </html>
