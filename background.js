@@ -71,12 +71,6 @@ async function isTrackingEnabled() {
   return enabled;
 }
 
-function instanceForHost(instances, hostname) {
-  return instances.find((i) => {
-    try { return new URL(i.baseUrl).hostname === hostname; } catch { return false; }
-  });
-}
-
 async function recordUnmatchedHost(hostname) {
   const { [UNMATCHED_HOSTS_KEY]: hosts = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
   if (hosts.includes(hostname)) return;
@@ -103,7 +97,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
       const hostname = new URL(details.url).hostname;
       const instances = await instanceStore.listInstances();
-      const instance = instanceForHost(instances, hostname);
+      const instance = IfsInstances.findInstanceForHost(instances, hostname);
       if (!instance) {
         await recordUnmatchedHost(hostname); // side panel's GET_UNMATCHED_HOSTS surfaces an "add this instance" prompt
         return;
@@ -290,12 +284,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const origin = new URL(message.baseUrl).origin + "/*";
           const granted = await chrome.permissions.contains({ origins: [origin] });
           if (!granted) return sendResponse({ ok: false, error: `Permission for ${origin} was not granted — tracking for this instance won't work.` });
-          // Connection check first: an instance whose credentials IFS rejects is never saved.
-          try {
-            await IfsInstances.requestIfsToken(message.fields, message.fields.secretPayload);
-          } catch (e) {
-            throw new Error(`Connection check failed, instance not saved — ${e.message}`);
-          }
           await instanceStore.saveInstance(message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
           return sendResponse({ ok: true });
         }
