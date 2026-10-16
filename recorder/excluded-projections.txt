@@ -1,0 +1,9 @@
+# Projections excluded from the Traffic Explorer display and from
+# Flow module/step generation (still recorded in full, so their data
+# stays available for dependency tracing), one per line. Lines
+# starting with # and blank lines are ignored. Matching is
+# case-insensitive against the .svc segment of the request URL,
+# with or without the ".svc" suffix.
+UserProfileService.svc
+FrameworkServices.svc
+BookmarkService.svc

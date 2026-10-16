@@ -1,5 +1,5 @@
 {
   "name": "ifs-flow-projection-tracker",
   "private": true,
-  "scripts": { "test": "node --test lib/**/*.test.js" }
+  "scripts": { "test": "node --test lib/*.test.js recorder/*.test.js manifest.test.js" }
 }
