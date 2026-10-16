@@ -140,6 +140,36 @@ The panel reflects Designer-tab presence as a live boolean; when absent,
 Create/Activate controls are disabled with an inline reason rather than
 hidden.
 
+### 7a. Flow Connect authentication
+
+This project never registers its own Azure AD app and never stores a Flow
+Connect credential — it borrows the session the user already has open in
+their Designer tab, the same trick IFS-Buddy uses (`background.js`'s
+`doCaptureFlowAuthToken`), but without the `debugger` permission IFS-Buddy
+needs for that: IFS-Buddy attaches CDP to sniff one outgoing
+`Authorization` header. This project's `webRequest` listener on
+`build.novacura.com` (already present for §7's id-parsing) is extended
+to `chrome.webRequest.onBeforeSendHeaders` with `["requestHeaders",
+"extraHeaders"]` — `extraHeaders` is required to see `Authorization` at
+all, per Chrome's restricted-headers rule since M72 — and reads it
+directly off the first matching request, no attach/detach lifecycle, no
+devtools-conflict risk.
+
+- Token cached in-memory in the service worker for 45 minutes (same TTL
+  IFS-Buddy uses, safely under Connect's ~1hr token lifetime), cleared
+  early on any `401` from a Connect call.
+- Every Connect REST call (module commit sequence, designer GET/POST, the
+  package/product searches in §7) goes through one `flowFetch(path,
+  options)` helper that attaches `Authorization: Bearer <token>` and
+  `X-Origin: "HubWebApp"` — the exact two headers `recorder/flow-asset.js`
+  and `flow-connect-knowledge.md` both confirm Connect's API requires.
+- If no token has been sniffed yet (no Designer tab open, or it hasn't
+  made an API call since the panel loaded), Create/Activate surface
+  "Open or interact with the Designer tab first" rather than guessing or
+  prompting for credentials — there is nothing to prompt for; the fix is
+  always "the Designer tab must make at least one authenticated request,"
+  which it already does on its own as soon as it's open.
+
 ## 8. Module lifecycle: Create / Activate / Reload & Activate
 
 **Status per projection row** (computed against the Designer tab's current
@@ -169,9 +199,16 @@ update branch → commit branch (new `headVersionId`) → re-push designer XML
 against the new version) against the Designer tab's `packageId`/`orgId`.
 
 **Activate** — `GET` the open flow's current designer data
-(`.../items/{itemId}/designer`), append `{ assetId, assetVersion:
-headVersionId, offeredParameterType: "{}" }` to `assets[]` if not already
-present, `POST` it back.
+(`.../items/{itemId}/designer`, a body that round-trips every field
+`setDesignerData` posts — `data`, `assets`, `parameterTypeExpression`,
+`resultTypeExpression`, plus `eTag`/`headVersionId`), append `{ assetId,
+assetVersion: headVersionId, offeredParameterType: "{}" }` to `assets[]`
+if not already present, `POST` the whole body back unchanged otherwise,
+then commit it (`POST .../items/{itemId}/commit` with `{ message, eTag }`,
+`eTag` read from that same GET body — ported from `flow-connect-asset.js`'s
+`commitAsset`). Skipping the commit would leave the activation an invisible
+draft, the exact "looks fine, is actually wrong" failure IFS-Buddy's own
+README flags as a known, unwanted gap elsewhere in that project.
 
 **Reload & Activate** — re-run Create's codegen+commit against the
 *existing* module asset (same find-by-name step reuses it, so this always
@@ -196,6 +233,12 @@ live verification per §10.
 3. Whether an `assets[]` entry's `assetVersion` staleness is visible/
    comparable the way §8 describes, once checked against a flow with a
    module added, recommitted, and re-opened.
+4. Whether `onBeforeSendHeaders` with `extraHeaders` reliably exposes the
+   Designer tab's real `Authorization` header in practice (§7a) — expected
+   to work per Chrome's documented behavior, but IFS-Buddy's own choice to
+   use `debugger`/CDP instead suggests this may have been tried and found
+   wanting; falls back to instructing the user to reload the Designer tab
+   if the token never arrives.
 
 Each ships with a visible fallback (manual nudge, user picker, or a plain
 "Activated" without the staleness distinction) rather than a guess that
