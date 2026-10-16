@@ -307,7 +307,9 @@
   }
 
   async function saveIfsInstance(ifsBaseUrl, authMethod, tokenEndpoint, clientId, secretPayload, masterKey) {
-    await basicData().saveInstance(ifsBaseUrl, { authMethod, tokenEndpoint, clientId, secretPayload }, masterKey);
+    // Keep a name the user chose in Basic Data; the store defaults to the hostname only for a new instance.
+    const existing = await basicData().getInstance(ifsBaseUrl);
+    await basicData().saveInstance(ifsBaseUrl, { name: existing ? existing.name : undefined, authMethod, tokenEndpoint, clientId, secretPayload }, masterKey);
   }
 
   /* --- Master Password Modal --- */
@@ -1734,9 +1736,24 @@
           return;
         }
 
+        // NovacuraBuddy seam: this extension holds host permissions per instance, not <all_urls>.
+        // The validation fetch below and the Explorer's later IFS calls need them. request() must be
+        // issued synchronously inside this click gesture, i.e. before any other await.
+        let origins;
+        try {
+          origins = [...new Set([new URL(ifsBaseUrl).origin + "/*", new URL(tokenEndpoint).origin + "/*"])];
+        } catch (urlErr) {
+          errorBox.textContent = "Token endpoint must be a valid URL.";
+          errorBox.style.display = "block";
+          return;
+        }
         submitBtn.disabled = true;
         submitBtn.textContent = "Validating…";
         try {
+          const granted = await chrome.permissions.request({ origins });
+          if (!granted) {
+            throw new Error(`Permission for ${origins.join(", ")} was not granted — the Explorer can't reach this IFS instance without it.`);
+          }
           const params = new URLSearchParams();
           params.set("client_id", clientId);
           if (authMethod === "client_credentials") {

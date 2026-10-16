@@ -511,3 +511,31 @@ test("the recorder's instance functions read and write the shared Basic Data sto
     delete require.cache[require.resolve("./ifs-modules.js")];
   }
 });
+
+test("saveIfsInstance keeps a user-chosen instance name when the Explorer re-saves credentials", async () => {
+  const local = {}, session = {};
+  const area = (backing) => ({
+    async get(keys) { const out = {}; for (const k of [].concat(keys)) if (k in backing) out[k] = backing[k]; return out; },
+    async set(obj) { Object.assign(backing, obj); }
+  });
+  global.chrome = { storage: { local: area(local), session: area(session) } };
+  global.CredentialCrypto = require("../lib/credential-crypto.js");
+  global.IfsInstances = require("../lib/ifs-instances.js");
+  global.fetch = async () => ({ ok: true, json: async () => ({ access_token: "tok", expires_in: 3600 }) });
+  delete require.cache[require.resolve("./ifs-modules.js")];
+  try {
+    const mod = require("./ifs-modules.js");
+    const store = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
+    const key = await store.ensureMasterKey(async () => "pw");
+    await store.saveInstance("https://ifs.example.com", { name: "Production", authMethod: "client_credentials", tokenEndpoint: "https://ifs.example.com/token", clientId: "c1", secretPayload: { clientSecret: "s" } }, key);
+
+    await mod.saveIfsInstance("https://ifs.example.com", "client_credentials", "https://ifs.example.com/token", "c2", { clientSecret: "s2" }, key);
+
+    const saved = local.ifsInstances["https://ifs.example.com"];
+    assert.equal(saved.name, "Production", "name survives the re-save");
+    assert.equal(saved.clientId, "c2", "credentials were updated");
+  } finally {
+    delete global.chrome; delete global.fetch; delete global.CredentialCrypto; delete global.IfsInstances;
+    delete require.cache[require.resolve("./ifs-modules.js")];
+  }
+});
