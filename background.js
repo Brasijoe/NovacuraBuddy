@@ -20,6 +20,10 @@ const UNMATCHED_HOSTS_KEY = "unmatchedHosts";
 const FLOW_TOKEN_PERSIST_KEY = "flowTokenPersist"; // { token, expiresAt }, chrome.storage.session
 const DESIGNER_TAB_PERSIST_KEY = "designerTabPersist"; // { tabId, orgId, itemId, packageId }
 
+const LOG_PREFIX = "[IFS Projection Tracker]";
+function log(...args) { console.log(LOG_PREFIX, ...args); }
+function logError(...args) { console.error(LOG_PREFIX, ...args); }
+
 const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
 const flowToken = FlowToken.createTokenCache(45 * 60 * 1000);
 let excludedSet = ProjectionFilter.parseExcludedList(""); // populated once `ready` resolves
@@ -57,6 +61,7 @@ function init() {
     // invisible until its next tabs.onUpdated fires — which a tab that's just sitting there open
     // may never do — leaving Create/Activate stuck disabled for a reason the user can't act on.
     await refreshDesignerTabState();
+    log("Ready. Excluded projections:", [...excludedSet].join(", "));
   })();
 }
 init();
@@ -108,6 +113,7 @@ chrome.webRequest.onBeforeRequest.addListener(
       const key = TRACKED_PROJECTIONS_PREFIX + instance.baseUrl;
       const { [key]: list = [] } = await chrome.storage.session.get(key);
       const next = Tracking.upsertTrackedProjection(list, projectionName, Date.now());
+      if (next.length !== list.length) log("Tracked new projection:", projectionName, "on", instance.baseUrl);
       await chrome.storage.session.set({ [key]: next });
     });
   },
@@ -118,6 +124,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
   (details) => {
     const token = FlowToken.extractBearerToken(details.requestHeaders);
     if (token) {
+      if (!flowToken.get()) log("Captured a Novacura Flow session token from", details.url);
       flowToken.set(token);
       persistFlowToken(token);
     }
@@ -127,26 +134,27 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
   ["requestHeaders", "extraHeaders"]
 );
 
+// Scoped to the active tab of the focused window, not "any tab anywhere with a Designer URL" —
+// otherwise Create/Activate stayed enabled forever once a Designer tab existed, even after
+// switching away to a completely different tab, which is confusing: the buttons act on whichever
+// tab is actually in front of the user right now.
 async function refreshDesignerTabState() {
-  const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/admin/design/designer/*" });
-  if (!tabs.length) {
-    designerTabState = null;
-    await persistDesignerTabState();
-    return;
-  }
-  const parsed = FlowDesignerTab.parseDesignerTabUrl(tabs[0].url);
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const parsed = activeTab && FlowDesignerTab.parseDesignerTabUrl(activeTab.url);
   if (!parsed) {
+    if (designerTabState) log("Active tab is no longer a Designer tab — disabling Create/Activate.");
     designerTabState = null;
     await persistDesignerTabState();
     return;
   }
+  const samePlace = designerTabState && designerTabState.orgId === parsed.orgId && designerTabState.itemId === parsed.itemId;
+  if (!samePlace) log("Active Designer tab:", parsed);
   // Keep the already-resolved packageId when it's still the same org+item — this cache is spec
   // §7's whole point ("a one-time cost per Designer tab, not per action"); re-deriving it on every
-  // tabs.onUpdated (which fires on *any* tab, constantly, while just browsing Aurena) would defeat
-  // it and cost 1+2×packageCount REST calls each time for no reason.
-  const samePlace = designerTabState && designerTabState.orgId === parsed.orgId && designerTabState.itemId === parsed.itemId;
+  // tab-state refresh (which fires often while just browsing) would defeat it and cost
+  // 1+2×packageCount REST calls each time for no reason.
   designerTabState = {
-    tabId: tabs[0].id,
+    tabId: activeTab.id,
     orgId: parsed.orgId,
     itemId: parsed.itemId,
     packageId: samePlace ? designerTabState.packageId : null
@@ -154,8 +162,10 @@ async function refreshDesignerTabState() {
   await persistDesignerTabState();
 }
 
+chrome.tabs.onActivated.addListener(() => refreshDesignerTabState());
 chrome.tabs.onUpdated.addListener(() => refreshDesignerTabState());
 chrome.tabs.onRemoved.addListener(() => refreshDesignerTabState());
+chrome.windows.onFocusChanged.addListener(() => refreshDesignerTabState());
 
 function boundFlowFetch() {
   const token = flowToken.get();
@@ -168,8 +178,10 @@ function boundFlowFetch() {
 // TypeError. Still updates the live state's cache opportunistically when it's still the same tab.
 async function resolvePackageIdFor(tab) {
   if (tab.packageId) return tab.packageId;
+  log("Resolving packageId for orgId=", tab.orgId, "itemId=", tab.itemId, "(searching every package's assets+products)...");
   const packageId = await FlowDesignerTab.resolvePackageId({ flowFetch: boundFlowFetch(), orgId: tab.orgId, itemId: tab.itemId });
   if (!packageId) throw new Error("Could not find which package the open flow belongs to.");
+  log("Resolved packageId =", packageId);
   tab.packageId = packageId;
   if (designerTabState && designerTabState.orgId === tab.orgId && designerTabState.itemId === tab.itemId) {
     designerTabState.packageId = packageId;
@@ -184,30 +196,40 @@ function captureDesignerTab() {
 }
 
 async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
+  log("CREATE_MODULE start:", projectionName, "against", baseUrl);
   const tab = captureDesignerTab();
   const packageId = await resolvePackageIdFor(tab);
   const flowFetch = boundFlowFetch();
   const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(masterPassword));
   const ifsToken = await instanceStore.getIfsAuthToken(baseUrl, masterKey);
+  log("Got an IFS auth token, fetching $metadata + OpenAPI for", projectionName, "...");
 
   const inputs = await ProjectionSearch.fetchProjectionCodegenInputs(baseUrl, ifsToken, projectionName);
+  log("Codegen inputs ready (csdl", inputs.csdl.length, "bytes, openApiJson", inputs.openApiJson.length, "bytes) — calling Connect's code-gen API...");
   const code = await FlowModules.generateModuleCode({
     flowFetch, csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
     codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
   });
+  log("Generated FlowScript source (", code.length, "bytes) — finding or creating the module asset...");
   const asset = await FlowModules.findOrCreateModule({ flowFetch, orgId: tab.orgId, packageId, projectionName });
+  log("Module asset id =", asset.id, "— committing module code...");
   const newBranch = await FlowModules.commitModuleCode({ flowFetch, orgId: tab.orgId, packageId, assetId: asset.id, flowScriptCode: code });
+  log("CREATE_MODULE done: assetId=", asset.id, "headVersionId=", newBranch.headVersionId);
   return { assetId: asset.id, headVersionId: newBranch.headVersionId };
 }
 
 async function handleActivateModule({ assetId, headVersionId }) {
+  log("ACTIVATE_MODULE start: assetId=", assetId, "headVersionId=", headVersionId);
   const tab = captureDesignerTab();
   const flowFetch = boundFlowFetch();
   await FlowDesignerTab.activateModule({ flowFetch, orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId });
+  log("ACTIVATE_MODULE done — attempting the Designer refresh-button click...");
   try {
     const response = await chrome.tabs.sendMessage(tab.tabId, { type: "CLICK_REFRESH" });
+    log("Refresh-button click result:", response);
     return { refreshed: !!(response && response.clicked) };
   } catch (e) {
+    log("Refresh-button click did not run (content script not reachable):", e.message);
     return { refreshed: false };
   }
 }
@@ -215,6 +237,7 @@ async function handleActivateModule({ assetId, headVersionId }) {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
+      log("Message:", message.type, message);
       switch (message.type) {
         case "LIST_INSTANCES":
           return sendResponse({ ok: true, instances: await instanceStore.listInstances() });
@@ -282,6 +305,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: false, error: `Unknown message type: ${message.type}` });
       }
     } catch (e) {
+      logError("Message", message.type, "failed:", e.message, e.stack);
       if (/\(401\)/.test(e.message)) flowToken.clear();
       sendResponse({ ok: false, error: e.message });
     }

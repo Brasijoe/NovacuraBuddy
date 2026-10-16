@@ -1,6 +1,14 @@
 (function (global) {
+  /** Strips a trailing slash from a user-entered base URL — "https://ifs.example.com/" is a very
+   *  easy thing to type, and concatenating it with a leading-slash path produces a real, server-
+   *  confirmed 404 ("//main/ifsapplications/..." — a double slash the IFS servlet container
+   *  doesn't normalize away). */
+  function normalizeBaseUrl(baseUrl) {
+    return String(baseUrl || "").replace(/\/+$/, "");
+  }
+
   function resolveIfsUrl(baseUrl, urlOrPath) {
-    return urlOrPath.startsWith("http") ? urlOrPath : baseUrl + urlOrPath;
+    return urlOrPath.startsWith("http") ? urlOrPath : normalizeBaseUrl(baseUrl) + urlOrPath;
   }
 
   function dirnameOfPath(path) {
@@ -9,7 +17,7 @@
   }
 
   async function ifsFetch(baseUrl, path, token, fetchImpl) {
-    return (fetchImpl || fetch)(baseUrl + path, { headers: { Authorization: `Bearer ${token}` } });
+    return (fetchImpl || fetch)(normalizeBaseUrl(baseUrl) + path, { headers: { Authorization: `Bearer ${token}` } });
   }
 
   async function fetchIfsText(url, token, fetchImpl) {

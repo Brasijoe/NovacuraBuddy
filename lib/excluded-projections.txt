@@ -6,3 +6,7 @@
 UserProfileService.svc
 FrameworkServices.svc
 BookmarkService.svc
+AppearanceConfiguration.svc
+ClientContext.svc
+Translations.svc
+ClientNavigator.svc
