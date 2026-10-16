@@ -19,5 +19,32 @@ initTrackingToggle();
 refreshLockStatus();
 refreshInstances();
 refreshProjections();
+async function refreshUnmatchedHosts() {
+  const response = await send({ type: "GET_UNMATCHED_HOSTS" });
+  if (!response || !response.ok) return;
+  const container = document.getElementById("unmatchedHosts");
+  container.innerHTML = "";
+  for (const host of response.hosts) {
+    const notice = document.createElement("div");
+    notice.className = "banner banner-warning";
+    const label = document.createElement("span");
+    label.textContent = `IFS instance ${host} isn't set up yet.`;
+    const save = document.createElement("button");
+    save.textContent = "Save now";
+    save.className = "btn-primary";
+    save.onclick = () => {
+      showTab("basic-data");
+      prefillInstanceForm({ baseUrl: `https://${host}`, name: host });
+    };
+    const dismiss = document.createElement("button");
+    dismiss.textContent = "Dismiss";
+    dismiss.className = "btn-ghost";
+    dismiss.onclick = async () => { await send({ type: "DISMISS_UNMATCHED_HOST", host }); refreshUnmatchedHosts(); };
+    notice.append(label, save, dismiss);
+    container.appendChild(notice);
+  }
+}
+
 initRecorderPanel();
-setInterval(() => { refreshProjections(); refreshLockStatus(); }, 5000);
+refreshUnmatchedHosts();
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); }, 5000);

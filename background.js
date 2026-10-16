@@ -18,6 +18,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 const TRACKING_ENABLED_KEY = "trackingEnabled";
 const TRACKED_PROJECTIONS_PREFIX = "tracked:"; // + baseUrl, chrome.storage.session
 const UNMATCHED_HOSTS_KEY = "unmatchedHosts";
+const DISMISSED_HOSTS_KEY = "dismissedUnmatchedHosts"; // hosts the user dismissed this browser session; never re-raised
 const FLOW_TOKEN_PERSIST_KEY = "flowTokenPersist"; // { token, expiresAt }, chrome.storage.session
 const DESIGNER_TAB_PERSIST_KEY = "designerTabPersist"; // { tabId, orgId, itemId, packageId, packageResolved }
 
@@ -75,6 +76,8 @@ async function isTrackingEnabled() {
 }
 
 async function recordUnmatchedHost(hostname) {
+  const { [DISMISSED_HOSTS_KEY]: dismissed = [] } = await chrome.storage.session.get(DISMISSED_HOSTS_KEY);
+  if (dismissed.includes(hostname)) return;
   const { [UNMATCHED_HOSTS_KEY]: hosts = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
   if (hosts.includes(hostname)) return;
   await chrome.storage.session.set({ [UNMATCHED_HOSTS_KEY]: [...hosts, hostname] });
@@ -308,7 +311,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const origin = new URL(message.baseUrl).origin + "/*";
           const granted = await chrome.permissions.contains({ origins: [origin] });
           if (!granted) return sendResponse({ ok: false, error: `Permission for ${origin} was not granted — tracking for this instance won't work.` });
-          await instanceStore.saveInstance(message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
+          const savedKey = await instanceStore.saveInstance(message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
+          // The instance now exists, so its "not set up yet" notice is obsolete.
+          const savedHost = new URL(savedKey || message.baseUrl).hostname;
+          const { [UNMATCHED_HOSTS_KEY]: pending = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
+          await chrome.storage.session.set({ [UNMATCHED_HOSTS_KEY]: pending.filter((h) => h !== savedHost) });
           return sendResponse({ ok: true });
         }
         case "TEST_INSTANCE": {
@@ -320,6 +327,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "DELETE_INSTANCE":
           await instanceStore.deleteInstance(message.baseUrl);
           return sendResponse({ ok: true });
+        case "DISMISS_UNMATCHED_HOST": {
+          // Remember the dismissal too, or the Tracker listener would re-add the host on its next IFS call.
+          const { [UNMATCHED_HOSTS_KEY]: hosts = [], [DISMISSED_HOSTS_KEY]: dismissed = [] } = await chrome.storage.session.get([UNMATCHED_HOSTS_KEY, DISMISSED_HOSTS_KEY]);
+          await chrome.storage.session.set({
+            [UNMATCHED_HOSTS_KEY]: hosts.filter((h) => h !== message.host),
+            [DISMISSED_HOSTS_KEY]: dismissed.includes(message.host) ? dismissed : [...dismissed, message.host],
+          });
+          return sendResponse({ ok: true });
+        }
         case "GET_UNMATCHED_HOSTS": {
           const { [UNMATCHED_HOSTS_KEY]: hosts = [] } = await chrome.storage.session.get(UNMATCHED_HOSTS_KEY);
           return sendResponse({ ok: true, hosts });

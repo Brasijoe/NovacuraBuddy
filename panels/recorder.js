@@ -108,6 +108,7 @@ function initRecorderPanel() {
     stopRecorderPolling();
     updateRecorderStatus();
     renderSessions();
+    if (typeof refreshUnmatchedHosts === "function") refreshUnmatchedHosts();
     if (res && res.session) {
       document.getElementById("recStatusText").textContent = `Saved "${res.session.name}" (${res.session.calls.length} calls)`;
     }
