@@ -71,11 +71,6 @@ function renderDeploy() {
   if (!editing.id) { els.deployForm.innerHTML = ""; return; }
   renderDeployForm(els.deployForm, () => (dirty ? null : { id: editing.id, name: els.name.value.trim(), content: els.sql.value }), {
     send,
-    onDeployed: (result) => {
-      showNotice(`Deployed — Quick Report id ${result.quickReportId} on ${instanceName(result.baseUrl)}.`);
-      refreshHistory();
-      refreshByInstance();
-    },
     onError: (message) => showError(message, true)
   });
 }
@@ -155,6 +150,13 @@ els.beautify.addEventListener("click", () => {
 
 for (const field of [els.name, els.tags, els.sql]) field.addEventListener("input", () => { dirty = true; });
 els.byInstanceSelect.addEventListener("change", refreshByInstance);
+// The background records every finished deploy in qrDeployments — whether it came from this page
+// or from the side panel — so the history tables follow that key instead of the deploy callback.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.qrDeployments) return;
+  refreshHistory();
+  refreshByInstance();
+});
 window.addEventListener("beforeunload", (e) => {
   if (dirty) { e.preventDefault(); e.returnValue = ""; }
 });

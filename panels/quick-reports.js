@@ -51,7 +51,6 @@ function renderQrList() {
       if (!form.hidden) {
         renderDeployForm(form, () => report, {
           send,
-          onDeployed: (result) => showNotice(`Deployed "${report.name}" — Quick Report id ${result.quickReportId}.`),
           onError: (message) => showError(message, true)
         });
       }

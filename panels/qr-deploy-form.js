@@ -1,6 +1,7 @@
 /** Instance → permission sets → Deploy, shared by the Quick Reports tab and the editor page.
  *  `getReport()` returns the report to deploy, or null when it can't be deployed yet (unsaved
- *  edits). Never writes history — the background does that after a finished deploy. */
+ *  edits). Never writes history — the background does that after a finished deploy. A finished
+ *  deploy shows a green confirmation inside the form; `onDeployed` is optional. */
 function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
   container.innerHTML = "";
   container.classList.add("deploy-form");
@@ -35,10 +36,24 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
   function removeConfirmBox() {
     if (confirmBox) { confirmBox.remove(); confirmBox = null; }
   }
+  let successBox = null;
+  function removeSuccessBox() {
+    if (successBox) { successBox.remove(); successBox = null; }
+  }
+  function showDeployed(report, baseUrl, quickReportId) {
+    removeSuccessBox();
+    const option = [...select.options].find((o) => o.value === baseUrl);
+    successBox = document.createElement("div");
+    successBox.className = "banner banner-deployed";
+    successBox.setAttribute("role", "status");
+    successBox.textContent = `✓ Deployed "${report.name}" to ${option ? option.text : baseUrl} — Quick Report id ${quickReportId}.`;
+    container.appendChild(successBox);
+  }
 
   select.onchange = async () => {
     const token = ++selectToken;
     removeConfirmBox();
+    removeSuccessBox();
     sets.textContent = "";
     deployBtn.disabled = true;
     if (!select.value) return;
@@ -77,6 +92,7 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
     const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin + "/*"] }, resolve));
     if (!granted) return onError(`Permission for ${origin} was not granted — can't deploy there.`);
     const permissionSetIds = [...sets.querySelectorAll("input:checked")].map((b) => b.value);
+    removeSuccessBox();
     deployBtn.disabled = true;
     deployBtn.textContent = "Deploying…";
     const response = await send({ type: "QR_DEPLOY", baseUrl, report, permissionSetIds, forceQuickReportId, masterPassword: "" });
@@ -84,7 +100,8 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
     deployBtn.textContent = "Deploy";
     if (!response.ok) return onError(explain(response));
     if (response.outcome.status === "needsConfirmation") return askOverwrite(response.outcome, baseUrl);
-    onDeployed({ baseUrl, ...response.outcome });
+    showDeployed(report, baseUrl, response.outcome.quickReportId);
+    if (onDeployed) onDeployed({ baseUrl, ...response.outcome });
   }
 
   function askOverwrite({ existingQuickReportId, existingDescription }, baseUrl) {

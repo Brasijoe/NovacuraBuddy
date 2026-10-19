@@ -13,6 +13,7 @@
   --accent-soft: #bed7ff;
   --accent-orange: #fd6e15;
   --accent-red: #ff3333;
+  --accent-green: #1f9d55;
   --on-accent: #ffffff;
 
   --space-2: 8px;
@@ -116,10 +117,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { border-color
 .banner-success { background: #eef4ff; color: #0b3f99; border: 1px solid var(--accent); }
 .banner-warning { display: flex; align-items: center; gap: var(--space-2); background: #fff6ee; color: #7a3b0a; border: 1px solid var(--accent-orange); }
 .banner-warning span { flex: 1; }
+.banner-deployed { background: #ecf8f0; color: #14532d; border: 1px solid var(--accent-green); font-weight: 600; }
 @media (prefers-color-scheme: dark) {
   .banner-error { background: rgba(255, 51, 51, 0.12); color: #ffb4ac; }
   .banner-success { background: rgba(12, 101, 244, 0.15); color: #bed7ff; }
   .banner-warning { background: rgba(253, 110, 21, 0.12); color: #ffc89e; }
+  .banner-deployed { background: rgba(31, 157, 85, 0.15); color: #a7f3c4; }
 }
 
 /* ---------- top bar ---------- */
