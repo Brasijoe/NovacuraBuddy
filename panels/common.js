@@ -88,8 +88,10 @@ async function unlock() {
   if (response) refreshLockStatus();
 }
 
-document.getElementById("unlockBtn").addEventListener("click", unlock);
-document.getElementById("unlockPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+const unlockBtnEl = document.getElementById("unlockBtn");
+if (unlockBtnEl) unlockBtnEl.addEventListener("click", unlock);
+const unlockPasswordEl = document.getElementById("unlockPassword");
+if (unlockPasswordEl) unlockPasswordEl.addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
 
 /** A user-initiated request: clears any previous action error first, and keeps its own error
  *  visible (sticky) instead of letting the next background poll wipe it. */
