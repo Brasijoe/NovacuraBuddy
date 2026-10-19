@@ -1,6 +1,7 @@
 let qrReports = [];
 let qrSearch = null;
 let qrLoadedOnce = false;
+let qrRenderedSig = null; // identity of what the list currently shows; unchanged → keep the DOM (and any open deploy form)
 
 function openQrEditor(id) {
   chrome.tabs.create({ url: chrome.runtime.getURL("qr-editor.html" + (id ? `?id=${encodeURIComponent(id)}` : "")) });
@@ -17,6 +18,9 @@ function renderQrList() {
   const shown = qrSearch ? qrSearch.search(document.getElementById("qrSearch").value) : [];
   document.getElementById("qrCount").textContent = qrReports.length ? `${shown.length} of ${qrReports.length}` : "";
   const list = document.getElementById("qrList");
+  const sig = JSON.stringify(shown.map((r) => [r.id, r.name, r.sqlSha, r.jsonSha]));
+  if (sig === qrRenderedSig) return;
+  qrRenderedSig = sig;
   list.innerHTML = "";
   for (const report of shown) {
     const li = document.createElement("li");
@@ -84,6 +88,11 @@ async function refreshQuickReports() {
 }
 
 function initQuickReportsPanel() {
+  // The editor tab writes qrCache after a save; pick it up so Deploy never sends stale SQL.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    const change = area === "local" && changes.qrCache;
+    if (change && change.newValue && change.newValue.reports) setQrReports(change.newValue.reports, change.newValue.fetchedAt);
+  });
   document.getElementById("qrSearch").addEventListener("input", renderQrList);
   document.getElementById("qrRefreshBtn").addEventListener("click", () => { clearError(true); refreshQuickReports(); });
   document.getElementById("qrNewBtn").addEventListener("click", () => openQrEditor(null));

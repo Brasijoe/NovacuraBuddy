@@ -30,12 +30,22 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
     for (const instance of instances) select.append(new Option(instance.name, instance.baseUrl));
   })();
 
+  let selectToken = 0; // bumped on every change so a slow response for a previous instance is ignored
+  let confirmBox = null;
+  function removeConfirmBox() {
+    if (confirmBox) { confirmBox.remove(); confirmBox = null; }
+  }
+
   select.onchange = async () => {
+    const token = ++selectToken;
+    removeConfirmBox();
     sets.textContent = "";
     deployBtn.disabled = true;
     if (!select.value) return;
+    const baseUrl = select.value;
     sets.textContent = "Loading permission sets…";
-    const response = await send({ type: "QR_PERMISSION_SETS", baseUrl: select.value, masterPassword: "" });
+    const response = await send({ type: "QR_PERMISSION_SETS", baseUrl, masterPassword: "" });
+    if (token !== selectToken) return;
     sets.textContent = "";
     if (!response.ok) return onError(explain(response));
     const remembered = new Set(response.remembered);
@@ -58,10 +68,10 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
       : response.error;
   }
 
-  async function deploy(forceQuickReportId) {
+  async function deploy(forceQuickReportId, baseUrlOverride) {
     const report = getReport();
     if (!report) return onError("Save your changes before deploying — Deploy sends the saved version.");
-    const baseUrl = select.value;
+    const baseUrl = baseUrlOverride || select.value;
     const origin = new URL(baseUrl).origin;
     // Must run inside the click's user gesture, before any other await.
     const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin + "/*"] }, resolve));
@@ -73,11 +83,12 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
     deployBtn.disabled = false;
     deployBtn.textContent = "Deploy";
     if (!response.ok) return onError(explain(response));
-    if (response.outcome.status === "needsConfirmation") return askOverwrite(response.outcome);
+    if (response.outcome.status === "needsConfirmation") return askOverwrite(response.outcome, baseUrl);
     onDeployed({ baseUrl, ...response.outcome });
   }
 
-  function askOverwrite({ existingQuickReportId, existingDescription }) {
+  function askOverwrite({ existingQuickReportId, existingDescription }, baseUrl) {
+    removeConfirmBox();
     const box = document.createElement("div");
     box.className = "banner banner-warning";
     const text = document.createElement("span");
@@ -85,13 +96,14 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
     const yes = document.createElement("button");
     yes.className = "btn-primary";
     yes.textContent = "Overwrite";
-    yes.onclick = () => { box.remove(); deploy(existingQuickReportId); };
+    yes.onclick = () => { removeConfirmBox(); deploy(existingQuickReportId, baseUrl); };
     const no = document.createElement("button");
     no.className = "btn-ghost";
     no.textContent = "Cancel";
-    no.onclick = () => box.remove();
+    no.onclick = removeConfirmBox;
     box.append(text, yes, no);
     container.appendChild(box);
+    confirmBox = box;
   }
 
   deployBtn.onclick = () => deploy();

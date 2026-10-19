@@ -124,15 +124,20 @@ async function loadReports() {
 els.save.addEventListener("click", async () => {
   const name = els.name.value.trim();
   if (!name) return showError("Give the report a name first.", true);
-  els.save.disabled = true;
-  els.save.textContent = "Saving…";
+  const lockable = [els.name, els.tags, els.sql];
+  const setSaving = (on) => {
+    for (const f of lockable) f.readOnly = on;
+    els.beautify.disabled = on;
+    els.save.disabled = on;
+    els.save.textContent = on ? "Saving…" : "Save";
+  };
+  setSaving(true);
   const response = await send({
     type: "QR_SAVE",
     masterPassword: "",
     report: { id: editing.id, name, content: els.sql.value, tags: parseTags(), sqlSha: editing.sqlSha, jsonSha: editing.jsonSha, createdAt: editing.createdAt }
   });
-  els.save.disabled = false;
-  els.save.textContent = "Save";
+  setSaving(false);
   if (!response.ok) return showError(explain(response), true);
   clearError(true);
   applyReport(response.report);
