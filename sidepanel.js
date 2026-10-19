@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -7,6 +7,7 @@ function showTab(name) {
     document.getElementById(`panel-${tab}`).hidden = tab !== name;
   }
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
+  if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
 }
 
 for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => showTab(tab));
@@ -51,5 +52,7 @@ async function refreshUnmatchedHosts() {
 }
 
 initRecorderPanel();
+initQuickReportsPanel();
+refreshUpdateBanner();
 refreshUnmatchedHosts();
 setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); }, 5000);

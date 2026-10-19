@@ -331,3 +331,16 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 input.rename-input { width: 100%; }
 .instance-list input.rename-input { flex: 1; min-width: 0; width: auto; }
 .session-list .empty-state { color: var(--ink-muted); font-size: 12px; padding: var(--space-3); text-align: center; }
+
+/* ---------- quick reports ---------- */
+.tabs { flex-wrap: wrap; }
+.qr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.qr-item { display: flex; flex-direction: column; gap: 6px; padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-raised); }
+.qr-head { display: flex; align-items: center; gap: var(--space-2); }
+.qr-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.qr-preview { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deploy-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.checklist { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; font-size: 13px; }
+.deploy-actions { display: flex; gap: var(--space-2); }
+.update-banner { flex-wrap: wrap; }
+.update-howto { flex-basis: 100%; margin: 0; font-size: 12px; }
