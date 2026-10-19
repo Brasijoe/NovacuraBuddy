@@ -18,7 +18,7 @@
 - MV3 forbids remote scripts: third-party code only from `lib/vendor/`, pinned versions, recorded in `lib/vendor/VENDOR.md`.
 - Data repo default: `Brasijoe/ifs-quick-report-deployer-data`. Per-user path: `quick-reports/<github-login>/<slug>.sql` + `<slug>.json`; `.json` shape `{ id, name, tags, createdAt, updatedAt }` (2-space JSON), unchanged from the Electron app.
 - Commit messages in the data repo: `add QR: <name>`, `update QR: <name>`, `move QR to <login>: <slug>`.
-- Update source: `https://api.github.com/repos/Brasijoe/NovacuraBuddy/releases/latest`; release asset name `NovacuraBuddy-v<version>.zip`; tag `v<version>`; check interval 6 h.
+- Update source: `https://api.github.com/repos/Brasijoe/NovacuraBuddy/releases/latest`; release asset name `NovacuraBuddy-v<version>.zip`; tag `v<version>`; the check runs only on browser startup (`chrome.runtime.onStartup`) — no timer, no check on panel open.
 - No partial history: a deploy that did not finish writes nothing locally.
 - Never overwrite on GitHub without the loaded `sha`; a conflict is an error shown to the user.
 - GitHub token and master password never appear in logs.
@@ -28,7 +28,7 @@
 ## Review Focus
 
 - Non-ASCII text (ä ö ü ß €) in report names or SQL must survive a save → list round trip through GitHub's base64 unchanged (Task 4 test).
-- After the user installs an update, the old "v0.2.0 available" banner must disappear on its own, not linger from cached update info (Task 6 test + Task 8 wiring).
+- After the user installs an update, the old "v0.2.0 available" banner must disappear on its own, not linger from cached update info (Task 6 test + Task 8 `readUpdateInfo` version filter).
 - A save where `.sql` succeeds but `.json` fails must tell the user to reload, and the next save after reloading must succeed (Task 4 test).
 - An IFS token that expires mid-session (401) must not fail the deploy: clear the cached token and retry once (Task 2 test).
 - Two names that slug the same ("My Report", "my report!") must not overwrite each other; same name in different case is a name collision (Task 4 tests).
@@ -1664,34 +1664,26 @@ const qrService = QrService.createQrService({
   cacheStorage: chrome.storage.local
 });
 
-// Update notice: the result is stored so the side panel only reads it. `currentVersion` in the
-// stored info makes it stale the moment the user installs the update (no lingering banner).
+// Update notice: checked only when the browser starts (user decision) — no timer, no check on
+// panel open. The stored result carries `currentVersion`, so it is ignored once the user has
+// installed the update (no lingering banner).
 const UPDATE_INFO_KEY = "updateInfo";
 const UPDATE_DISMISSED_KEY = "updateDismissed";
-const UPDATE_ALARM = "update-check";
-const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 async function runUpdateCheck() {
   const info = await UpdateCheck.checkForUpdate(chrome.runtime.getManifest().version);
   if (info.reason) log("Update check:", info.reason);
-  const stored = { ...info, checkedAt: Date.now() };
-  await chrome.storage.local.set({ [UPDATE_INFO_KEY]: stored });
-  return stored;
+  await chrome.storage.local.set({ [UPDATE_INFO_KEY]: { ...info, checkedAt: Date.now() } });
 }
 
-async function refreshUpdateInfoIfStale() {
+async function readUpdateInfo() {
   const { [UPDATE_INFO_KEY]: info } = await chrome.storage.local.get(UPDATE_INFO_KEY);
-  const fresh = info && Date.now() - info.checkedAt < UPDATE_INTERVAL_MS && info.currentVersion === chrome.runtime.getManifest().version;
-  return fresh ? info : runUpdateCheck();
+  return info && info.currentVersion === chrome.runtime.getManifest().version ? info : null;
 }
 
-chrome.alarms.get(UPDATE_ALARM, (existing) => {
-  if (!existing) chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: UPDATE_INTERVAL_MS / 60000 });
+chrome.runtime.onStartup.addListener(() => {
+  runUpdateCheck().catch((e) => logError("Update check failed:", e.message));
 });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === UPDATE_ALARM) runUpdateCheck().catch((e) => logError("Update check failed:", e.message));
-});
-refreshUpdateInfoIfStale().catch((e) => logError("Update check failed:", e.message));
 ```
 
 Replace the log-redaction lines inside the listener:
@@ -1732,9 +1724,9 @@ Add these cases before `default:`:
             deployments: message.qrId ? await qrService.historyForReport(message.qrId) : await qrService.historyForInstance(message.baseUrl)
           });
         case "GET_UPDATE_INFO": {
-          const info = await refreshUpdateInfoIfStale();
+          const info = await readUpdateInfo();
           const { [UPDATE_DISMISSED_KEY]: dismissedVersion } = await chrome.storage.local.get(UPDATE_DISMISSED_KEY);
-          return sendResponse({ ok: true, info, dismissed: !!info.available && info.version === dismissedVersion });
+          return sendResponse({ ok: true, info, dismissed: !!info && !!info.available && info.version === dismissedVersion });
         }
         case "DISMISS_UPDATE":
           await chrome.storage.local.set({ [UPDATE_DISMISSED_KEY]: message.version });
@@ -1756,13 +1748,13 @@ Run: `grep -n "log(\"Message:\"" background.js` — confirm the destructuring li
 
 - [ ] **Step 6: Load-check the worker**
 
-In Chrome: `chrome://extensions` → NovacuraBuddy → Reload → "service worker" link → Console. Expected: no errors; within a few seconds either nothing or a line `[IFS Projection Tracker] Update check: HTTP 404` (no release exists yet — that is correct and quiet).
+In Chrome: `chrome://extensions` → NovacuraBuddy → Reload → "service worker" link → Console. Expected: no errors. No update check runs on reload (only on browser startup). Restart Chrome, open the service-worker console again: either nothing or `[IFS Projection Tracker] Update check: HTTP 404` (no release exists yet — correct and quiet).
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add background.js manifest.json manifest.test.js
-git commit -m "feat(quick-reports): background messages, update alarm, manifest permissions"
+git commit -m "feat(quick-reports): background messages, startup update check, manifest permissions"
 ```
 
 ---
@@ -2712,7 +2704,7 @@ Run: `npm test` — record the count (474 + new).
 1. Basic Data: save token → "Connected as <login>". Move unowned reports → existing flat reports appear in your folder on GitHub and in the tab.
 2. Quick Reports tab: search, Refresh, Deploy (new name → created; same report again → updated, no question; another report with a name that exists on IFS → overwrite question).
 3. Editor: save, conflict between two tabs, beautify, history, by-instance.
-4. Update banner: after merge to master, run `npm run release -- 0.2.0`; on a second install still at 0.1.0 (or by temporarily setting `manifest.json` to `0.1.0` locally and reloading) the banner shows within one panel open; Download saves `NovacuraBuddy-v0.2.0.zip`; after unzipping over the folder and Reload, the banner is gone.
+4. Update banner: after merge to master, run `npm run release -- 0.2.0`; on a second install still at 0.1.0 (or by temporarily setting `manifest.json` to `0.1.0` locally and reloading) after a browser restart the banner shows; Download saves `NovacuraBuddy-v0.2.0.zip`; after unzipping over the folder and Reload, the banner is gone.
 
 - [ ] **Step 3: Update spec status**
 

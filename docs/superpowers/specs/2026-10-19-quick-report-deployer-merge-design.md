@@ -38,6 +38,7 @@ Success looks like:
 | Layout | Side-panel tab (list, search, Refresh, quick Deploy, Open editor) + full-page editor tab |
 | Deploy history / permission-set memory | Local, `chrome.storage.local`, per instance |
 | Versioning | GitHub Releases of `Brasijoe/NovacuraBuddy` (public), tag `v<manifest version>` |
+| Update check timing | Only on browser startup |
 | Update install | Banner + download of release zip; user unzips over folder and reloads (Chrome cannot self-update an unpacked extension) |
 | Dropped from deployer | Command palette, SQLite, Electron safeStorage, its own instance store + token code |
 | Out of scope | Firefox build, "show teammates' reports" toggle, automatic update install |
@@ -98,8 +99,10 @@ Basic Data does not orphan history.
   returns `{ available, version, zipUrl, htmlUrl }`. `zipUrl` = the release asset named
   `NovacuraBuddy-v<version>.zip`, falling back to the release page if absent. No token. 404 (no
   releases yet) and network errors → `{ available: false }` plus a debug log line.
-- Background: runs on service-worker start and on a `chrome.alarms` alarm every 6 h; result
-  stored in `chrome.storage.local` (`updateInfo`), so the side panel just reads it.
+- Background: runs **only on browser startup** (`chrome.runtime.onStartup`, user decision
+  2026-10-19) — no timer, no check on panel open. Result stored in `chrome.storage.local`
+  (`updateInfo`, incl. `currentVersion`), so the side panel just reads it; stored info whose
+  `currentVersion` differs from the installed version is ignored (no banner after updating).
 
 ### 3.5 `lib/vendor/`
 Pinned local copies of `fuse.js` (UMD build) and `sql-formatter` (standalone build), with a
@@ -159,8 +162,8 @@ from `ifs-instances.js` → list permission sets (pre-check from memory) → `qr
 name and IFS error text; write nothing.
 
 ### 4.4 Update check
-Background alarm → `checkForUpdate` → `updateInfo` in storage → side panel reads on open and on
-`chrome.storage.onChanged`.
+Browser startup (`chrome.runtime.onStartup`) → `checkForUpdate` → `updateInfo` in storage → side
+panel reads it on open and on `chrome.storage.onChanged`.
 
 ## 5. Error handling
 
