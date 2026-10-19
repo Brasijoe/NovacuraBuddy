@@ -23,3 +23,22 @@ test("ships the extension, never tests, docs, firefox, scripts, dot-files or pac
     "manifest.json", "qr-editor.html", "recorder/viewer.js", "sidepanel.html"
   ]);
 });
+
+test("zipDirectoryContents puts the directory's contents at the zip root, with no wrapper folder", { skip: process.platform !== "win32" && "Windows-only (PowerShell)" }, () => {
+  const { execFileSync } = require("node:child_process");
+  const { zipDirectoryContents } = require("./release-files.js");
+  const stage = fs.mkdtempSync(path.join(os.tmpdir(), "nb-stage-"));
+  fs.mkdirSync(path.join(stage, "lib"), { recursive: true });
+  fs.writeFileSync(path.join(stage, "manifest.json"), "{}");
+  fs.writeFileSync(path.join(stage, "lib", "a.js"), "x");
+  const zipPath = path.join(os.tmpdir(), `nb-zip-${process.pid}-${Date.now()}.zip`);
+  zipDirectoryContents(stage, zipPath);
+  const names = execFileSync("powershell", ["-NoProfile", "-Command",
+    `Add-Type -A System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::OpenRead('${zipPath}').Entries | ForEach-Object { $_.FullName }`],
+    { encoding: "utf8" }).split(/\r?\n/).map((s) => s.trim().replace(/\\/g, "/")).filter(Boolean);
+  fs.rmSync(zipPath, { force: true });
+  fs.rmSync(stage, { recursive: true, force: true });
+  assert.ok(names.includes("manifest.json"), `manifest.json not at zip root; entries: ${names}`);
+  assert.ok(names.includes("lib/a.js"), `lib/a.js missing; entries: ${names}`);
+  assert.ok(names.every((n) => !n.startsWith(path.basename(stage) + "/")), `wrapper folder found; entries: ${names}`);
+});

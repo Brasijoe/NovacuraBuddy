@@ -5,7 +5,7 @@ const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { collectReleaseFiles } = require("./release-files.js");
+const { collectReleaseFiles, zipDirectoryContents } = require("./release-files.js");
 const { compareVersions } = require("../lib/update-check.js");
 
 const root = path.resolve(__dirname, "..");
@@ -49,7 +49,7 @@ for (const f of files) {
   fs.copyFileSync(path.join(root, f), dest);
 }
 const zipPath = path.join(root, zipName);
-run("powershell", ["-NoProfile", "-Command", `Compress-Archive -Path '${stage}\*' -DestinationPath '${zipPath}' -Force`]);
+zipDirectoryContents(stage, zipPath);
 
 run("git", ["commit", "-am", `chore: release v${version}`]);
 run("git", ["tag", `v${version}`]);

@@ -1,3 +1,4 @@
+const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -25,4 +26,15 @@ function collectReleaseFiles(rootDir) {
   return out.sort();
 }
 
-module.exports = { collectReleaseFiles };
+const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+/**
+ * Zips the CONTENTS of stageDir into zipPath (no wrapper folder), so manifest.json sits at the zip root.
+ * Windows PowerShell only (Compress-Archive).
+ */
+function zipDirectoryContents(stageDir, zipPath) {
+  const command = `Compress-Archive -Path (Join-Path ${psQuote(stageDir)} '*') -DestinationPath ${psQuote(zipPath)} -Force`;
+  execFileSync("powershell", ["-NoProfile", "-Command", command], { stdio: "inherit" });
+}
+
+module.exports = { collectReleaseFiles, zipDirectoryContents };
