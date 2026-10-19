@@ -1,8 +1,9 @@
 /** Instance → permission sets → Deploy, shared by the Quick Reports tab and the editor page.
  *  `getReport()` returns the report to deploy, or null when it can't be deployed yet (unsaved
  *  edits). Never writes history — the background does that after a finished deploy. A finished
- *  deploy shows a green confirmation inside the form; `onDeployed` is optional. */
-function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
+ *  deploy shows a green confirmation inside the form; `onDeployed` is optional. With `onClose`
+ *  the form gets a Close button (side panel); the editor page keeps its form always open. */
+function renderDeployForm(container, getReport, { send, onDeployed, onClose, onError }) {
   container.innerHTML = "";
   container.classList.add("deploy-form");
 
@@ -16,6 +17,13 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
   deployBtn.textContent = "Deploy";
   deployBtn.disabled = true;
   actions.appendChild(deployBtn);
+  if (onClose) {
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "btn-ghost";
+    closeBtn.textContent = "Close";
+    closeBtn.onclick = onClose;
+    actions.appendChild(closeBtn);
+  }
   container.append(select, sets, actions);
 
   (async () => {
@@ -40,13 +48,16 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
   function removeSuccessBox() {
     if (successBox) { successBox.remove(); successBox = null; }
   }
+  const instanceLabel = (baseUrl) => {
+    const option = [...select.options].find((o) => o.value === baseUrl);
+    return option ? option.text : baseUrl;
+  };
   function showDeployed(report, baseUrl, quickReportId) {
     removeSuccessBox();
-    const option = [...select.options].find((o) => o.value === baseUrl);
     successBox = document.createElement("div");
     successBox.className = "banner banner-deployed";
     successBox.setAttribute("role", "status");
-    successBox.textContent = `✓ Deployed "${report.name}" to ${option ? option.text : baseUrl} — Quick Report id ${quickReportId}.`;
+    successBox.textContent = `✓ Deployed "${report.name}" to ${instanceLabel(baseUrl)} — Quick Report id ${quickReportId}.`;
     container.appendChild(successBox);
   }
 
@@ -101,7 +112,7 @@ function renderDeployForm(container, getReport, { send, onDeployed, onError }) {
     if (!response.ok) return onError(explain(response));
     if (response.outcome.status === "needsConfirmation") return askOverwrite(response.outcome, baseUrl);
     showDeployed(report, baseUrl, response.outcome.quickReportId);
-    if (onDeployed) onDeployed({ baseUrl, ...response.outcome });
+    if (onDeployed) onDeployed({ baseUrl, instanceName: instanceLabel(baseUrl), ...response.outcome });
   }
 
   function askOverwrite({ existingQuickReportId, existingDescription }, baseUrl) {

@@ -2,6 +2,7 @@ let qrReports = [];
 let qrSearch = null;
 let qrLoadedOnce = false;
 let qrRenderedSig = null; // identity of what the list currently shows; unchanged → keep the DOM (and any open deploy form)
+let qrOpenForm = null; // the one row whose deploy form is expanded: { close() }
 
 function openQrEditor(id) {
   chrome.tabs.create({ url: chrome.runtime.getURL("qr-editor.html" + (id ? `?id=${encodeURIComponent(id)}` : "")) });
@@ -21,6 +22,7 @@ function renderQrList() {
   const sig = JSON.stringify(shown.map((r) => [r.id, r.name, r.sqlSha, r.jsonSha]));
   if (sig === qrRenderedSig) return;
   qrRenderedSig = sig;
+  qrOpenForm = null;
   list.innerHTML = "";
   for (const report of shown) {
     const li = document.createElement("li");
@@ -46,14 +48,34 @@ function renderQrList() {
 
     const form = document.createElement("div");
     form.hidden = true;
-    deployBtn.onclick = () => {
-      form.hidden = !form.hidden;
-      if (!form.hidden) {
-        renderDeployForm(form, () => report, {
-          send,
-          onError: (message) => showError(message, true)
-        });
+    let deployed = null; // green "Deployed …" line left on the row after the form collapses
+    const row = {
+      close() {
+        form.hidden = true;
+        deployBtn.textContent = "Deploy";
+        if (qrOpenForm === row) qrOpenForm = null;
       }
+    };
+    deployBtn.onclick = () => {
+      if (!form.hidden) return row.close();
+      if (qrOpenForm) qrOpenForm.close();
+      if (deployed) { deployed.remove(); deployed = null; }
+      form.hidden = false;
+      deployBtn.textContent = "Close";
+      qrOpenForm = row;
+      renderDeployForm(form, () => report, {
+        send,
+        onClose: () => row.close(),
+        onDeployed: (result) => {
+          row.close();
+          deployed = document.createElement("div");
+          deployed.className = "banner banner-deployed";
+          deployed.setAttribute("role", "status");
+          deployed.textContent = `✓ Deployed to ${result.instanceName} — Quick Report id ${result.quickReportId}.`;
+          li.appendChild(deployed);
+        },
+        onError: (message) => showError(message, true)
+      });
     };
 
     li.append(head, preview, form);
