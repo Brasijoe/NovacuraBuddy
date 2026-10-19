@@ -66,8 +66,9 @@ the module stays free of storage.
 ### 3.2 `lib/qr-library.js`
 GitHub data-repo client. Inputs: token, repo (`owner/name`), `fetch`.
 
-- `whoAmI()` — `GET /user`, returns login; cached in `chrome.storage.local` keyed by a hash of the
-  token so a changed token re-resolves.
+- `whoAmI()` — `GET /user`, returns login. Called when the token is saved in Basic Data (together
+  with a repo-access check); the login is stored next to the encrypted token, so a changed token
+  always re-resolves because it can only change through that save.
 - `list(login)` — default branch via `GET /repos/{repo}`, then one
   `GET /git/trees/{branch}?recursive=1`, filter to `quick-reports/<login>/*.json|*.sql`, fetch
   blobs, return `{ id, name, tags, createdAt, updatedAt, content, sqlSha, jsonSha }[]`.
