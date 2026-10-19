@@ -8,7 +8,13 @@ importScripts(
   "lib/tracking.js",
   "lib/flow-designer-tab.js",
   "lib/flow-modules.js",
-  "lib/flow-token.js"
+  "lib/flow-token.js",
+  "lib/qr-deploy.js",
+  "lib/qr-history.js",
+  "lib/qr-library.js",
+  "lib/github-settings.js",
+  "lib/qr-service.js",
+  "lib/update-check.js"
 );
 
 // Without this, the toolbar icon has no default_popup and MV3 does nothing on click — the panel
@@ -28,6 +34,33 @@ function logError(...args) { console.error(LOG_PREFIX, ...args); }
 
 const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
 globalThis.__recorderInstanceStore = instanceStore; // RecorderCapture lists instances from the shared store
+const qrService = QrService.createQrService({
+  instanceStore,
+  settings: GithubSettings.createGithubSettings(chrome.storage.local),
+  history: QrHistory.createQrHistory(chrome.storage.local),
+  cacheStorage: chrome.storage.local
+});
+
+// Update notice: checked only when the browser starts (user decision) — no timer, no check on
+// panel open. The stored result carries `currentVersion`, so it is ignored once the user has
+// installed the update (no lingering banner).
+const UPDATE_INFO_KEY = "updateInfo";
+const UPDATE_DISMISSED_KEY = "updateDismissed";
+
+async function runUpdateCheck() {
+  const info = await UpdateCheck.checkForUpdate(chrome.runtime.getManifest().version);
+  if (info.reason) log("Update check:", info.reason);
+  await chrome.storage.local.set({ [UPDATE_INFO_KEY]: { ...info, checkedAt: Date.now() } });
+}
+
+async function readUpdateInfo() {
+  const { [UPDATE_INFO_KEY]: info } = await chrome.storage.local.get(UPDATE_INFO_KEY);
+  return info && info.currentVersion === chrome.runtime.getManifest().version ? info : null;
+}
+
+chrome.runtime.onStartup.addListener(() => {
+  runUpdateCheck().catch((e) => logError("Update check failed:", e.message));
+});
 const flowToken = FlowToken.createTokenCache(45 * 60 * 1000);
 let excludedSet = ProjectionFilter.parseExcludedList(""); // populated once `ready` resolves
 let designerTabState = null; // { tabId, orgId, itemId, packageId, packageResolved }
@@ -282,8 +315,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const { masterPassword, fields, ...safeMessage } = message;
-      log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage);
+      const { masterPassword, fields, token, report, ...safeMessage } = message;
+      log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage, report ? { report: report.id } : "");
+      const masterKey = () => instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
       switch (message.type) {
         // The Traffic Explorer's token comes from IFS Buddy's own capture (recorder-capture.js),
         // unchanged; the Tracker keeps using its webRequest-sniffed flowToken.
@@ -407,13 +441,42 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             return sendResponse({ ok: true, result: await handleActivateModule(created) });
           }
           return sendResponse({ ok: true, result: await handleActivateModule(message) });
+        case "QR_GET_SETTINGS":
+          return sendResponse({ ok: true, ...(await qrService.getGithubSettings()) });
+        case "QR_SAVE_SETTINGS":
+          return sendResponse({ ok: true, ...(await qrService.saveGithubSettings({ token: message.token, repo: message.repo }, await masterKey())) });
+        case "QR_LIST":
+          return sendResponse({ ok: true, ...(await qrService.listReports(await masterKey())) });
+        case "QR_LIST_CACHED":
+          return sendResponse({ ok: true, cache: await qrService.getCachedReports() });
+        case "QR_SAVE":
+          return sendResponse({ ok: true, report: await qrService.saveReport(await masterKey(), message.report) });
+        case "QR_MOVE_UNOWNED":
+          return sendResponse({ ok: true, ...(await qrService.moveUnowned(await masterKey())) });
+        case "QR_PERMISSION_SETS":
+          return sendResponse({ ok: true, ...(await qrService.listPermissionSets(message.baseUrl, await masterKey())) });
+        case "QR_DEPLOY":
+          return sendResponse({ ok: true, outcome: await qrService.deploy(await masterKey(), message) });
+        case "QR_HISTORY":
+          return sendResponse({
+            ok: true,
+            deployments: message.qrId ? await qrService.historyForReport(message.qrId) : await qrService.historyForInstance(message.baseUrl)
+          });
+        case "GET_UPDATE_INFO": {
+          const info = await readUpdateInfo();
+          const { [UPDATE_DISMISSED_KEY]: dismissedVersion } = await chrome.storage.local.get(UPDATE_DISMISSED_KEY);
+          return sendResponse({ ok: true, info, dismissed: !!info && !!info.available && info.version === dismissedVersion });
+        }
+        case "DISMISS_UPDATE":
+          await chrome.storage.local.set({ [UPDATE_DISMISSED_KEY]: message.version });
+          return sendResponse({ ok: true });
         default:
           return sendResponse({ ok: false, error: `Unknown message type: ${message.type}` });
       }
     } catch (e) {
       logError("Message", message.type, "failed:", e.message, e.stack);
       if (e.service === "connect" && e.status === 401) flowToken.clear();
-      sendResponse({ ok: false, error: e.message, needsMasterPassword: e.code === "MASTER_PASSWORD_REQUIRED" });
+      sendResponse({ ok: false, error: e.message, code: e.code, needsMasterPassword: e.code === "MASTER_PASSWORD_REQUIRED" });
     }
   })();
   return true; // keep the message channel open for the async response
