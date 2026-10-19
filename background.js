@@ -49,7 +49,11 @@ const UPDATE_DISMISSED_KEY = "updateDismissed";
 
 async function runUpdateCheck() {
   const info = await UpdateCheck.checkForUpdate(chrome.runtime.getManifest().version);
-  if (info.reason) log("Update check:", info.reason);
+  if (info.reason) {
+    // Network/HTTP failure: keep whatever we already know (e.g. an available update) instead of overwriting it.
+    log("Update check:", info.reason);
+    return;
+  }
   await chrome.storage.local.set({ [UPDATE_INFO_KEY]: { ...info, checkedAt: Date.now() } });
 }
 

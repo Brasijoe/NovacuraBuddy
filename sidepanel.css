@@ -3,6 +3,7 @@
    this extension, so the stacks below name them first and fall back to the deck's own documented
    Arial substitute, then the platform default — swap in real font files the moment they exist. */
 :root {
+  color-scheme: light dark;
   --ink: #000000;
   --ink-muted: #465466;
   --surface: #ffffff;
@@ -94,7 +95,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 }
 .btn-ghost:hover:not(:disabled) { color: var(--accent-red); border-color: transparent; }
 
-input[type="text"], input:not([type]), input[type="password"] {
+input[type="text"], input:not([type]), input[type="password"], select, textarea {
   font: inherit;
   color: var(--ink);
   background: var(--surface);
@@ -102,7 +103,7 @@ input[type="text"], input:not([type]), input[type="password"] {
   border-radius: var(--radius-md);
   padding: 6px 12px;
 }
-input:focus-visible { border-color: var(--accent); }
+input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--accent); }
 
 /* ---------- banner ---------- */
 .banner {
@@ -342,5 +343,5 @@ input.rename-input { width: 100%; }
 .deploy-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .checklist { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; font-size: 13px; }
 .deploy-actions { display: flex; gap: var(--space-2); }
-.update-banner { flex-wrap: wrap; }
+.update-banner:not([hidden]) { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .update-howto { flex-basis: 100%; margin: 0; font-size: 12px; }
