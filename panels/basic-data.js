@@ -131,3 +131,57 @@ function prefillInstanceForm({ baseUrl, name }) {
   document.getElementById("instanceName").value = name;
   document.getElementById("instanceTokenEndpoint").focus();
 }
+
+async function refreshGithubStatus() {
+  const response = await send({ type: "QR_GET_SETTINGS" });
+  if (!response.ok) return;
+  const repoField = document.getElementById("githubRepo");
+  if (!repoField.value) repoField.value = response.repo;
+  document.getElementById("githubStatus").textContent = response.hasToken
+    ? `Connected as ${response.login} → ${response.repo}`
+    : "No GitHub token saved yet — Quick Reports need one.";
+  document.getElementById("githubMoveBtn").hidden = !response.hasToken;
+}
+
+document.getElementById("githubForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Checking GitHub…";
+  const response = await actionOrShowError({
+    type: "QR_SAVE_SETTINGS",
+    repo: document.getElementById("githubRepo").value,
+    token: document.getElementById("githubToken").value,
+    masterPassword: document.getElementById("githubMasterPassword").value || masterPasswordOf()
+  });
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Save GitHub settings";
+  if (!response) return;
+  document.getElementById("githubToken").value = "";
+  document.getElementById("githubMasterPassword").value = "";
+  showNotice(`GitHub OK — saved as ${response.login} for ${response.repo}.`);
+  if (typeof qrLoadedOnce !== "undefined") qrLoadedOnce = false; // Quick Reports tab reloads on next open
+  refreshGithubStatus();
+  refreshLockStatus();
+});
+
+// Two clicks instead of a confirm() dialog: the move rewrites files in the shared repo.
+document.getElementById("githubMoveBtn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = "1";
+    btn.textContent = "Click again to move them now";
+    setTimeout(() => { delete btn.dataset.armed; btn.textContent = "Move unowned reports into my folder"; }, 5000);
+    return;
+  }
+  delete btn.dataset.armed;
+  btn.disabled = true;
+  btn.textContent = "Moving…";
+  const response = await actionOrShowError({ type: "QR_MOVE_UNOWNED", masterPassword: masterPasswordOf() });
+  btn.disabled = false;
+  btn.textContent = "Move unowned reports into my folder";
+  if (!response) return;
+  const skipped = response.skipped.length ? ` Skipped (already in your folder or incomplete): ${response.skipped.join(", ")}.` : "";
+  showNotice(`Moved ${response.moved.length} report(s) into your folder.${skipped}`);
+  if (typeof qrLoadedOnce !== "undefined") qrLoadedOnce = false;
+});

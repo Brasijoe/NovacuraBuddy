@@ -76,6 +76,16 @@
         <input id="masterPassword" placeholder="Master password" type="password" required />
         <button type="submit" class="btn-primary">Add instance</button>
       </form>
+      <hr class="section-divider" />
+      <h2>GitHub (Quick Reports)</h2>
+      <p id="githubStatus" class="list-count"></p>
+      <form id="githubForm" class="instance-form">
+        <input id="githubRepo" placeholder="owner/repo" required />
+        <input id="githubToken" type="password" placeholder="GitHub personal access token (repo access)" required />
+        <input id="githubMasterPassword" type="password" placeholder="Master password (if locked)" />
+        <button type="submit" class="btn-primary">Save GitHub settings</button>
+      </form>
+      <button id="githubMoveBtn" class="btn-ghost" hidden title="One-time: move reports saved before per-user folders into your own folder">Move unowned reports into my folder</button>
     </section>
 
     <script src="panels/common.js"></script>

@@ -18,6 +18,7 @@ showTab(initialTab);
 initTrackingToggle();
 refreshLockStatus();
 refreshInstances();
+refreshGithubStatus();
 refreshProjections();
 let lastUnmatchedHostsKey = null;
 async function refreshUnmatchedHosts() {
