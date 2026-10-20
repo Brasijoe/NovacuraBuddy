@@ -93,6 +93,21 @@ if (unlockBtnEl) unlockBtnEl.addEventListener("click", unlock);
 const unlockPasswordEl = document.getElementById("unlockPassword");
 if (unlockPasswordEl) unlockPasswordEl.addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
 
+/** Why Create/Activate can't run right now ("" when it can), from a GET_DESIGNER_STATUS response.
+ *  Shared by the Projection Tracker and Quick Reports so both explain it the same way. */
+function designerBlockReason(designer) {
+  if (!designer.open) return "No Flow Designer tab active — switch to the Designer tab of the flow (Create/Activate act on it).";
+  if (!designer.hasFlowToken) return "Designer tab found, but no Flow session yet — click anywhere in the Designer tab once.";
+  return "";
+}
+
+/** The one way any panel creates (or reloads) the Flow module for an IFS projection and activates
+ *  it in the open Designer flow. The Projection Tracker and Quick Reports both call this, so the
+ *  module flow is the same everywhere; `type` is CREATE_MODULE or RELOAD_AND_ACTIVATE. */
+function createAndActivateModule(baseUrl, projectionName, type = "CREATE_MODULE") {
+  return actionOrShowError({ type, baseUrl, projectionName, masterPassword: masterPasswordOf() });
+}
+
 /** A user-initiated request: clears any previous action error first, and keeps its own error
  *  visible (sticky) instead of letting the next background poll wipe it. */
 function actionOrShowError(message) {

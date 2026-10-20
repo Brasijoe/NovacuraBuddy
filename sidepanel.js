@@ -55,4 +55,4 @@ initRecorderPanel();
 initQuickReportsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); }, 5000);

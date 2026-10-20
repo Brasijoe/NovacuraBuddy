@@ -64,7 +64,7 @@ function renderActions(entry, { name, status, assetId, headVersionId, open }) {
     btn.className = "btn-primary";
     btn.disabled = !open;
     btn.title = disabledTitle || "Create the module and activate it in the open flow";
-    btn.onclick = () => runAction(btn, "Creating & activating…", () => actionOrShowError({ type: "CREATE_MODULE", baseUrl: currentBaseUrl, projectionName: name, masterPassword: masterPasswordOf() }));
+    btn.onclick = () => runAction(btn, "Creating & activating…", () => createAndActivateModule(currentBaseUrl, name));
     entry.actions.appendChild(btn);
     return;
   }
@@ -84,7 +84,7 @@ function renderActions(entry, { name, status, assetId, headVersionId, open }) {
     reloadBtn.textContent = "Reload & Activate";
     reloadBtn.disabled = !open;
     reloadBtn.title = disabledTitle;
-    reloadBtn.onclick = () => runAction(reloadBtn, "Reloading…", () => actionOrShowError({ type: "RELOAD_AND_ACTIVATE", baseUrl: currentBaseUrl, projectionName: name, masterPassword: masterPasswordOf() }));
+    reloadBtn.onclick = () => runAction(reloadBtn, "Reloading…", () => createAndActivateModule(currentBaseUrl, name, "RELOAD_AND_ACTIVATE"));
     entry.actions.appendChild(reloadBtn);
   }
 }
@@ -124,11 +124,7 @@ async function refreshProjections() {
 
   document.getElementById("designerDot").classList.toggle("is-open", designerResponse.open);
   const hint = document.getElementById("designerHint");
-  hint.textContent = !designerResponse.open
-    ? "No Flow Designer tab active — switch to the Designer tab of the flow (Create/Activate act on it)."
-    : !designerResponse.hasFlowToken
-      ? "Designer tab found, but no Flow session yet — click anywhere in the Designer tab once."
-      : "";
+  hint.textContent = designerBlockReason(designerResponse);
   hint.hidden = !hint.textContent;
 
   const trackedByName = new Map(trackedResponse.tracked.map((t) => [t.projectionName.toUpperCase(), t]));

@@ -267,11 +267,12 @@ async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
     codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
   });
   log("Generated FlowScript source (", code.length, "bytes) — finding or creating the module asset...");
-  const asset = await FlowModules.findOrCreateModule({ flowFetch, orgId: tab.orgId, packageId, projectionName });
+  // IFS's own spelling of the name (callers may pass any case, e.g. QuickReport<id> from Quick Reports).
+  const asset = await FlowModules.findOrCreateModule({ flowFetch, orgId: tab.orgId, packageId, projectionName: inputs.projectionName });
   log("Module asset id =", asset.id, "— committing module code...");
   const newBranch = await FlowModules.commitModuleCode({ flowFetch, orgId: tab.orgId, packageId, assetId: asset.id, flowScriptCode: code });
   log("CREATE_MODULE done: assetId=", asset.id, "headVersionId=", newBranch.headVersionId);
-  return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || projectionName };
+  return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || inputs.projectionName };
 }
 
 async function handleActivateModule({ assetId, headVersionId, projectionName }) {
@@ -464,7 +465,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "QR_HISTORY":
           return sendResponse({
             ok: true,
-            deployments: message.qrId ? await qrService.historyForReport(message.qrId) : await qrService.historyForInstance(message.baseUrl)
+            deployments: message.qrId ? await qrService.historyForReport(message.qrId)
+              : message.baseUrl ? await qrService.historyForInstance(message.baseUrl)
+              : await qrService.historyAll()
           });
         case "GET_UPDATE_INFO": {
           const info = await readUpdateInfo();
