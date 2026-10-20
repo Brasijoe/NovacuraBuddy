@@ -48,7 +48,7 @@ test("importScripts loads the IFS client before its users", () => {
 });
 
 test("every <script src> in the extension pages exists", () => {
-  for (const page of ["sidepanel.html", "qr-editor.html"]) {
+  for (const page of ["sidepanel.html", "qr-editor.html", "cl-editor.html"]) {
     const html = fs.readFileSync(path.join(__dirname, page), "utf8");
     for (const m of html.matchAll(/<script src="([^"]+)"/g)) assert.ok(fs.existsSync(path.join(__dirname, m[1])), `${page}: ${m[1]} does not exist`);
   }
@@ -61,4 +61,11 @@ test("pages load the shared picker before the forms that use it", () => {
     assert.ok(srcs.indexOf("panels/common.js") < srcs.indexOf("panels/permission-picker.js"), page);
     assert.ok(srcs.indexOf("panels/permission-picker.js") < srcs.indexOf("panels/qr-deploy-form.js"), page);
   }
+});
+
+test("the Custom LU editor loads its libraries before cl-editor.js", () => {
+  const html = fs.readFileSync(path.join(__dirname, "cl-editor.html"), "utf8");
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  const order = ["lib/custom-lu-model.js", "lib/flow-properties.js", "panels/common.js", "panels/permission-picker.js", "panels/cl-deploy-form.js", "cl-editor.js"];
+  assert.deepEqual(srcs.filter((s) => order.includes(s)), order);
 });

@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Custom LU editor</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+    <link rel="stylesheet" href="qr-editor.css" />
+    <link rel="stylesheet" href="cl-editor.css" />
+  </head>
+  <body class="qr-editor-page">
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+
+    <header class="topbar"><h1 id="editorTitle">New Custom LU</h1></header>
+
+    <div class="editor-grid">
+      <section class="editor-main">
+        <p id="modeHint" class="list-count"></p>
+        <div id="importRow" hidden>
+          <label class="btn-like">Choose Flow properties file (.json) <input id="importFile" type="file" accept=".json,application/json" hidden /></label>
+        </div>
+        <div id="luBlocks"></div>
+        <div class="editor-actions">
+          <button id="saveBtn" class="btn-primary" hidden>Save to library</button>
+        </div>
+      </section>
+
+      <aside class="editor-side">
+        <h2>Deploy</h2>
+        <p class="list-count">Creates the LU and new attributes, approves, publishes, and grants the LU's projection.</p>
+        <div id="deployForm"></div>
+      </aside>
+    </div>
+
+    <script src="lib/custom-lu-model.js"></script>
+    <script src="lib/flow-properties.js"></script>
+    <script src="panels/common.js"></script>
+    <script src="panels/permission-picker.js"></script>
+    <script src="panels/cl-deploy-form.js"></script>
+    <script src="cl-editor.js"></script>
+  </body>
+</html>
