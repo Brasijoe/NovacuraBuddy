@@ -66,6 +66,12 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
         li.className = "banner banner-deployed";
         li.setAttribute("role", "status");
         li.textContent = `✓ ${r.name} on ${picker.instanceLabel(baseUrl)} — ${summary(r.outcome)}.`;
+        for (const g of r.outcome.grantErrors || []) {
+          const warn = document.createElement("div");
+          warn.className = "cl-warning";
+          warn.textContent = `⚠ Not granted to ${g.role}: ${g.message}`;
+          li.appendChild(warn);
+        }
         for (const m of r.outcome.mismatches) {
           const warn = document.createElement("div");
           warn.className = "cl-warning";
