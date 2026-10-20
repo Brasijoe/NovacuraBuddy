@@ -467,13 +467,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "DEACTIVATE_MODULE":
           return sendResponse({ ok: true, result: await handleDeactivateModule(message) });
+        case "CREATE_MODULE": { // Create always activates in the open flow too
+          const created = await handleCreateModule(message);
+          return sendResponse({ ok: true, result: await handleActivateModule(created) });
+        }
         case "ACTIVATE_MODULE":
-        case "CREATE_MODULE": // Create always activates in the open flow too
-        case "RELOAD_AND_ACTIVATE":
-          if (message.type !== "ACTIVATE_MODULE") {
-            const created = await handleCreateModule(message);
-            return sendResponse({ ok: true, result: await handleActivateModule(created) });
-          }
           return sendResponse({ ok: true, result: await handleActivateModule(message) });
         case "QR_GET_SETTINGS":
           return sendResponse({ ok: true, ...(await qrService.getGithubSettings()) });

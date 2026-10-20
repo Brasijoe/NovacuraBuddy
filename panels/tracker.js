@@ -12,7 +12,7 @@ async function initTrackingToggle() {
 // Activation is shown by the row's switch, so only states the switch can't express get a pill.
 function statusLabel(status) {
   return {
-    not_created: "Not created", activated_stale: "Update available", unknown: "Status unavailable"
+    not_created: "Not created", unknown: "Status unavailable"
   }[status] || "";
 }
 
@@ -71,7 +71,7 @@ function buildProjectionRow() {
 /** On = the module is in the open flow. Turning it on creates the module first when it doesn't
  *  exist yet (same path as Quick Reports' Module button); turning it off removes it from the flow. */
 function buildModuleSwitch(entry, { name, status, assetId, headVersionId, open }) {
-  const active = status === "activated" || status === "activated_stale";
+  const active = status === "activated";
   const label = document.createElement("label");
   label.className = "toggle";
   const input = document.createElement("input");
@@ -108,17 +108,7 @@ function buildModuleSwitch(entry, { name, status, assetId, headVersionId, open }
 function renderActions(entry, state) {
   if (entry.busy) return; // keep the in-flight switch as the user left it until the action ends
   entry.actions.innerHTML = "";
-  const { name, status, open } = state;
-  if (status === "unknown" || status === "no_designer") return;
-
-  if (status === "activated_stale") {
-    const reloadBtn = document.createElement("button");
-    reloadBtn.textContent = "Reload & Activate";
-    reloadBtn.disabled = !open;
-    reloadBtn.title = open ? "Regenerate the module from IFS and activate the new version" : "Open or interact with the Designer tab first";
-    reloadBtn.onclick = () => runAction(reloadBtn, "Reloading…", () => createAndActivateModule(currentBaseUrl, name, "RELOAD_AND_ACTIVATE"));
-    entry.actions.appendChild(reloadBtn);
-  }
+  if (state.status === "unknown" || state.status === "no_designer") return;
   entry.actions.appendChild(buildModuleSwitch(entry, state));
 }
 

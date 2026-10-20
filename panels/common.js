@@ -101,11 +101,11 @@ function designerBlockReason(designer) {
   return "";
 }
 
-/** The one way any panel creates (or reloads) the Flow module for an IFS projection and activates
- *  it in the open Designer flow. The Projection Tracker and Quick Reports both call this, so the
- *  module flow is the same everywhere; `type` is CREATE_MODULE or RELOAD_AND_ACTIVATE. */
-function createAndActivateModule(baseUrl, projectionName, type = "CREATE_MODULE") {
-  return actionOrShowError({ type, baseUrl, projectionName, masterPassword: masterPasswordOf() });
+/** The one way any panel creates the Flow module for an IFS projection and activates it in the
+ *  open Designer flow. The Projection Tracker and Quick Reports both call this, so the module flow
+ *  is the same everywhere. */
+function createAndActivateModule(baseUrl, projectionName) {
+  return actionOrShowError({ type: "CREATE_MODULE", baseUrl, projectionName, masterPassword: masterPasswordOf() });
 }
 
 /** A user-initiated request: clears any previous action error first, and keeps its own error

@@ -300,7 +300,6 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 .status-unlocked { color: var(--accent); border-color: var(--accent-soft); }
 .status-created { color: var(--accent); border-color: var(--accent-soft); }
 .status-activated { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.status-activated_stale { background: var(--accent-orange); border-color: var(--accent-orange); color: var(--on-accent); }
 .status-deployed { background: #ecf8f0; color: #1d6b40; border-color: #c4e8d2; }
 @media (prefers-color-scheme: dark) {
   .status-deployed { background: rgba(31, 157, 85, 0.14); color: #a7f3c4; border-color: rgba(31, 157, 85, 0.35); }
