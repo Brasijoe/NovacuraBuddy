@@ -106,6 +106,10 @@ input[type="text"], input:not([type]), input[type="password"], select, textarea 
 }
 input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--accent); }
 
+/* `hidden` must always win: a class that sets `display` (e.g. .deploy-form's flex) otherwise
+   overrides the attribute, so script-hidden panels stayed visible (deploy form Close bug). */
+[hidden] { display: none !important; }
+
 /* ---------- banner ---------- */
 .banner {
   border-radius: var(--radius-md);
