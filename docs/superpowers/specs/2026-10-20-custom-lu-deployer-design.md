@@ -173,8 +173,8 @@ Existing-LU reads: `GET CustomLusSet?$select=Lu,LuType,Objgrants,luname,keyref` 
   `Properties.json`): `Type: "Table"` → one LU block, `Columns` → String attributes (length 100,
   editable). Text/scalar properties are skipped. `TableValues` is never read into the UI.
 - **Flow Classic User properties** → one `UserProperties` LU, wide layout: one column per distinct
-  user-property name (union) plus `USER_ID`. **Blocked:** parser waits for the Classic example the
-  user will provide; implemented as a separate task once the sample is in hand. No guessed format.
+  user-property name (union) plus `USER_ID`. Built 2026-10-20 from the user's sample: the export has
+  the same shape as Connect's, and every non-Table property with `Scope: "User"` goes into this LU.
 - **Selection (both exports):** every importable table from the properties file — Connect Table properties and, once built, each Flow Classic table plus the merged `UserProperties` block — is listed with a checkbox; only ticked ones are deployed (user requirement 2026-10-20).
 - Bad JSON / nothing importable → plain error, not an empty editor.
 
