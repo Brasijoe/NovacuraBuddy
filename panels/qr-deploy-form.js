@@ -1,4 +1,4 @@
-/** Instance → permission sets → Deploy, shared by the Quick Reports tab and the editor page.
+/** Instance → permission sets (shared picker) → Deploy, shared by the Quick Reports tab and the editor page.
  *  `getReport()` returns the report to deploy, or null when it can't be deployed yet (unsaved
  *  edits). Never writes history — the background does that after a finished deploy. A finished
  *  deploy shows a green confirmation inside the form; `onDeployed` is optional. With `onClose`
@@ -7,9 +7,6 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
   container.innerHTML = "";
   container.classList.add("deploy-form");
 
-  const select = document.createElement("select");
-  const sets = document.createElement("div");
-  sets.className = "checklist";
   const actions = document.createElement("div");
   actions.className = "deploy-actions";
   const deployBtn = document.createElement("button");
@@ -24,22 +21,6 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
     closeBtn.onclick = onClose;
     actions.appendChild(closeBtn);
   }
-  container.append(select, sets, actions);
-
-  (async () => {
-    const response = await send({ type: "LIST_INSTANCES" });
-    if (!response.ok) return onError(response.error);
-    const instances = response.instances.slice().sort((a, b) => a.name.localeCompare(b.name));
-    if (!instances.length) {
-      sets.textContent = "No IFS instances yet — add one in Basic Data.";
-      select.hidden = true;
-      return;
-    }
-    select.append(new Option("Choose an IFS instance…", ""));
-    for (const instance of instances) select.append(new Option(instance.name, instance.baseUrl));
-  })();
-
-  let selectToken = 0; // bumped on every change so a slow response for a previous instance is ignored
   let confirmBox = null;
   function removeConfirmBox() {
     if (confirmBox) { confirmBox.remove(); confirmBox = null; }
@@ -48,71 +29,46 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
   function removeSuccessBox() {
     if (successBox) { successBox.remove(); successBox = null; }
   }
-  const instanceLabel = (baseUrl) => {
-    const option = [...select.options].find((o) => o.value === baseUrl);
-    return option ? option.text : baseUrl;
-  };
   function showDeployed(report, baseUrl, quickReportId) {
     removeSuccessBox();
     successBox = document.createElement("div");
     successBox.className = "banner banner-deployed";
     successBox.setAttribute("role", "status");
-    successBox.textContent = `✓ Deployed "${report.name}" to ${instanceLabel(baseUrl)} — Quick Report id ${quickReportId}.`;
+    successBox.textContent = `✓ Deployed "${report.name}" to ${picker.instanceLabel(baseUrl)} — Quick Report id ${quickReportId}.`;
     container.appendChild(successBox);
   }
 
-  select.onchange = async () => {
-    const token = ++selectToken;
-    removeConfirmBox();
-    removeSuccessBox();
-    sets.textContent = "";
-    deployBtn.disabled = true;
-    if (!select.value) return;
-    const baseUrl = select.value;
-    sets.textContent = "Loading permission sets…";
-    const response = await send({ type: "PERMISSION_SETS", baseUrl, masterPassword: "" });
-    if (token !== selectToken) return;
-    sets.textContent = "";
-    if (!response.ok) return onError(explain(response));
-    const remembered = new Set(response.remembered);
-    if (!response.sets.length) sets.textContent = "No customer permission sets on this instance — the report deploys without grants.";
-    for (const ps of response.sets) {
-      const label = document.createElement("label");
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.value = ps.id;
-      box.checked = remembered.has(ps.id);
-      label.append(box, document.createTextNode(` ${ps.name}`));
-      sets.appendChild(label);
+  const picker = renderPermissionPicker(container, {
+    send,
+    onError,
+    emptySetsText: "No customer permission sets on this instance — the report deploys without grants.",
+    onChange: (ready) => {
+      removeConfirmBox();
+      removeSuccessBox();
+      deployBtn.disabled = !ready;
     }
-    deployBtn.disabled = false;
-  };
-
-  function explain(response) {
-    return response.needsMasterPassword
-      ? "Saved credentials are locked — unlock them in the NovacuraBuddy side panel, then try again."
-      : response.error;
-  }
+  });
+  container.append(actions);
 
   async function deploy(forceQuickReportId, baseUrlOverride) {
     const report = getReport();
     if (!report) return onError("Save your changes before deploying — Deploy sends the saved version.");
-    const baseUrl = baseUrlOverride || select.value;
+    const baseUrl = baseUrlOverride || picker.baseUrl();
     const origin = new URL(baseUrl).origin;
     // Must run inside the click's user gesture, before any other await.
     const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin + "/*"] }, resolve));
     if (!granted) return onError(`Permission for ${origin} was not granted — can't deploy there.`);
-    const permissionSetIds = [...sets.querySelectorAll("input:checked")].map((b) => b.value);
+    const permissionSetIds = picker.selectedIds();
     removeSuccessBox();
     deployBtn.disabled = true;
     deployBtn.textContent = "Deploying…";
     const response = await send({ type: "QR_DEPLOY", baseUrl, report, permissionSetIds, forceQuickReportId, masterPassword: "" });
     deployBtn.disabled = false;
     deployBtn.textContent = "Deploy";
-    if (!response.ok) return onError(explain(response));
+    if (!response.ok) return onError(explainLocked(response));
     if (response.outcome.status === "needsConfirmation") return askOverwrite(response.outcome, baseUrl);
     showDeployed(report, baseUrl, response.outcome.quickReportId);
-    if (onDeployed) onDeployed({ baseUrl, instanceName: instanceLabel(baseUrl), ...response.outcome });
+    if (onDeployed) onDeployed({ baseUrl, instanceName: picker.instanceLabel(baseUrl), ...response.outcome });
   }
 
   function askOverwrite({ existingQuickReportId, existingDescription }, baseUrl) {

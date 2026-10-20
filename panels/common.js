@@ -60,13 +60,14 @@ function updateCurrentInstanceLabel() {
 }
 
 // The unlock field is the normal way in; the Add-instance form's field still works as before.
-const masterPasswordOf = () =>
-  document.getElementById("unlockPassword").value || document.getElementById("masterPassword").value;
+const fieldValue = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+const masterPasswordOf = () => fieldValue("unlockPassword") || fieldValue("masterPassword");
 
 // The unlocked key lives in session storage like IFS Buddy's (cleared by a browser restart or an
 // extension reload), so the panel needs its own place to re-enter the master password — the
 // equivalent of IFS Buddy's unlock dialog — not just the collapsed Add-instance form.
 async function refreshLockStatus() {
+  if (!document.getElementById("unlockRow")) return; // pages without the unlock UI (editor tabs)
   const response = await send({ type: "GET_LOCK_STATUS" });
   if (!response || !response.ok) return;
   const locked = response.passwordSet && !response.unlocked;
@@ -128,4 +129,11 @@ function runAction(btn, busyLabel, action) {
       btn.textContent = originalLabel;
       refreshProjections();
     });
+}
+
+/** The text for a failed background response; a locked credential store gets the unlock hint. */
+function explainLocked(response) {
+  return response.needsMasterPassword
+    ? "Saved credentials are locked — unlock them in the NovacuraBuddy side panel, then try again."
+    : response.error;
 }

@@ -53,3 +53,12 @@ test("every <script src> in the extension pages exists", () => {
     for (const m of html.matchAll(/<script src="([^"]+)"/g)) assert.ok(fs.existsSync(path.join(__dirname, m[1])), `${page}: ${m[1]} does not exist`);
   }
 });
+
+test("pages load the shared picker before the forms that use it", () => {
+  for (const page of ["sidepanel.html", "qr-editor.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, page), "utf8");
+    const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(srcs.indexOf("panels/common.js") < srcs.indexOf("panels/permission-picker.js"), page);
+    assert.ok(srcs.indexOf("panels/permission-picker.js") < srcs.indexOf("panels/qr-deploy-form.js"), page);
+  }
+});
