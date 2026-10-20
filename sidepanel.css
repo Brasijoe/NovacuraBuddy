@@ -1,0 +1,373 @@
+/* Tokens from Novacura's own brand deck (NOVACURA Powerpoint Template - Arial - Example
+   slides.pptx). Montserrat/Roboto are the real brand typefaces; no font files are bundled with
+   this extension, so the stacks below name them first and fall back to the deck's own documented
+   Arial substitute, then the platform default — swap in real font files the moment they exist. */
+:root {
+  color-scheme: light dark;
+  --ink: #000000;
+  --ink-muted: #465466;
+  --surface: #ffffff;
+  --surface-raised: #e4e8ef;
+  --neutral: #9ea7b4;
+  --accent: #0c65f4;
+  --accent-soft: #bed7ff;
+  --accent-orange: #fd6e15;
+  --accent-red: #ff3333;
+  --accent-green: #1f9d55;
+  --on-accent: #ffffff;
+
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-6: 40px;
+
+  --radius-md: 20px;
+  --radius-full: 999px;
+
+  --shadow-raised: 0 5px 30px rgba(0, 0, 0, 0.07);
+
+  --font-sans: Roboto, "Segoe UI", Arial, sans-serif;
+  --font-sans-head: Montserrat, "Segoe UI", Arial, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ffffff;
+    --ink-muted: #9ea7b4;
+    --surface: #141635;
+    --surface-raised: #465466;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font: 13px/1.45 var(--font-sans);
+  color: var(--ink);
+  background: var(--surface);
+  margin: 0;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+h2 {
+  font-family: var(--font-sans-head);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin: 0 0 var(--space-2);
+}
+
+/* "FULL CAPS WITH A TRAILING PERIOD." — the deck's own documented title convention
+   (Content fundamentals: DOCUMENT TITLE.) */
+h2::after { content: "."; }
+
+button {
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--surface-raised);
+  border-radius: var(--radius-md);
+  padding: 5px 12px;
+}
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+button:disabled { color: var(--neutral); border-color: var(--surface-raised); cursor: default; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.btn-primary:hover:not(:disabled) { color: var(--on-accent); opacity: 0.9; }
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-muted);
+  padding: 4px 8px;
+}
+.btn-ghost:hover:not(:disabled) { color: var(--accent-red); border-color: transparent; }
+
+input[type="text"], input:not([type]), input[type="password"], select, textarea {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--surface-raised);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible { border-color: var(--accent); }
+
+/* `hidden` must always win: a class that sets `display` (e.g. .deploy-form's flex) otherwise
+   overrides the attribute, so script-hidden panels stayed visible (deploy form Close bug). */
+[hidden] { display: none !important; }
+
+/* ---------- banner ---------- */
+.banner {
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+}
+.banner[hidden] { display: none; }
+.banner-error { background: #fff0ef; color: #7a1f17; border: 1px solid var(--accent-red); }
+.banner-success { background: #eef4ff; color: #0b3f99; border: 1px solid var(--accent); }
+.banner-warning { display: flex; align-items: center; gap: var(--space-2); background: #fff6ee; color: #7a3b0a; border: 1px solid var(--accent-orange); }
+.banner-warning span { flex: 1; }
+.banner-deployed { background: #ecf8f0; color: #14532d; border: 1px solid var(--accent-green); font-weight: 600; }
+@media (prefers-color-scheme: dark) {
+  .banner-error { background: rgba(255, 51, 51, 0.12); color: #ffb4ac; }
+  .banner-success { background: rgba(12, 101, 244, 0.15); color: #bed7ff; }
+  .banner-warning { background: rgba(253, 110, 21, 0.12); color: #ffc89e; }
+  .banner-deployed { background: rgba(31, 157, 85, 0.15); color: #a7f3c4; }
+}
+
+/* ---------- top bar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.current-instance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  min-width: 0;
+}
+.current-instance span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--neutral);
+  flex: none;
+}
+.dot.is-open { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  flex: none;
+}
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle-track {
+  width: 30px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--surface-raised);
+  position: relative;
+  transition: background 0.15s ease;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+.toggle input:checked + .toggle-track { background: var(--accent); }
+.toggle input:checked + .toggle-track .toggle-thumb { transform: translateX(12px); }
+.toggle input:focus-visible + .toggle-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.toggle input:disabled + .toggle-track { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- instances drawer ---------- */
+.drawer summary {
+  font-family: var(--font-sans-head);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  cursor: pointer;
+  list-style: none;
+  padding: var(--space-2) 0;
+}
+.drawer summary::after { content: "."; }
+.drawer summary::-webkit-details-marker { display: none; }
+.drawer summary::before { content: "▸ "; display: inline-block; transition: transform 0.15s ease; }
+.drawer[open] summary::before { transform: rotate(90deg); }
+
+.instance-list { list-style: none; margin: 0 0 var(--space-2); padding: 0; }
+.instance-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.instance-list li:hover { background: var(--surface-raised); }
+.instance-list li.is-selected { background: var(--accent-soft); }
+.instance-list .instance-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.instance-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.instance-form button[type="submit"] { align-self: flex-start; }
+
+/* ---------- search ---------- */
+.search-row { display: flex; gap: var(--space-2); }
+.search-row input { flex: 1; min-width: 0; }
+
+#unmatchedHosts p {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  color: var(--ink-muted);
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* ---------- projection list ---------- */
+main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0; }
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.list-count { font-size: 12px; color: var(--ink-muted); }
+
+/* Projection Tracker sections (tracked projections, modules in the flow's package): click the
+   heading to expand/retract. */
+.tracker-section + .tracker-section { margin-top: var(--space-3); }
+.tracker-section > summary { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; list-style: none; margin-bottom: var(--space-2); }
+.tracker-section > summary::-webkit-details-marker { display: none; }
+.tracker-section > summary::before { content: "▸"; font-size: 11px; color: var(--ink-muted); transition: transform 0.15s; }
+.tracker-section[open] > summary::before { transform: rotate(90deg); }
+.tracker-section > summary h2 { margin: 0; }
+.tracker-section .list-toolbar { justify-content: flex-end; }
+.projection-card .sess-meta { display: flex; align-items: center; gap: 6px; }
+
+.projection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.proj-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.proj-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+.projection-card .proj-actions { flex-shrink: 0; }
+
+/* Status pill — modelled on the deck's own Badge component: solid accent fill for the
+   "arrived" state, a quiet outline for everything still in progress. Reads as a position on a
+   ramp (not-created → created → activated), never a red/yellow/green light. */
+.status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  justify-self: start;
+}
+.status-not_created { color: var(--ink-muted); border-color: var(--surface-raised); }
+.status-unknown { color: var(--neutral); border-color: var(--surface-raised); border-style: dashed; }
+.status-locked { color: var(--accent-orange); border-color: var(--accent-orange); }
+.status-unlocked { color: var(--accent); border-color: var(--accent-soft); }
+.status-created { color: var(--accent); border-color: var(--accent-soft); }
+.status-activated { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.status-deployed { background: #ecf8f0; color: #1d6b40; border-color: #c4e8d2; }
+@media (prefers-color-scheme: dark) {
+  .status-deployed { background: rgba(31, 157, 85, 0.14); color: #a7f3c4; border-color: rgba(31, 157, 85, 0.35); }
+}
+
+/* One deliberate moment of motion: a row's status pill briefly glows when it actually changes —
+   never on every poll tick, only on a real transition. */
+@keyframes statusFlash {
+  from { box-shadow: 0 0 0 4px var(--accent-soft); }
+  to { box-shadow: 0 0 0 0 transparent; }
+}
+.status.flash { animation: statusFlash 0.6s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .status.flash { animation: none; }
+}
+
+.empty-state {
+  color: var(--ink-muted);
+  font-size: 12px;
+  padding: var(--space-3) 0;
+  text-align: center;
+}
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--surface-raised); }
+
+/* Each tab's blocks (toggle, search, list…) get the same breathing room, and a thin rule
+   separates the input area from the list below it. */
+[role="tabpanel"] { display: flex; flex-direction: column; gap: var(--space-3); }
+[role="tabpanel"][hidden] { display: none; }
+.section-divider { border: 0; border-top: 1px solid var(--surface-raised); margin: var(--space-2) 0 0; width: 100%; }
+.tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink-muted); padding: var(--space-2) var(--space-3); font-weight: 600; }
+.tab:hover:not(:disabled) { color: var(--accent); border-color: transparent; }
+.tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---------- recorder ---------- */
+.recorder-controls { display: flex; gap: var(--space-2); }
+.status-bar { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; color: var(--ink-muted); }
+.status-indicator { width: 7px; height: 7px; border-radius: 50%; background: var(--neutral); }
+.status-bar.recording { color: var(--accent-orange); font-weight: 600; }
+.status-bar.recording .status-indicator { background: var(--accent-orange); }
+.session-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.sess-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-raised); }
+.sess-item:hover { border-color: var(--accent-soft); }
+.sess-info { flex: 1; min-width: 0; cursor: pointer; }
+.sess-title { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sess-meta { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.projection-card .sess-meta { margin-top: 6px; }
+.icon-btn { border: none; background: none; padding: 4px; color: var(--ink-muted); }
+.icon-btn:hover:not(:disabled) { color: var(--accent); }
+.icon-btn.del:hover:not(:disabled) { color: var(--accent-red); }
+input.rename-input { width: 100%; }
+.instance-list input.rename-input { flex: 1; min-width: 0; width: auto; }
+.session-list .empty-state { color: var(--ink-muted); font-size: 12px; padding: var(--space-3); text-align: center; }
+
+/* ---------- quick reports ---------- */
+.tabs { flex-wrap: wrap; }
+.qr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.qr-item { display: flex; flex-direction: column; gap: 6px; padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-raised); }
+.qr-head { display: flex; align-items: center; gap: var(--space-2); }
+.qr-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.qr-preview { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deploy-form { display: flex; flex-direction: column; gap: var(--space-2); }
+.checklist { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; font-size: 13px; }
+.deploy-actions { display: flex; gap: var(--space-2); }
+.qr-picker { display: flex; flex-direction: column; gap: 6px; }
+.qr-picker[hidden] { display: none; }
+.qr-picker-title { font-size: 12px; color: var(--ink-muted); }
+.qr-pick { text-align: left; }
+.update-banner:not([hidden]) { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.update-howto { flex-basis: 100%; margin: 0; font-size: 12px; }

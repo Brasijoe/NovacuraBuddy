@@ -1,0 +1,8 @@
+{
+  "name": "ifs-flow-projection-tracker",
+  "private": true,
+  "scripts": {
+    "test": "node --test lib/*.test.js recorder/*.test.js scripts/*.test.js manifest.test.js",
+    "release": "node scripts/release.js"
+  }
+}

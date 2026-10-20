@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+    <div id="designerHint" class="banner" hidden></div>
+    <div id="unmatchedHosts"></div>
+    <div id="updateBanner" class="banner banner-success update-banner" hidden></div>
+
+    <header class="topbar">
+      <div class="current-instance" id="currentInstanceLabel" title="Currently selected IFS instance">
+        <span class="dot" id="designerDot"></span>
+        <span id="currentInstanceName">No instance selected</span>
+      </div>
+      <span id="lockStatus" class="status" hidden></span>
+    </header>
+
+    <div class="search-row" id="unlockRow" hidden>
+      <input id="unlockPassword" type="password" placeholder="Master password (unlocks saved IFS credentials)" />
+      <button id="unlockBtn">Unlock</button>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button id="tab-tracker" class="tab" role="tab">Projection Tracker</button>
+      <button id="tab-recorder" class="tab" role="tab">Traffic Recorder</button>
+      <button id="tab-quick-reports" class="tab" role="tab">Quick Reports</button>
+      <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
+    </nav>
+
+    <section id="panel-tracker" role="tabpanel" hidden>
+      <label class="toggle" title="Pause or resume tracking">
+        <input type="checkbox" id="trackingToggle" />
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Tracking</span>
+      </label>
+
+      <div class="search-row">
+        <input id="searchTerm" placeholder="Search a projection…" />
+        <button id="searchBtn">Search</button>
+      </div>
+
+      <hr class="section-divider" />
+
+      <main>
+        <details id="trackedSection" class="tracker-section" open>
+          <summary><h2>Tracked projections</h2><span class="list-count" id="listCount"></span></summary>
+          <div class="list-toolbar">
+            <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
+          </div>
+          <ul id="projectionList" class="projection-list"></ul>
+        </details>
+        <details id="packageModuleSection" class="tracker-section" open>
+          <summary><h2>Modules in this flow's package</h2><span class="list-count" id="packageModuleCount"></span></summary>
+          <p id="packageModuleHint" class="empty-state" hidden></p>
+          <ul id="packageModuleList" class="projection-list"></ul>
+        </details>
+      </main>
+    </section>
+
+    <section id="panel-recorder" role="tabpanel" hidden>
+      <div class="recorder-controls">
+        <button id="startBtn" class="btn-primary">● Start</button>
+        <button id="stopBtn" disabled>■ Stop</button>
+        <button id="viewerBtn" title="Open Full Viewer">Open viewer</button>
+      </div>
+      <div id="recStatusBar" class="status-bar"><span class="status-indicator"></span><span id="recStatusText">Ready to record</span></div>
+      <hr class="section-divider" />
+      <h2>Recorded Sessions</h2>
+      <div id="sessionList" class="session-list"></div>
+    </section>
+
+    <section id="panel-quick-reports" role="tabpanel" hidden>
+      <div class="search-row">
+        <input id="qrSearch" placeholder="Search Quick Reports (name or SQL)…" />
+        <button id="qrRefreshBtn">Refresh</button>
+      </div>
+      <div class="list-toolbar">
+        <span class="list-count" id="qrCount"></span>
+        <button id="qrNewBtn" class="btn-primary">New report</button>
+      </div>
+      <span class="list-count" id="qrRefreshed"></span>
+      <div id="qrSetupHint" class="empty-state" hidden></div>
+      <hr class="section-divider" />
+      <ul id="qrList" class="qr-list"></ul>
+    </section>
+
+    <section id="panel-basic-data" role="tabpanel" hidden>
+      <ul id="instanceList" class="instance-list"></ul>
+      <form id="instanceForm" class="instance-form">
+        <input id="instanceName" placeholder="Name" required />
+        <input id="instanceBaseUrl" placeholder="https://ifs.example.com" required />
+        <input id="instanceTokenEndpoint" placeholder="Token endpoint" required />
+        <input id="instanceClientId" placeholder="Client ID" required />
+        <input id="instanceClientSecret" placeholder="Client secret" type="password" required />
+        <input id="masterPassword" placeholder="Master password" type="password" required />
+        <button type="submit" class="btn-primary">Add instance</button>
+      </form>
+      <hr class="section-divider" />
+      <h2>GitHub (Quick Reports)</h2>
+      <p id="githubStatus" class="list-count"></p>
+      <form id="githubForm" class="instance-form">
+        <input id="githubRepo" placeholder="owner/repo" required />
+        <input id="githubToken" type="password" placeholder="GitHub personal access token (repo access)" required />
+        <input id="githubMasterPassword" type="password" placeholder="Master password (if locked)" />
+        <button type="submit" class="btn-primary">Save GitHub settings</button>
+      </form>
+      <button id="githubMoveBtn" class="btn-ghost" hidden title="One-time: move reports saved before per-user folders into your own folder">Move unowned reports into my folder</button>
+    </section>
+
+    <script src="lib/vendor/fuse.min.js"></script>
+    <script src="lib/qr-search.js"></script>
+    <script src="lib/qr-deploy.js"></script>
+    <script src="panels/common.js"></script>
+    <script src="panels/tracker.js"></script>
+    <script src="panels/basic-data.js"></script>
+    <script src="panels/recorder.js"></script>
+    <script src="panels/qr-deploy-form.js"></script>
+    <script src="panels/quick-reports.js"></script>
+    <script src="panels/update-banner.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

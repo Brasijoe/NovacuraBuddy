@@ -136,6 +136,14 @@ the listing entries are assumed to carry an `id` field matching the URL's
 `itemId` verbatim, which hasn't been checked against a real multi-package
 org yet.
 
+**Superseded 2026-10-16 (live-verified):** the search above can't find package-less (global)
+items, which appear in no package listing (an application in a package does appear in its
+`/products`, by its Designer `itemId`). `packageId` now comes from the
+`packageInfo` field of `GET .../items/{itemId}/designer`. `packageInfo: null` means the flow is a
+global asset; its modules are then listed/created in the org-level App Library
+(`.../organisations/{orgId}/assets`, same body, no `/packages/{id}` segment — as in Novacura's
+HubAPI module).
+
 The panel reflects Designer-tab presence as a live boolean; when absent,
 Create/Activate controls are disabled with an inline reason rather than
 hidden.

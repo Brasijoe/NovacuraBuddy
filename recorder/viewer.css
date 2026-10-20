@@ -1,0 +1,561 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  color: #1e293b;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.layout { display: flex; height: 100vh; }
+
+/* --- Sidebar --- */
+.sidebar {
+  width: 290px;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+.sidebar-brand {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+.sidebar-title { font-weight: 700; font-size: 13.5px; color: #fff; }
+.sidebar-sub { font-size: 11px; color: #0A68FF; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.session-nav { flex: 1; overflow-y: auto; padding: 6px 10px; }
+.sess-nav-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  background: transparent;
+  transition: all 0.15s ease;
+}
+.sess-nav-item:hover { background: #1e293b; }
+.sess-nav-item.active { background: #2563eb; color: #fff; }
+.sess-nav-item.active .s-meta { color: #bfdbfe; }
+.s-name { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+/* --- Main Workspace --- */
+.workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #f8fafc; }
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.topbar-info { display: flex; align-items: center; gap: 10px; }
+.topbar-info h1 { font-size: 16px; font-weight: 700; color: #0f172a; }
+.meta-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; background: #e2e8f0; color: #475569; font-weight: 600; }
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 5px 10px;
+  width: 260px;
+}
+.search-box input { border: none; background: transparent; outline: none; font-size: 12px; width: 100%; }
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-action:hover { background: #f1f5f9; border-color: #94a3b8; }
+.btn-action.danger { color: #e11d48; border-color: #fecdd3; }
+.btn-action.danger:hover { background: #ffe4e6; }
+.btn-ghost { background: none; border: none; font-size: 11px; cursor: pointer; color: #94a3b8; }
+.btn-ghost.danger:hover { color: #f43f5e; }
+
+/* --- Calls List --- */
+.calls-feed { flex: 1; overflow-y: auto; padding: 16px 20px 60px; }
+.call-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  transition: box-shadow 0.15s ease;
+}
+.call-card:hover { box-shadow: 0 3px 6px rgba(0,0,0,0.06); }
+
+.call-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.call-header:hover { background: #f8fafc; }
+
+.call-caret { color: #94a3b8; display: flex; align-items: center; }
+.http-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: #fff;
+  min-width: 54px;
+  text-align: center;
+}
+.http-pill.GET { background: #2563eb; }
+.http-pill.POST { background: #059669; }
+.http-pill.PATCH { background: #d97706; }
+.http-pill.PUT { background: #7c3aed; }
+.http-pill.DELETE { background: #e11d48; }
+.http-pill.OPTIONS { background: #64748b; }
+
+.call-endpoint {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.status-pill.success { background: #dcfce7; color: #15803d; }
+.status-pill.error { background: #fee2e2; color: #b91c1c; }
+
+.call-timing, .call-size { font-size: 11px; color: #64748b; font-family: monospace; white-space: nowrap; }
+.btn-del-call {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-del-call:hover { background: #fee2e2; color: #e11d48; }
+
+/* --- Call Detail Drawer --- */
+.call-detail {
+  border-top: 1px solid #f1f5f9;
+  background: #ffffff;
+  padding: 12px 16px 16px;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+.detail-tabs { display: flex; gap: 6px; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px; }
+.d-tab {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.d-tab:hover { color: #0f172a; }
+.d-tab.active { color: #0A68FF; border-bottom-color: #0A68FF; }
+
+.d-pane { display: none; }
+.d-pane.active { display: block; }
+
+/* Data Tables */
+.kv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kv-table td { padding: 6px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.kv-table td:first-child { width: 160px; font-weight: 600; color: #475569; }
+.kv-table td.val { font-family: monospace; word-break: break-all; color: #0f172a; }
+
+.pane-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.btn-tool {
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.btn-tool:hover { background: #f1f5f9; }
+.btn-tool.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+.payload-info { font-size: 11px; color: #64748b; margin-left: auto; }
+
+pre.raw-code {
+  background: #090d16;
+  color: #e2e8f0;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+/* --- JSON-Grid Styles --- */
+.jg-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  max-height: 520px;
+  overflow: auto;
+  background: #ffffff;
+}
+.jg-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.jg-table th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 600;
+  text-align: left;
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.jg-table td { padding: 4px 8px; border: 1px solid #f1f5f9; vertical-align: top; }
+.jg-kv td.jg-key { width: 220px; font-weight: 600; color: #334155; background: #f8fafc; }
+.jg-idx, .jg-idx-col { width: 34px; text-align: center; color: #94a3b8; font-weight: 500; background: #f8fafc; }
+
+.jg-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 11px;
+}
+.jg-head:hover { background: #f1f5f9; }
+.jg-badge { background: #e2e8f0; color: #475569; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 500; }
+.jg-type-label { color: #0284c7; }
+.jg-str { color: #059669; word-break: break-word; }
+.jg-num { color: #d97706; font-weight: 600; }
+.jg-bool { color: #7c3aed; font-weight: 600; }
+.jg-null, .jg-empty { color: #94a3b8; font-style: italic; }
+
+.empty-splash { text-align: center; padding: 80px 20px; color: #94a3b8; }
+.empty-splash svg { margin-bottom: 12px; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+/* --- Create Asset Modal --- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal-panel {
+  background: #ffffff;
+  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.modal-header h2 { font-size: 14px; font-weight: 700; color: #0f172a; }
+.modal-close {
+  background: transparent; border: none; font-size: 18px; line-height: 1;
+  color: #94a3b8; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+}
+.modal-close:hover { background: #f1f5f9; color: #0f172a; }
+.modal-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-group label { font-size: 11.5px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.3px; }
+.field-group select, .field-group input, .field-group textarea {
+  border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 9px;
+  font-size: 12.5px; font-family: inherit; color: #0f172a; background: #fff;
+}
+.field-group select:disabled { background: #f1f5f9; color: #94a3b8; }
+.field-group textarea { resize: vertical; min-height: 60px; }
+
+.searchable-select { position: relative; }
+.searchable-select-input {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 9px;
+  font-size: 12.5px; font-family: inherit; color: #0f172a; background: #fff;
+}
+.searchable-select-input:disabled { background: #f1f5f9; color: #94a3b8; }
+.searchable-select.is-disabled { cursor: not-allowed; }
+.searchable-select-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: #fff; border: 1px solid #cbd5e1; border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  max-height: 180px; overflow-y: auto; z-index: 10;
+}
+.searchable-select-option { padding: 7px 9px; font-size: 12.5px; color: #0f172a; cursor: pointer; }
+.searchable-select-option.is-highlighted, .searchable-select-option:hover { background: #eff6ff; }
+.searchable-select-empty { padding: 7px 9px; font-size: 12.5px; color: #94a3b8; }
+
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid #e2e8f0; }
+.btn-primary {
+  background: #0A68FF; color: #fff; border: 1px solid #0A68FF;
+  padding: 7px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.btn-primary:hover:not(:disabled) { background: #0954d1; }
+.btn-primary:disabled { background: #93b8f7; border-color: #93b8f7; cursor: not-allowed; }
+.modal-error {
+  background: #fee2e2; color: #b91c1c; border: 1px solid #fecdd3;
+  border-radius: 6px; padding: 8px 10px; font-size: 12px; display: flex;
+  flex-direction: column; gap: 6px;
+}
+.modal-error .btn-tool { align-self: flex-start; }
+.modal-success { text-align: center; padding: 10px 4px 4px; }
+.modal-success .success-icon { color: #059669; margin-bottom: 8px; }
+.modal-success p { color: #334155; font-size: 12.5px; margin-bottom: 14px; }
+
+/* --- IFS Module Generation --- */
+.mp-modal-panel { width: 360px; }
+.mp-hint { font-size: 11.5px; color: #64748b; margin-top: 4px; }
+.mp-error { color: #b91c1c; font-size: 12px; margin-top: 6px; }
+.error-detail-pre {
+  white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px; margin: 0 0 6px;
+}
+.ifs-progress-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.ifs-progress-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #f8fafc; font-size: 12.5px; }
+.ifs-progress-row .name { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.ifs-progress-row .status { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.ifs-progress-row .status.pending { background: #e2e8f0; color: #64748b; }
+.ifs-progress-row .status.working { background: #dbeafe; color: #1d4ed8; }
+.ifs-progress-row .status.done { background: #dcfce7; color: #15803d; }
+.ifs-progress-row .status.skipped { background: #e2e8f0; color: #475569; }
+.ifs-progress-row .status.warning { background: #fef3c7; color: #92400e; }
+.ifs-progress-row .status.error { background: #fee2e2; color: #b91c1c; }
+.ifs-summary { padding: 10px 0; font-size: 12.5px; color: #334155; }
+
+/* --- Dependency review modal (2026-08-10 redesign, iterated twice: fixed-grid rows so the
+   checkbox and content never drift relative to each other regardless of text length; two tabs
+   ("Please Verify" default, "High Confidence") instead of stacked sections; real Target/Source
+   columns instead of an inline arrow line; scoped dark theme via .dep-modal-dark on the shared
+   .modal-panel — every rule below that isn't already dep-* is generic across every modal in the
+   app, so dark overrides live entirely under the .dep-modal-dark prefix and never leak into the
+   rest of the UI). --- */
+.dep-tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+.dep-tab {
+  flex: 1; text-align: center; padding: 9px 10px; border-radius: 6px 6px 0 0;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  cursor: pointer; border: none; background: transparent; color: #94a3b8;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.12s ease;
+}
+.dep-tab:hover { color: #475569; }
+.dep-tab.active { color: #0f172a; border-bottom-color: #0A68FF; }
+
+.dep-pane { display: flex; flex-direction: column; gap: 8px; }
+.dep-empty { font-size: 12px; color: #94a3b8; text-align: center; padding: 24px 8px; }
+
+.dep-columns-header {
+  display: grid; grid-template-columns: 18px 1fr 1fr; gap: 10px;
+  padding: 0 10px 4px; border-bottom: 1px solid #e2e8f0;
+}
+.dep-col-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; }
+
+.dep-section-rows { display: flex; flex-direction: column; gap: 5px; }
+
+.dep-candidate-row {
+  display: grid;
+  grid-template-columns: 18px 1fr 1fr;
+  grid-template-areas: "check target source" "meta meta meta";
+  align-items: start; column-gap: 10px; row-gap: 6px;
+  padding: 9px 10px; border-radius: 8px; background: #f8fafc; border: 1px solid #eef2f7;
+  cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease;
+}
+.dep-candidate-row:hover { background: #f1f5f9; border-color: #dbe4ee; }
+.dep-candidate-row input { grid-area: check; margin-top: 2px; }
+/* min-width: 0 overrides a grid item's default auto min-width — without it, a long step name
+   (real IFS function names routinely run 30-50 chars, e.g.
+   "CalculateAndFetchSalesLineTotalWithHeaderParams") refuses to shrink below its own content
+   width and overflows straight into the neighboring column instead of truncating. */
+.dep-col-target { grid-area: target; min-width: 0; }
+.dep-col-source { grid-area: source; min-width: 0; }
+/* Step name gets its own pill so it reads as a distinct unit from the field path instead of
+   running together as one blob (e.g. "GetCustomerOrderData.OrderNo") — real request 2026-08-10.
+   Stacked vertically (badge above field path), not side by side — a real IFS function name
+   routinely runs 30-50 chars (e.g. "CalculateAndFetchSalesLineTotalWithHeaderParams"), and
+   putting it beside the field path meant the two fought over the same cramped horizontal space,
+   truncating one or both illegibly. Stacked, each gets the column's FULL width to itself. A
+   nested field path (ValidationRec.Identity4) stays as one plain piece — only the step/field
+   boundary needed visual separation. The badge still truncates with an ellipsis on the rare
+   over-long name (full name in its title attribute on hover); the field path wraps instead of
+   truncating — it's usually short and is the more important half to always read in full. */
+.dep-step-field { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.dep-step-badge {
+  max-width: 100%; font-size: 10.5px; font-weight: 700; color: #1e3a8a; background: #dbeafe;
+  padding: 2px 7px; border-radius: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dep-step-field-source .dep-step-badge { color: #3f6212; background: #ecfccb; }
+.dep-field-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px; font-weight: 600; color: #0f172a; word-break: break-word;
+}
+.dep-meta { grid-area: meta; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dep-value-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px; color: #3730a3; background: #eef2ff; border: 1px solid #e0e7ff;
+  padding: 1px 7px; border-radius: 5px;
+  /* Real bug, 2026-08-11: an unbounded long value (JSON.stringify'd) forced the WHOLE row wider
+     than the fixed-width modal panel, pushing the User Input/Fixed toggle out of view entirely —
+     unusable, no way to classify that row. Capped + ellipsis-truncated visually; full text stays
+     available via the native title tooltip (see dep-value-chip-copy's own JS wiring) and the
+     copy icon right next to it. */
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: inline-block; vertical-align: middle; cursor: default;
+}
+.dep-value-chip-copy {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; margin-left: 2px; vertical-align: middle;
+  border: 1px solid #e0e7ff; border-radius: 5px; background: #fff; color: #3730a3;
+  cursor: pointer; font-size: 11px; line-height: 1; flex: none;
+}
+.dep-value-chip-copy:hover { background: #eef2ff; }
+.dep-modal-dark .dep-value-chip-copy { background: #1a2332; border-color: #4338ca; color: #c7d2fe; }
+.dep-modal-dark .dep-value-chip-copy:hover { background: #312e81; }
+.dep-badge { font-size: 10.5px; font-weight: 600; padding: 1px 8px; border-radius: 10px; }
+.dep-badge-list { background: #fef3c7; color: #92400e; }
+.dep-badge-progress { background: #e0f2fe; color: #0369a1; }
+.dep-badge-occurrences { background: #ede9fe; color: #6d28d9; }
+
+/* --- Classify Remaining Values modal (User Input / Fixed) — same design language as the
+   dependency review modal above, reworked 2026-08-10 after reusing .dep-candidate-row (built for
+   that modal's own 4-part checkbox/target/source/meta shape) broke this modal's different
+   field/value/toggle row shape. Gets its own row class instead. --- */
+.dep-classify-row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  column-gap: 14px; row-gap: 4px;
+  padding: 9px 10px; border-radius: 8px; background: #f8fafc; border: 1px solid #eef2f7;
+}
+.dep-classify-row .dep-step-field { grid-row: 1; grid-column: 1; }
+.dep-classify-row .dep-meta { grid-row: 2; grid-column: 1; }
+.dep-classify-row .dep-choice-toggle { grid-row: 1 / span 2; grid-column: 2; }
+.dep-choice-toggle {
+  display: flex; border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; flex: none;
+}
+.dep-choice-btn {
+  padding: 6px 12px; font-size: 11.5px; font-weight: 600; cursor: pointer; color: #64748b;
+  background: #fff; white-space: nowrap;
+}
+.dep-choice-btn:first-child { border-right: 1px solid #cbd5e1; }
+.dep-choice-btn input { display: none; }
+.dep-choice-btn:has(input:checked) { background: #0A68FF; color: #fff; }
+
+/* --- Scoped dark theme for the dependency + classify review modals --- */
+.modal-panel.dep-modal-dark { background: #0f172a; }
+.dep-modal-dark .modal-header { border-bottom-color: #1e293b; }
+.dep-modal-dark .modal-header h2 { color: #f1f5f9; }
+.dep-modal-dark .mp-hint { color: #94a3b8; }
+.dep-modal-dark .modal-footer { border-top-color: #1e293b; }
+.dep-modal-dark .dep-tabs { border-bottom-color: #1e293b; }
+.dep-modal-dark .dep-tab { color: #64748b; }
+.dep-modal-dark .dep-tab:hover { color: #cbd5e1; }
+.dep-modal-dark .dep-tab.active { color: #f1f5f9; border-bottom-color: #38bdf8; }
+.dep-modal-dark .dep-empty { color: #64748b; }
+.dep-modal-dark .dep-columns-header { border-bottom-color: #1e293b; }
+.dep-modal-dark .dep-col-label { color: #64748b; }
+.dep-modal-dark .dep-candidate-row { background: #1a2332; border-color: #263041; }
+.dep-modal-dark .dep-candidate-row:hover { background: #212c3d; border-color: #334155; }
+.dep-modal-dark .dep-step-badge { background: #1e3a5f; color: #93c5fd; }
+.dep-modal-dark .dep-step-field-source .dep-step-badge { background: #14532d; color: #86efac; }
+.dep-modal-dark .dep-field-path { color: #e2e8f0; }
+.dep-modal-dark .dep-value-chip { background: #312e81; color: #c7d2fe; border-color: #4338ca; }
+.dep-modal-dark .dep-badge-list { background: #78350f; color: #fde68a; }
+.dep-modal-dark .dep-badge-progress { background: #0c4a6e; color: #7dd3fc; }
+.dep-modal-dark .dep-badge-occurrences { background: #3730a3; color: #ddd6fe; }
+.dep-modal-dark .dep-classify-row { background: #1a2332; border-color: #263041; }
+.dep-modal-dark .dep-choice-toggle { border-color: #334155; }
+.dep-modal-dark .dep-choice-btn { background: #1a2332; color: #94a3b8; }
+.dep-modal-dark .dep-choice-btn:first-child { border-right-color: #334155; }
+.dep-modal-dark .dep-choice-btn:has(input:checked) { background: #0A68FF; color: #fff; }
+.ifs-auth-method-toggle { display: flex; gap: 8px; margin-bottom: 4px; }
+.ifs-auth-method-toggle label { display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 500; color: #334155; }
+
+/* --- Call Optimizer (dedup/merge marks) --- */
+/* Dim only the secondary details (pill/endpoint/status/timing/size/delete-btn), not the
+   checkbox or badge — those are the two things a marked-for-deletion card most needs to keep
+   legible, so they stay at full opacity/contrast while the rest visually recedes. */
+.call-card.marked-delete { background: #fafafa; }
+.call-card.marked-delete .call-header > :not(.call-del-check):not(.opt-badge) { opacity: 0.5; }
+
+.call-del-check {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #e11d48;
+}
+
+.opt-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.opt-badge.dup { background: #fef3c7; color: #78350f; border-color: #fcd34d; }
+.opt-badge.unused { background: #e2e8f0; color: #1e293b; border-color: #94a3b8; }
+.opt-badge.merge-absorbed { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.opt-badge.merge-survivor { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }

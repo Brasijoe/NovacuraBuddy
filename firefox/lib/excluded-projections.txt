@@ -1,0 +1,12 @@
+# Projections excluded from the tracked list and from module creation
+# (still filtered out before ever being shown), one per line. Lines
+# starting with # and blank lines are ignored. Matching is
+# case-insensitive against the .svc segment of the request URL,
+# with or without the ".svc" suffix.
+UserProfileService.svc
+FrameworkServices.svc
+BookmarkService.svc
+AppearanceConfiguration.svc
+ClientContext.svc
+Translations.svc
+ClientNavigator.svc

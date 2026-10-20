@@ -1,0 +1,11 @@
+/* Wide layout only — colors, type and components come from sidepanel.css. */
+.qr-editor-page { max-width: 1400px; margin: 0 auto; padding: var(--space-3); }
+.qr-editor-page h1 { font-family: var(--font-sans-head); font-size: 20px; margin: 0; }
+.editor-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--space-4); margin-top: var(--space-3); }
+@media (max-width: 900px) { .editor-grid { grid-template-columns: 1fr; } }
+.editor-main, .editor-side { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+#qrSql { font-family: var(--font-mono); font-size: 13px; width: 100%; box-sizing: border-box; min-height: 60vh; resize: vertical; tab-size: 2; }
+.editor-actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
+.history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.history-table th { text-align: left; color: var(--ink-muted); font-weight: 600; border-bottom: 1px solid var(--surface-raised); padding: 4px 6px; }
+.history-table td { border-bottom: 1px solid var(--surface-raised); padding: 4px 6px; overflow-wrap: anywhere; }
