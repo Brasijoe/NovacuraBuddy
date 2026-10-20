@@ -28,8 +28,24 @@ test("every script background.js imports exists", () => {
   const src = fs.readFileSync(path.join(__dirname, "background.js"), "utf8");
   const block = src.match(/importScripts\(([\s\S]*?)\);/)[1];
   const files = [...block.matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]);
-  for (const f of ["lib/qr-deploy.js", "lib/qr-history.js", "lib/qr-library.js", "lib/github-settings.js", "lib/qr-service.js", "lib/update-check.js"]) {
+  for (const f of ["lib/ifs-client.js", "lib/ifs-permissions.js", "lib/qr-deploy.js", "lib/qr-history.js", "lib/qr-library.js", "lib/github-settings.js", "lib/qr-service.js", "lib/update-check.js"]) {
     assert.ok(files.includes(f), `importScripts is missing ${f}`);
   }
   for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, f)), `${f} does not exist`);
+});
+
+test("importScripts loads the IFS client before its users", () => {
+  const src = fs.readFileSync(path.join(__dirname, "background.js"), "utf8");
+  const block = src.match(/importScripts\(([\s\S]*?)\);/)[1];
+  const files = [...block.matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]);
+  const at = (f) => files.indexOf(f);
+  assert.ok(at("lib/ifs-client.js") < at("lib/ifs-permissions.js"));
+  assert.ok(at("lib/ifs-permissions.js") < at("lib/qr-deploy.js"));
+});
+
+test("every <script src> in the extension pages exists", () => {
+  for (const page of ["sidepanel.html", "qr-editor.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, page), "utf8");
+    for (const m of html.matchAll(/<script src="([^"]+)"/g)) assert.ok(fs.existsSync(path.join(__dirname, m[1])), `${page}: ${m[1]} does not exist`);
+  }
 });

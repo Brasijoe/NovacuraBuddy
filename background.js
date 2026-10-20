@@ -9,6 +9,8 @@ importScripts(
   "lib/flow-designer-tab.js",
   "lib/flow-modules.js",
   "lib/flow-token.js",
+  "lib/ifs-client.js",
+  "lib/ifs-permissions.js",
   "lib/qr-deploy.js",
   "lib/qr-history.js",
   "lib/qr-library.js",
