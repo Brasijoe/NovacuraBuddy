@@ -46,12 +46,18 @@
       <hr class="section-divider" />
 
       <main>
-        <h2>Tracked projections</h2>
-        <div class="list-toolbar">
-          <span class="list-count" id="listCount"></span>
-          <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
-        </div>
-        <ul id="projectionList" class="projection-list"></ul>
+        <details id="trackedSection" class="tracker-section" open>
+          <summary><h2>Tracked projections</h2><span class="list-count" id="listCount"></span></summary>
+          <div class="list-toolbar">
+            <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
+          </div>
+          <ul id="projectionList" class="projection-list"></ul>
+        </details>
+        <details id="packageModuleSection" class="tracker-section" open>
+          <summary><h2>Modules in this flow's package</h2><span class="list-count" id="packageModuleCount"></span></summary>
+          <p id="packageModuleHint" class="empty-state" hidden></p>
+          <ul id="packageModuleList" class="projection-list"></ul>
+        </details>
       </main>
     </section>
 

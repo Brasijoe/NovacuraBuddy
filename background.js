@@ -278,9 +278,22 @@ async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
 async function handleActivateModule({ assetId, headVersionId, projectionName }) {
   log("ACTIVATE_MODULE start: assetId=", assetId, "headVersionId=", headVersionId);
   const tab = captureDesignerTab();
-  const flowFetch = boundFlowFetch();
-  await FlowDesignerTab.activateModule({ flowFetch, orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId, moduleName: projectionName });
+  await FlowDesignerTab.activateModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId, moduleName: projectionName });
   log("ACTIVATE_MODULE done — refreshing the Designer so the module shows up...");
+  return refreshDesignerTab(tab);
+}
+
+async function handleDeactivateModule({ assetId }) {
+  log("DEACTIVATE_MODULE start: assetId=", assetId);
+  const tab = captureDesignerTab();
+  await FlowDesignerTab.deactivateModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, itemId: tab.itemId, assetId });
+  log("DEACTIVATE_MODULE done — refreshing the Designer so the module disappears...");
+  return refreshDesignerTab(tab);
+}
+
+/** After any module save: let the Designer reload itself so it shows the change (and holds the
+ *  new etag for its own next save). */
+async function refreshDesignerTab(tab) {
   try {
     const response = await chrome.tabs.sendMessage(tab.tabId, { type: "CLICK_REFRESH" });
     if (response && response.clicked) {
@@ -417,7 +430,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           if (!designerTabState) {
             const statuses = {};
             for (const name of message.projectionNames) statuses[name] = { status: "no_designer", assetId: null, headVersionId: null };
-            return sendResponse({ ok: true, statuses });
+            return sendResponse({ ok: true, statuses, packageModules: [] });
           }
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
@@ -435,9 +448,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               headVersionId: moduleAsset ? moduleAsset.mainBranch.headVersionId : null
             };
           }
-          log("Computed status for", message.projectionNames.length, "projection(s) in one pass");
-          return sendResponse({ ok: true, statuses });
+          // Every module in the open flow's package, from the same two lists — the tracker's
+          // second section.
+          const packageModules = assets
+            .filter((a) => a.type === "module")
+            .map((a) => ({ name: a.name, status: FlowDesignerTab.computeModuleStatus(a, designerData.assets), assetId: a.id, headVersionId: a.mainBranch.headVersionId }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+          log("Computed status for", message.projectionNames.length, "projection(s) and", packageModules.length, "package module(s) in one pass");
+          return sendResponse({ ok: true, statuses, packageModules });
         }
+        case "DEACTIVATE_MODULE":
+          return sendResponse({ ok: true, result: await handleDeactivateModule(message) });
         case "ACTIVATE_MODULE":
         case "CREATE_MODULE": // Create always activates in the open flow too
         case "RELOAD_AND_ACTIVATE":

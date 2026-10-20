@@ -9,23 +9,39 @@ async function initTrackingToggle() {
   if (response) document.getElementById("trackingToggle").checked = response.enabled;
 }
 
+// Activation is shown by the row's switch, so only states the switch can't express get a pill.
 function statusLabel(status) {
   return {
-    not_created: "Not created", created: "Created", activated: "Activated",
-    activated_stale: "Update available", unknown: "Status unavailable", no_designer: "—"
-  }[status] || status;
+    not_created: "Not created", activated_stale: "Update available", unknown: "Status unavailable"
+  }[status] || "";
 }
 
 // --- Incremental row rendering: the panel polls every 5s, and rebuilding the whole list on
 // every tick (the original innerHTML="" approach) made the UI visibly flicker/refresh. Rows are
 // built once and mutated in place; only genuinely new/removed names touch the DOM tree shape.
-const rowElements = new Map(); // upper-cased name -> { name, status, metaText, actions, lastStatus }
+// Both sections (tracked projections, modules in the flow's package) use the same row code.
+function createRowList(listEl) {
+  return { listEl, rows: new Map() }; // rows: upper-cased name -> { name, status, metaText, actions, lastStatus, busy }
+}
 const projectionListEl = document.getElementById("projectionList");
+const trackedRows = createRowList(projectionListEl);
+const packageModuleRows = createRowList(document.getElementById("packageModuleList"));
 
 function resetProjectionList() {
-  rowElements.clear();
+  for (const list of [trackedRows, packageModuleRows]) {
+    list.rows.clear();
+    list.listEl.innerHTML = "";
+  }
   searchResultNames = [];
-  projectionListEl.innerHTML = "";
+}
+
+function pruneRows(list, keepUpper) {
+  for (const key of [...list.rows.keys()]) {
+    if (!keepUpper.has(key)) {
+      list.rows.get(key).row.remove();
+      list.rows.delete(key);
+    }
+  }
 }
 
 function buildProjectionRow() {
@@ -49,75 +65,101 @@ function buildProjectionRow() {
   actions.className = "proj-actions";
 
   row.append(info, actions);
-  return { row, name, status, metaText, actions, lastStatus: null };
+  return { row, name, status, metaText, actions, lastStatus: null, busy: false };
 }
 
-function renderActions(entry, { name, status, assetId, headVersionId, open }) {
-  entry.actions.innerHTML = "";
-  const disabledTitle = open ? "" : "Open or interact with the Designer tab first";
+/** On = the module is in the open flow. Turning it on creates the module first when it doesn't
+ *  exist yet (same path as Quick Reports' Module button); turning it off removes it from the flow. */
+function buildModuleSwitch(entry, { name, status, assetId, headVersionId, open }) {
+  const active = status === "activated" || status === "activated_stale";
+  const label = document.createElement("label");
+  label.className = "toggle";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = active;
+  input.disabled = !open;
+  input.setAttribute("aria-label", `${name} active in the open flow`);
+  const track = document.createElement("span");
+  track.className = "toggle-track";
+  const thumb = document.createElement("span");
+  thumb.className = "toggle-thumb";
+  track.appendChild(thumb);
+  label.append(input, track);
+  label.title = !open ? "Open or interact with the Designer tab first"
+    : active ? "Active in the open flow — switch off to remove it"
+      : status === "not_created" ? "Switch on to create the module and add it to the open flow"
+        : "Switch on to add the module to the open flow";
 
+  input.onchange = async () => {
+    entry.busy = true;
+    input.disabled = true;
+    try {
+      if (!input.checked) await actionOrShowError({ type: "DEACTIVATE_MODULE", assetId });
+      else if (status === "not_created") await createAndActivateModule(currentBaseUrl, name);
+      else await actionOrShowError({ type: "ACTIVATE_MODULE", assetId, headVersionId, projectionName: name });
+    } finally {
+      entry.busy = false;
+      refreshProjections(); // the real state wins: a failed action flips the switch back
+    }
+  };
+  return label;
+}
+
+function renderActions(entry, state) {
+  if (entry.busy) return; // keep the in-flight switch as the user left it until the action ends
+  entry.actions.innerHTML = "";
+  const { name, status, open } = state;
   if (status === "unknown" || status === "no_designer") return;
 
-  if (status === "not_created") {
-    const btn = document.createElement("button");
-    btn.textContent = "Create";
-    btn.className = "btn-primary";
-    btn.disabled = !open;
-    btn.title = disabledTitle || "Create the module and activate it in the open flow";
-    btn.onclick = () => runAction(btn, "Creating & activating…", () => createAndActivateModule(currentBaseUrl, name));
-    entry.actions.appendChild(btn);
-    return;
-  }
-
-  if (status === "created") {
-    const activateBtn = document.createElement("button");
-    activateBtn.textContent = "Activate";
-    activateBtn.className = "btn-primary";
-    activateBtn.disabled = !open;
-    activateBtn.title = disabledTitle;
-    activateBtn.onclick = () => runAction(activateBtn, "Activating…", () => actionOrShowError({ type: "ACTIVATE_MODULE", assetId, headVersionId, projectionName: name }));
-    entry.actions.appendChild(activateBtn);
-  }
-
-  if (status !== "activated") {
+  if (status === "activated_stale") {
     const reloadBtn = document.createElement("button");
     reloadBtn.textContent = "Reload & Activate";
     reloadBtn.disabled = !open;
-    reloadBtn.title = disabledTitle;
+    reloadBtn.title = open ? "Regenerate the module from IFS and activate the new version" : "Open or interact with the Designer tab first";
     reloadBtn.onclick = () => runAction(reloadBtn, "Reloading…", () => createAndActivateModule(currentBaseUrl, name, "RELOAD_AND_ACTIVATE"));
     entry.actions.appendChild(reloadBtn);
   }
+  entry.actions.appendChild(buildModuleSwitch(entry, state));
 }
 
-function upsertProjectionRow(name, { status, assetId, headVersionId, open }) {
+function upsertProjectionRow(list, name, state) {
   const key = name.toUpperCase();
-  let entry = rowElements.get(key);
+  let entry = list.rows.get(key);
   if (!entry) {
     entry = buildProjectionRow();
     entry.name.textContent = name;
-    rowElements.set(key, entry);
-    projectionListEl.appendChild(entry.row);
+    list.rows.set(key, entry);
+    list.listEl.appendChild(entry.row);
   }
 
-  if (entry.lastStatus !== status) {
-    entry.status.className = `status status-${status}`;
-    entry.status.textContent = statusLabel(status);
+  if (entry.lastStatus !== state.status) {
+    entry.status.className = `status status-${state.status}`;
+    entry.status.textContent = statusLabel(state.status);
+    entry.status.hidden = !entry.status.textContent;
     if (entry.lastStatus !== null && entry.lastStatus !== "unknown") {
       entry.status.classList.remove("flash");
       void entry.status.offsetWidth; // restart the animation on a real transition
       entry.status.classList.add("flash");
     }
-    entry.lastStatus = status;
+    entry.lastStatus = state.status;
   }
-  renderActions(entry, { name, status, assetId, headVersionId, open });
+  renderActions(entry, state);
+  return entry;
+}
+
+function renderPackageModules(modules, designer) {
+  const designerOpen = designer.open;
+  const hint = document.getElementById("packageModuleHint");
+  hint.textContent = designerBlockReason(designer) || (modules.length ? "" : "No modules in this flow's package yet.");
+  hint.hidden = !hint.textContent;
+  document.getElementById("packageModuleCount").textContent = modules.length ? `${modules.length}` : "";
+  pruneRows(packageModuleRows, new Set(modules.map((m) => m.name.toUpperCase())));
+  for (const m of modules) upsertProjectionRow(packageModuleRows, m.name, { ...m, open: designerOpen });
 }
 
 async function refreshProjections() {
-  document.getElementById("listCount").textContent = "";
-  if (!currentBaseUrl) return;
-
   const [trackedResponse, designerResponse] = await Promise.all([
-    sendOrShowError({ type: "GET_TRACKED", baseUrl: currentBaseUrl }),
+    currentBaseUrl ? sendOrShowError({ type: "GET_TRACKED", baseUrl: currentBaseUrl }) : { tracked: [] },
     sendOrShowError({ type: "GET_DESIGNER_STATUS" })
   ]);
   if (!trackedResponse || !designerResponse) return;
@@ -132,38 +174,38 @@ async function refreshProjections() {
   const trackedUpper = new Set(trackedNames.map((n) => n.toUpperCase()));
   const extraSearchNames = searchResultNames.filter((n) => !trackedUpper.has(n.toUpperCase()));
   const desired = [...trackedNames, ...extraSearchNames];
-  const desiredUpper = new Set(desired.map((n) => n.toUpperCase()));
+  pruneRows(trackedRows, new Set(desired.map((n) => n.toUpperCase())));
+  document.getElementById("listCount").textContent = desired.length ? `${desired.length}` : "";
 
-  for (const key of [...rowElements.keys()]) {
-    if (!desiredUpper.has(key)) {
-      rowElements.get(key).row.remove();
-      rowElements.delete(key);
-    }
-  }
-
-  document.getElementById("listCount").textContent = desired.length ? `${desired.length} tracked` : "";
-  if (desired.length === 0) return;
-
-  // One call for the whole list, not one per row — a row the user can SEE but whose status we
+  // One call for both sections, not one per row — a row the user can SEE but whose status we
   // couldn't fetch (no Designer tab, no session token yet) still renders, with a plain "Status
-  // unavailable" badge and the real reason in its title, instead of silently not appearing at
-  // all (count said "N tracked", the list showed nothing — confusing and now fixed).
-  const statusesResponse = await sendOrShowError({ type: "GET_MODULE_STATUSES", projectionNames: desired });
+  // unavailable" badge and the real reason in its title, instead of silently not appearing.
+  // Designer open but no Flow session yet: the hint above already says so — don't also raise the
+  // same failure as an error banner on every 5s poll.
+  const canCheck = !designerResponse.open || designerResponse.hasFlowToken;
+  const statusesResponse = canCheck ? await sendOrShowError({ type: "GET_MODULE_STATUSES", projectionNames: desired }) : null;
   for (const name of desired) {
     const row = statusesResponse && statusesResponse.statuses[name];
-    if (row) {
-      upsertProjectionRow(name, { ...row, open: designerResponse.open });
-    } else {
-      upsertProjectionRow(name, { status: "unknown", assetId: null, headVersionId: null, open: designerResponse.open });
-      const key = name.toUpperCase();
-      rowElements.get(key).status.title = (statusesResponse ? "" : "Could not check status — see the error above.");
-    }
+    const entry = row
+      ? upsertProjectionRow(trackedRows, name, { ...row, open: designerResponse.open })
+      : upsertProjectionRow(trackedRows, name, { status: "unknown", assetId: null, headVersionId: null, open: designerResponse.open });
+    if (!row) entry.status.title = statusesResponse ? "" : canCheck ? "Could not check status — see the error above." : designerBlockReason(designerResponse);
     const tracked = trackedByName.get(name.toUpperCase());
-    const entry = rowElements.get(name.toUpperCase());
     entry.metaText.textContent = tracked
-      ? ` · ${tracked.hitCount} hit${tracked.hitCount === 1 ? "" : "s"} · first seen ${new Date(tracked.firstSeenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-      : " · from search";
+      ? `${tracked.hitCount} hit${tracked.hitCount === 1 ? "" : "s"} · first seen ${new Date(tracked.firstSeenAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+      : "from search";
   }
+  // A failed poll keeps the last package list rather than blanking it until the next one.
+  if (statusesResponse || !canCheck) renderPackageModules(statusesResponse ? statusesResponse.packageModules || [] : [], designerResponse);
+}
+
+// The two sections remember whether they're expanded.
+for (const id of ["trackedSection", "packageModuleSection"]) {
+  const section = document.getElementById(id);
+  try { if (localStorage.getItem(`section:${id}`) === "closed") section.open = false; } catch { /* default open */ }
+  section.addEventListener("toggle", () => {
+    try { localStorage.setItem(`section:${id}`, section.open ? "open" : "closed"); } catch { /* not persisted */ }
+  });
 }
 
 document.getElementById("clearTraceBtn").addEventListener("click", async () => {
