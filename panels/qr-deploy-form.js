@@ -70,7 +70,7 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
     if (!select.value) return;
     const baseUrl = select.value;
     sets.textContent = "Loading permission sets…";
-    const response = await send({ type: "QR_PERMISSION_SETS", baseUrl, masterPassword: "" });
+    const response = await send({ type: "PERMISSION_SETS", baseUrl, masterPassword: "" });
     if (token !== selectToken) return;
     sets.textContent = "";
     if (!response.ok) return onError(explain(response));

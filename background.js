@@ -20,6 +20,7 @@ importScripts(
   "lib/custom-lu-deploy.js",
   "lib/github-settings.js",
   "lib/qr-service.js",
+  "lib/cl-service.js",
   "lib/update-check.js"
 );
 
@@ -40,12 +41,10 @@ function logError(...args) { console.error(LOG_PREFIX, ...args); }
 
 const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storage.local, session: chrome.storage.session });
 globalThis.__recorderInstanceStore = instanceStore; // RecorderCapture lists instances from the shared store
-const qrService = QrService.createQrService({
-  instanceStore,
-  settings: GithubSettings.createGithubSettings(chrome.storage.local),
-  history: QrHistory.createQrHistory(chrome.storage.local),
-  cacheStorage: chrome.storage.local
-});
+const githubSettings = GithubSettings.createGithubSettings(chrome.storage.local);
+const qrHistory = QrHistory.createQrHistory(chrome.storage.local);
+const qrService = QrService.createQrService({ instanceStore, settings: githubSettings, history: qrHistory, cacheStorage: chrome.storage.local });
+const clService = ClService.createClService({ instanceStore, settings: githubSettings, history: qrHistory });
 
 // Update notice: checked only when the browser starts (user decision) — no timer, no check on
 // panel open. The stored result carries `currentVersion`, so it is ignored once the user has
@@ -491,7 +490,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, report: await qrService.saveReport(await masterKey(), message.report) });
         case "QR_MOVE_UNOWNED":
           return sendResponse({ ok: true, ...(await qrService.moveUnowned(await masterKey())) });
-        case "QR_PERMISSION_SETS":
+        case "PERMISSION_SETS":
           return sendResponse({ ok: true, ...(await qrService.listPermissionSets(message.baseUrl, await masterKey())) });
         case "QR_DEPLOY":
           return sendResponse({ ok: true, outcome: await qrService.deploy(await masterKey(), message) });
@@ -502,6 +501,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               : message.baseUrl ? await qrService.historyForInstance(message.baseUrl)
               : await qrService.historyAll()
           });
+        case "CL_LIBRARY":
+          return sendResponse({ ok: true, lus: await clService.listLibrary(await masterKey()) });
+        case "CL_CREATE":
+          return sendResponse({ ok: true, lu: await clService.createInLibrary(await masterKey(), message.lu) });
+        case "CL_ENV_LIST":
+          return sendResponse({ ok: true, lus: await clService.listEnvironment(message.baseUrl, await masterKey()) });
+        case "CL_ENV_GET":
+          return sendResponse({ ok: true, lu: await clService.getEnvironmentLu(message.baseUrl, await masterKey(), message.name) });
+        case "CL_DEPLOY":
+          return sendResponse({ ok: true, results: await clService.deploy(await masterKey(), message) });
         case "GET_UPDATE_INFO": {
           const info = await readUpdateInfo();
           const { [UPDATE_DISMISSED_KEY]: dismissedVersion } = await chrome.storage.local.get(UPDATE_DISMISSED_KEY);
