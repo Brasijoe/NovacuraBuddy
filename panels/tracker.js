@@ -143,7 +143,7 @@ function upsertProjectionRow(list, name, state) {
     }
     entry.lastStatus = state.status;
   }
-  renderActions(entry, state);
+  renderActions(entry, { ...state, name }); // status rows carry no name of their own
   return entry;
 }
 

@@ -251,7 +251,14 @@ function captureDesignerTab() {
   return { ...designerTabState };
 }
 
+function requireProjectionName(projectionName, action) {
+  if (typeof projectionName !== "string" || !projectionName.trim()) {
+    throw new Error(`${action}: no projection/module name was given — nothing was changed.`);
+  }
+}
+
 async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
+  requireProjectionName(projectionName, "Create module");
   log("CREATE_MODULE start:", projectionName, "against", baseUrl);
   const tab = captureDesignerTab();
   const packageId = await resolvePackageIdFor(tab);
@@ -276,6 +283,7 @@ async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
 }
 
 async function handleActivateModule({ assetId, headVersionId, projectionName }) {
+  requireProjectionName(projectionName, "Activate module"); // it becomes the module-added event's name
   log("ACTIVATE_MODULE start: assetId=", assetId, "headVersionId=", headVersionId);
   const tab = captureDesignerTab();
   await FlowDesignerTab.activateModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, itemId: tab.itemId, assetId, headVersionId, moduleName: projectionName });
