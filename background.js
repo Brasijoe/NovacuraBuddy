@@ -13,7 +13,9 @@ importScripts(
   "lib/ifs-permissions.js",
   "lib/qr-deploy.js",
   "lib/qr-history.js",
+  "lib/gh-library.js",
   "lib/qr-library.js",
+  "lib/cl-library.js",
   "lib/github-settings.js",
   "lib/qr-service.js",
   "lib/update-check.js"
