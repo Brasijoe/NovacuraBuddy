@@ -48,8 +48,9 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
       const blocked = designer && designer.ok !== false ? designerBlockReason(designer) : "";
       if (blocked) return onError(blocked);
       btn.textContent = "Creating & activating…";
-      const response = await createAndActivateModule(baseUrl, name);
-      if (response) btn.insertAdjacentText("afterend", ` ✓ Module ${name} created & activated in the open flow.`);
+      const projection = CustomLuModel.projectionName(name);
+      const response = await createAndActivateModule(baseUrl, projection);
+      if (response) btn.insertAdjacentText("afterend", ` ✓ Module ${projection} created & activated in the open flow.`);
     } catch (err) {
       onError(err && err.message ? err.message : String(err));
     } finally {

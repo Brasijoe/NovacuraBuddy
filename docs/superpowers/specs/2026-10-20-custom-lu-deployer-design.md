@@ -150,7 +150,7 @@ instance `ifscloud.flowington.com`) unless marked **UNCONFIRMED**. Payloads keep
 4. **Approve LU:** `POST Approve {Lu, LuType:"CUSTOM_LU"}`. (Fails with `ORA-20105 ... CFLU_NO_PERS_APPROV`
    when no attribute is approved — that is why step 3 comes first.)
 5. **Publish:** `POST Publish {Lu, LuType:"CUSTOM_LU"}`.
-6. **Grant:** `POST PermissionSetHandling.svc/GrantProjections {Projections:"PROJECTION_NAME=<Lu>^", Role}`
+6. **Grant:** `POST PermissionSetHandling.svc/GrantProjections {Projections:"PROJECTION_NAME=CustomProjection<first 22 chars of Lu>^", Role}` (live 2026-10-20; the Flow module uses the same name)
    per selected set, via `lib/ifs-permissions.js`. Projection name = LU name 1:1 — **UNCONFIRMED**
    (user statement, not traced).
 

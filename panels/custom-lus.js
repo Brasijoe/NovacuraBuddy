@@ -79,8 +79,9 @@ async function createClModule(baseUrl, name, btn) {
     const blocked = designer && designer.ok !== false ? designerBlockReason(designer) : "";
     if (blocked) return showError(blocked, true);
     btn.textContent = "Creating & activating…";
-    const response = await createAndActivateModule(baseUrl, name);
-    if (response) showNotice(`Module ${name} created & activated in the open flow.`);
+    const projection = CustomLuModel.projectionName(name);
+    const response = await createAndActivateModule(baseUrl, projection);
+    if (response) showNotice(`Module ${projection} created & activated in the open flow.`);
   } catch (err) {
     showError(err && err.message ? err.message : String(err), true);
   } finally {
