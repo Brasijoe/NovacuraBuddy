@@ -35,10 +35,12 @@ test("zipDirectoryContents puts the directory's contents at the zip root, with n
   zipDirectoryContents(stage, zipPath);
   const names = execFileSync("powershell", ["-NoProfile", "-Command",
     `Add-Type -A System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::OpenRead('${zipPath}').Entries | ForEach-Object { $_.FullName }`],
-    { encoding: "utf8" }).split(/\r?\n/).map((s) => s.trim().replace(/\\/g, "/")).filter(Boolean);
+    { encoding: "utf8" }).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   fs.rmSync(zipPath, { force: true });
   fs.rmSync(stage, { recursive: true, force: true });
   assert.ok(names.includes("manifest.json"), `manifest.json not at zip root; entries: ${names}`);
+  // Entry names must use "/": Windows PowerShell 5.1's Compress-Archive writes "lib\a.js", which
+  // Mac/Linux/7-Zip unpack as one flat file named "lib\a.js".
   assert.ok(names.includes("lib/a.js"), `lib/a.js missing; entries: ${names}`);
   assert.ok(names.every((n) => !n.startsWith(path.basename(stage) + "/")), `wrapper folder found; entries: ${names}`);
 });

@@ -32,8 +32,20 @@ const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
  * Zips the CONTENTS of stageDir into zipPath (no wrapper folder), so manifest.json sits at the zip root.
  * Windows PowerShell only (Compress-Archive).
  */
+// Entries are written one by one with "/" separators: Windows PowerShell 5.1's Compress-Archive
+// stores "panels\common.js", which Mac/Linux/7-Zip unpack as a single flat file of that name.
 function zipDirectoryContents(stageDir, zipPath) {
-  const command = `Compress-Archive -Path (Join-Path ${psQuote(stageDir)} '*') -DestinationPath ${psQuote(zipPath)} -Force`;
+  const command = [
+    "Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem",
+    `$stage = (Resolve-Path -LiteralPath ${psQuote(stageDir)}).Path.TrimEnd('\\')`,
+    `$zip = ${psQuote(zipPath)}`,
+    "if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }",
+    "$archive = [IO.Compression.ZipFile]::Open($zip, 'Create')",
+    "try { Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object {",
+    "  $name = $_.FullName.Substring($stage.Length + 1).Replace('\\', '/')",
+    "  [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $name, 'Optimal') } }",
+    "finally { $archive.Dispose() }"
+  ].join("\n");
   execFileSync("powershell", ["-NoProfile", "-Command", command], { stdio: "inherit" });
 }
 
