@@ -16,6 +16,7 @@ importScripts(
   "lib/gh-library.js",
   "lib/qr-library.js",
   "lib/cl-library.js",
+  "lib/custom-lu-model.js",
   "lib/github-settings.js",
   "lib/qr-service.js",
   "lib/update-check.js"

@@ -28,7 +28,7 @@ test("every script background.js imports exists", () => {
   const src = fs.readFileSync(path.join(__dirname, "background.js"), "utf8");
   const block = src.match(/importScripts\(([\s\S]*?)\);/)[1];
   const files = [...block.matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]);
-  for (const f of ["lib/ifs-client.js", "lib/ifs-permissions.js", "lib/qr-deploy.js", "lib/qr-history.js", "lib/gh-library.js", "lib/qr-library.js", "lib/cl-library.js", "lib/github-settings.js", "lib/qr-service.js", "lib/update-check.js"]) {
+  for (const f of ["lib/ifs-client.js", "lib/ifs-permissions.js", "lib/qr-deploy.js", "lib/qr-history.js", "lib/gh-library.js", "lib/qr-library.js", "lib/cl-library.js", "lib/custom-lu-model.js", "lib/github-settings.js", "lib/qr-service.js", "lib/update-check.js"]) {
     assert.ok(files.includes(f), `importScripts is missing ${f}`);
   }
   for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, f)), `${f} does not exist`);
