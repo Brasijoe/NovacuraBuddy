@@ -198,6 +198,7 @@ Test fixtures must be synthetic; real exports are never committed (repo is publi
   overwritten.
 - Organisation = the last Flow Designer tab opened (remembered in `chrome.storage.local`), so it works
   from the editor page. UNCONFIRMED: reading the existing module via GET `items/{id}/designerXml/{head}`.
+- With the toggle on, Deploy first checks Flow (org known, one real Flow call, an existing module is ours) and stops with an error before any IFS call if that fails.
 - A projection not yet visible right after Publish shows as a per-LU warning; deploying again with
   the toggle on retries it.
 

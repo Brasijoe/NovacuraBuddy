@@ -184,6 +184,17 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
     // Must run inside the click's user gesture, before any other await.
     const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin + "/*"] }, resolve));
     if (!granted) return onError(`Permission for ${origin} was not granted — can't deploy there.`);
+    const withFlowProperties = !!(flowPropertiesBox && flowPropertiesBox.checked);
+    if (withFlowProperties) {
+      deploying = true;
+      deployBtn.disabled = true;
+      deployBtn.textContent = "Checking Flow…";
+      const ready = await send({ type: "CL_FLOW_PROPERTIES_PREFLIGHT" });
+      deploying = false;
+      deployBtn.disabled = false;
+      deployBtn.textContent = "Deploy";
+      if (!ready.ok) return onError(explainLocked(ready));
+    }
     const showProgress = renderProgress(lus);
     const deployId = crypto.randomUUID();
     const onProgress = (message) => {
@@ -207,6 +218,6 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
       return onError(explainLocked(response));
     }
     renderResults(response.results, baseUrl);
-    if (flowPropertiesBox && flowPropertiesBox.checked) await buildFlowPropertiesModule(baseUrl, response.results);
+    if (withFlowProperties) await buildFlowPropertiesModule(baseUrl, response.results);
   };
 }
