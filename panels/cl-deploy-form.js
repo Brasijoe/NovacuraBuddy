@@ -92,6 +92,25 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
     }
   }
 
+  /** One "waiting / current step" line per LU while the background deploys them in order. */
+  function renderProgress(lus) {
+    results.innerHTML = "";
+    const lines = lus.map((lu) => {
+      const li = document.createElement("li");
+      li.className = "banner";
+      li.setAttribute("role", "status");
+      li.textContent = `${String(lu.name || "").trim()} — waiting…`;
+      results.appendChild(li);
+      return li;
+    });
+    // Earlier LUs may have succeeded or failed; the final result lines replace all of this.
+    return (p) => {
+      lines.slice(0, p.index).forEach((li, i) => { li.textContent = `${String(lus[i].name || "").trim()} — finished.`; });
+      const li = lines[p.index];
+      if (li) li.textContent = `⏳ ${p.name} (${p.index + 1}/${p.total}) — ${p.step}…`;
+    };
+  }
+
   deployBtn.onclick = async () => {
     const lus = getLus();
     if (!lus) return;
@@ -101,19 +120,28 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
     // Must run inside the click's user gesture, before any other await.
     const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin + "/*"] }, resolve));
     if (!granted) return onError(`Permission for ${origin} was not granted — can't deploy there.`);
-    results.innerHTML = "";
+    const showProgress = renderProgress(lus);
+    const deployId = crypto.randomUUID();
+    const onProgress = (message) => {
+      if (message && message.type === "CL_DEPLOY_PROGRESS" && message.deployId === deployId) showProgress(message);
+    };
+    chrome.runtime.onMessage.addListener(onProgress);
     deploying = true;
     deployBtn.disabled = true;
     deployBtn.textContent = "Deploying…";
     let response;
     try {
-      response = await send({ type: "CL_DEPLOY", baseUrl, lus, permissionSetIds: picker.selectedIds(), masterPassword: "" });
+      response = await send({ type: "CL_DEPLOY", baseUrl, lus, permissionSetIds: picker.selectedIds(), masterPassword: "", deployId });
     } finally {
+      chrome.runtime.onMessage.removeListener(onProgress);
       deploying = false;
       deployBtn.disabled = false;
       deployBtn.textContent = "Deploy";
     }
-    if (!response.ok) return onError(explainLocked(response));
+    if (!response.ok) {
+      results.innerHTML = "";
+      return onError(explainLocked(response));
+    }
     renderResults(response.results, baseUrl);
   };
 }

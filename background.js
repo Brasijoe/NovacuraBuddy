@@ -509,8 +509,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, lus: await clService.listEnvironment(message.baseUrl, await masterKey()) });
         case "CL_ENV_GET":
           return sendResponse({ ok: true, lu: await clService.getEnvironmentLu(message.baseUrl, await masterKey(), message.name) });
-        case "CL_DEPLOY":
-          return sendResponse({ ok: true, results: await clService.deploy(await masterKey(), message) });
+        case "CL_DEPLOY": {
+          // Live step updates for the page that asked; nobody listening is fine.
+          const onProgress = (progress) => chrome.runtime.sendMessage({ type: "CL_DEPLOY_PROGRESS", deployId: message.deployId, ...progress }).catch(() => {});
+          return sendResponse({ ok: true, results: await clService.deploy(await masterKey(), message, onProgress) });
+        }
         case "GET_UPDATE_INFO": {
           const info = await readUpdateInfo();
           const { [UPDATE_DISMISSED_KEY]: dismissedVersion } = await chrome.storage.local.get(UPDATE_DISMISSED_KEY);
