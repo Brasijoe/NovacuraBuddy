@@ -181,6 +181,26 @@ Existing-LU reads: `GET CustomLusSet?$select=Lu,LuType,Objgrants,luname,keyref` 
 Note: Flow properties exports can contain secrets in `TableValues` (seen in `Properties.json`).
 Test fixtures must be synthetic; real exports are never committed (repo is public).
 
+### 8a. FlowProperties module — `lib/flow-properties-module.js` (user requirement 2026-10-20)
+
+- Import mode only: the deploy form has a **Create FlowProperties Asset** toggle. When ticked, after
+  the deploy every LU that deployed OK (✓) goes into one Flow module named `FlowProperties` at
+  organisation level (App Library, no package). It is not added to any flow.
+- Code comes from **Flow's code generator** (user choice): per LU, the projection
+  `CustomProjection<first 22 chars>` is fetched from IFS (metadata + OpenAPI) and generated as for the
+  Module button. Kept: the shared prelude (everything up to `GetTypeMismatchErrorMessage`) once, and per
+  LU only `let <Entity>Set` plus the declarations it references (entity type, `get<Entity>SetRows`).
+  Dropped: Reference_, ByKey, Create/Update/Delete/Copy and the `#importSource` header.
+- **Merge** (user choice): each LU's code sits between `// >>> FlowProperties: <Lu>` and
+  `// <<< FlowProperties: <Lu>`; a re-import replaces that LU's block, others stay, the prelude is the
+  newest. A declaration another LU defines identically is kept once; a different one with the same
+  name leaves that LU out with a warning. A `FlowProperties` module not made by NovacuraBuddy is never
+  overwritten.
+- Organisation = the last Flow Designer tab opened (remembered in `chrome.storage.local`), so it works
+  from the editor page. UNCONFIRMED: reading the existing module via GET `items/{id}/designerXml/{head}`.
+- A projection not yet visible right after Publish shows as a per-LU warning; deploying again with
+  the toggle on retries it.
+
 ## 9. Testing
 
 - `node --test` units with a mocked IFS client:

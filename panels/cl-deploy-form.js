@@ -1,7 +1,7 @@
 /** Instance → permission sets → Deploy for Custom LUs, used by the editor page and the side panel.
  *  Shows one result line per LU (green = deployed, red = the IFS error verbatim) with a Module
  *  button that creates the Flow module through the shared createAndActivateModule. */
-function renderClDeployForm(container, getLus, { send, onError, onClose, moduleFromPanelOnly }) {
+function renderClDeployForm(container, getLus, { send, onError, onClose, moduleFromPanelOnly, offerFlowPropertiesModule }) {
   container.innerHTML = "";
   container.classList.add("deploy-form");
 
@@ -12,6 +12,16 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
   deployBtn.textContent = "Deploy";
   deployBtn.disabled = true;
   actions.appendChild(deployBtn);
+  let flowPropertiesBox = null;
+  if (offerFlowPropertiesModule) {
+    const label = document.createElement("label");
+    label.className = "cl-toggle";
+    flowPropertiesBox = document.createElement("input");
+    flowPropertiesBox.type = "checkbox";
+    label.append(flowPropertiesBox, " Create FlowProperties Asset");
+    label.title = "After the deploy, add the readable Set of every deployed LU to one org-level Flow module named FlowProperties.";
+    actions.appendChild(label);
+  }
   if (onClose) {
     const closeBtn = document.createElement("button");
     closeBtn.className = "btn-ghost";
@@ -118,6 +128,53 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
     };
   }
 
+  /** Org-level FlowProperties module with the readable Set of every LU that deployed in this run. */
+  async function buildFlowPropertiesModule(baseUrl, deployResults) {
+    const luNames = deployResults.filter((r) => r.ok).map((r) => r.name);
+    const li = document.createElement("li");
+    li.className = "banner";
+    li.setAttribute("role", "status");
+    results.appendChild(li);
+    const skipped = deployResults.filter((r) => !r.ok).map((r) => r.name);
+    if (!luNames.length) {
+      li.textContent = "FlowProperties module: no LU deployed, nothing to add.";
+      return;
+    }
+    li.textContent = `⏳ FlowProperties module: generating code for ${luNames.length} LU(s)…`;
+    deploying = true;
+    deployBtn.disabled = true;
+    let response;
+    try {
+      response = await send({ type: "CL_FLOW_PROPERTIES_MODULE", baseUrl, luNames, masterPassword: "" });
+    } finally {
+      deploying = false;
+      deployBtn.disabled = false;
+    }
+    if (!response.ok) {
+      li.className = "banner banner-error";
+      li.setAttribute("role", "alert");
+      li.textContent = `✗ FlowProperties module — ${explainLocked(response)}`;
+      return;
+    }
+    const ok = response.included.length > 0;
+    li.className = ok ? "banner banner-deployed" : "banner banner-error";
+    li.textContent = ok
+      ? `✓ FlowProperties module updated with ${response.included.join(", ")} (now ${response.lus.length} LU(s)).`
+      : "✗ FlowProperties module — no LU could be added; nothing was changed.";
+    for (const f of response.failed) {
+      const warn = document.createElement("div");
+      warn.className = "cl-warning";
+      warn.textContent = `⚠ ${f.lu} not added: ${f.message}`;
+      li.appendChild(warn);
+    }
+    if (skipped.length) {
+      const note = document.createElement("div");
+      note.className = "cl-warning";
+      note.textContent = `Skipped (deploy failed): ${skipped.join(", ")}`;
+      li.appendChild(note);
+    }
+  }
+
   deployBtn.onclick = async () => {
     const lus = getLus();
     if (!lus) return;
@@ -150,5 +207,6 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
       return onError(explainLocked(response));
     }
     renderResults(response.results, baseUrl);
+    if (flowPropertiesBox && flowPropertiesBox.checked) await buildFlowPropertiesModule(baseUrl, response.results);
   };
 }

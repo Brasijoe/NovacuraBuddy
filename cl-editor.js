@@ -245,7 +245,7 @@ function importFile(file) {
 }
 
 function start() {
-  renderClDeployForm(els.deployForm, lusToDeploy, { send, onError: (message) => showError(message, true), moduleFromPanelOnly: true });
+  renderClDeployForm(els.deployForm, lusToDeploy, { send, onError: (message) => showError(message, true), moduleFromPanelOnly: true, offerFlowPropertiesModule: mode === "import" });
   if (mode === "new") {
     els.title.textContent = "New Custom LU";
     els.save.hidden = false;
