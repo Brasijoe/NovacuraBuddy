@@ -25,7 +25,7 @@ Success looks like:
 - Deploy runs the HAR-captured IFS sequence and ends with the LU published and granted; a Module
   button then creates the Flow module through the shared `createAndActivateModule`.
 - Every failed step shows its real IFS error; nothing is reported as success unless IFS returned 2xx.
-- All existing tests (522) keep passing after the shared pieces are extracted from Quick Reports.
+- All existing tests (526) keep passing after the shared pieces are extracted from Quick Reports.
 
 ## 2. Non-goals
 
@@ -48,7 +48,7 @@ User rule: Projection Tracker, Quick Reports and this feature share code. Extrac
 | GitHub library (list/save per login) | `lib/qr-library.js` | generic `lib/gh-library.js` parameterised by folder prefix + file (de)serialiser; `qr-library.js` becomes a thin wrapper with prefix `quick-reports/` |
 | Permission sets list + grant | `lib/qr-deploy.js` (`listPermissionSets`, `grantProjection*`) | `lib/ifs-permissions.js`; `qr-deploy.js` imports it |
 | Permission-set picker UI | `panels/qr-deploy-form.js` | picker part moved to `panels/permission-picker.js`; QR deploy form uses it |
-| IFS REST client (token, XSRF, If-Match, retry) | `createIfsClient` in `lib/qr-deploy.js` | `lib/ifs-client.js`; both deployers use it |
+| IFS REST client (bearer token, If-Match, 401 retry) | `createIfsClient` in `lib/qr-deploy.js` | `lib/ifs-client.js`; both deployers use it |
 | Flow module creation + Designer block reason | `panels/common.js` | unchanged, reused |
 
 Quick Reports behaviour must not change; its existing tests are the guard.
@@ -72,6 +72,7 @@ One block per LU: LU name, prompt, attribute table (name, prompt, type, length).
 | New | editable | — | yes | yes (create only) | all |
 | Existing | read-only | read-only + IFS note | yes | no | new rows only |
 | Import | editable per block, checkbox per block | — | yes | no | checked blocks |
+| Library | read-only | — | no | already saved (create only) | all |
 
 Types: **String** (length, default 100, max 4000), **Number**, **Date**, **DateTime**.
 
@@ -116,28 +117,35 @@ Base: `/main/ifsapplications/projection/v1/EntityConfigHandling.svc`. Captured 2
 instance `ifscloud.flowington.com`) unless marked **UNCONFIRMED**. Payloads keep captured key order.
 
 1. **LU** (skipped when it already exists):
-   existence check `GET CustomLusSet(Lu='<Lu>',LuType=...CUSTOM_LU)` (404 = new) → `GET ValidateLu(Lu='<Lu>')` → `POST CustomLusSet?select-fields=<captured field list, verbatim>` body
+   existence check `GET CustomLusSet(Lu='<Lu>',LuType=...CUSTOM_LU)` (404 = new — standard OData, not captured: **UNCONFIRMED**) → `GET ValidateLu(Lu='<Lu>')` → `POST CustomLusSet?select-fields=<captured field list, verbatim>` body
    `{Lu, Module:"CONFIG", Prompt, UsedDb:false, SynchronizedDb:false, EnabledRowkey:false, CreateProjectionDb:true, PublishedDb:false}`.
 2. **Per new attribute:**
-   - `GET ValidateAttributeName(AttributeName='<NAME>')`, `GET GetAttributeNameLength(AttributeName='<NAME>')`
-   - `POST CustomAttributesVirtuals` with the captured default body (`Lu`, `LuType:"CUSTOM_LU"`, `DataType:"STRING"`, `DataLength:"100"`, …) → `Objkey`
-   - `PATCH CustomAttributesVirtuals(Objkey=...)` in captured order:
-     `{CustomAttributeType:"PERSISTENT_FIELD"}` → format → `{DataType, Indexed:false}` → type extras → `{AttributeName, Prompt}`
-   - type mapping:
+   - `GET ValidateAttributeName(AttributeName='<NAME>')`: **204 = valid; 200 = invalid**, the body's
+     `value` is the reason (e.g. "The value of [Name] is invalid. First letter should be an uppercase
+     alpha character") and becomes the step error. (`GetAttributeNameLength` is informational in the
+     web client and is not called.)
+   - `POST CustomAttributesVirtuals` with the captured default body (`Lu`, `LuType:"CUSTOM_LU"`, `DataType:"STRING"`, `DataLength:"100"`, …) → `Objkey` + `@odata.etag`
+   - `POST CleanDisplayTextVirtual` body `{}` (sent by the web client right after the virtual is created)
+   - `PATCH CustomAttributesVirtuals(Objkey=...)` with `If-Match: <virtual etag>` (the etag stays the same
+     for every PATCH in the captures), in captured order:
+     `{CustomAttributeType:"PERSISTENT_FIELD"}` → `{TextFormat:"UNFORMATTED"}` → type PATCHes → `{AttributeName, Prompt}`
+   - type PATCHes:
 
-     | Type | DataType | Format PATCH | Extras |
-     |---|---|---|---|
-     | String | `STRING` | `{TextFormat:"UNFORMATTED"}` | `{DataLength:"<n>"}` |
-     | Number | `NUMBER` | `{NumberFormat:"UNFORMATTED"}` | — |
-     | Date | `DATE` | — | `{DateFormat:"DATE"}` |
-     | DateTime | `DATE` | — | `{DateFormat:"DATETIME"}` **UNCONFIRMED (guess, user-approved)** |
+     | Type | PATCHes after TextFormat | Source |
+     |---|---|---|
+     | String | `{DataLength:"<n>"}` | captured (`"4000"`) |
+     | Number | `{DataType:"NUMBER", Indexed:false}` | **UNCONFIRMED** shape (mirrors the captured DATE PATCH; the virtual's GET showed `DataType:"NUMBER"`, `NumberFormat:"UNFORMATTED"` set by IFS) |
+     | Date | `{DataType:"DATE", Indexed:false}` → `{DateFormat:"DATE"}` | captured |
+     | DateTime | `{DataType:"DATE", Indexed:false}` → `{DateFormat:"DATETIME"}` | **UNCONFIRMED (guess, user-approved)** |
+   - `POST CustomAttributesVirtuals(Objkey=...)/IfsApp.EntityConfigHandling.CustomAttributesVirtual_CreateCustomAttributes` body `{}`, `If-Match` virtual etag
+   - `POST .../IfsApp.EntityConfigHandling.CustomAttributesVirtual_CleanupVirtualEntity` body `{}`, `If-Match` virtual etag — always runs, also after a failure (like the Quick Report draft cleanup)
 
-     The String `DataLength` PATCH and the Number `NumberFormat` PATCH are inferred from the virtual's
-     GET responses, not seen as standalone PATCHes — **UNCONFIRMED** until a live run.
-   - `POST CustomAttributesVirtuals(Objkey=...)/IfsApp.EntityConfigHandling.CustomAttributesVirtual_CreateCustomAttributes` body `{}`
-   - `POST .../IfsApp.EntityConfigHandling.CustomAttributesVirtual_CleanupVirtualEntity`
+   All EntityConfigHandling JSON calls send `Content-Type: application/json;IEEE754Compatible=true`,
+   `Accept: application/json;odata.metadata=full;IEEE754Compatible=true`, `Prefer: wait=99999` (captured).
+   Auth is the Basic Data bearer token, same as Quick Reports (no XSRF token needed).
 3. **Approve attributes:** one `$batch` (`multipart/mixed`, one changeset) with
-   `POST ApproveAttribute {Lu, LuType:"CUSTOM_LU", AttributeName}` per new attribute, as the web client sends it.
+   `POST ApproveAttribute {Lu, LuType:"CUSTOM_LU", AttributeName}` per new attribute, plus every existing
+   attribute with `Published: false` (left over from an earlier failed run), as the web client sends it.
    Each part's status is checked; a non-2xx part fails the step.
 4. **Approve LU:** `POST Approve {Lu, LuType:"CUSTOM_LU"}`. (Fails with `ORA-20105 ... CFLU_NO_PERS_APPROV`
    when no attribute is approved — that is why step 3 comes first.)
@@ -167,6 +175,7 @@ Existing-LU reads: `GET CustomLusSet?$select=Lu,LuType,Objgrants,luname,keyref` 
 - **Flow Classic User properties** → one `UserProperties` LU, wide layout: one column per distinct
   user-property name (union) plus `USER_ID`. **Blocked:** parser waits for the Classic example the
   user will provide; implemented as a separate task once the sample is in hand. No guessed format.
+- **Selection (both exports):** every importable table from the properties file — Connect Table properties and, once built, each Flow Classic table plus the merged `UserProperties` block — is listed with a checkbox; only ticked ones are deployed (user requirement 2026-10-20).
 - Bad JSON / nothing importable → plain error, not an empty editor.
 
 Note: Flow properties exports can contain secrets in `TableValues` (seen in `Properties.json`).
@@ -181,7 +190,7 @@ Test fixtures must be synthetic; real exports are never committed (repo is publi
   - first-failure stop; batch isolation across LUs
   - generic GitHub library: prefix isolation, create-only conflict
   - Connect properties parser edge cases
-- Existing 522 tests stay green after the extraction (§3).
+- Existing 526 tests stay green after the extraction (§3).
 - Live checklist (user): new LU with all four types → published + granted + module; existing LU add
   attribute; library LU to second instance; import from `Properties.json`; DateTime confirmation;
   projection-name confirmation.
