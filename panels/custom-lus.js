@@ -47,27 +47,46 @@ function buildClLibraryRow(lu) {
   return li;
 }
 
+let clLibraryLus = [];
+
+function renderClLibrary() {
+  const list = document.getElementById("clLibraryList");
+  const needle = document.getElementById("clLibrarySearch").value.trim().toLowerCase();
+  list.innerHTML = "";
+  clOpenForm = null;
+  const shown = clLibraryLus.filter((lu) => lu.name.toLowerCase().includes(needle));
+  clHint("clLibraryHint", !clLibraryLus.length ? "No saved LUs yet — New LU creates one." : shown.length ? "" : "No LUs match.");
+  for (const lu of shown) list.appendChild(buildClLibraryRow(lu));
+}
+
 async function refreshClLibrary() {
   const list = document.getElementById("clLibraryList");
   clHint("clLibraryHint", "Loading…");
   const response = await send({ type: "CL_LIBRARY", masterPassword: "" });
   list.innerHTML = "";
   clOpenForm = null;
+  clLibraryLus = [];
   if (!response.ok) return clHint("clLibraryHint", `${explainLocked(response)} (GitHub settings are in Basic Data.)`);
-  clHint("clLibraryHint", response.lus.length ? "" : "No saved LUs yet — New LU creates one.");
-  for (const lu of response.lus) list.appendChild(buildClLibraryRow(lu));
+  clLibraryLus = response.lus;
+  renderClLibrary();
 }
 
 async function createClModule(baseUrl, name, btn) {
-  const designer = await send({ type: "GET_DESIGNER_STATUS" });
-  const blocked = designer && designer.ok !== false ? designerBlockReason(designer) : "";
-  if (blocked) return showError(blocked, true);
+  if (btn.disabled) return;
   btn.disabled = true;
-  btn.textContent = "Creating & activating…";
-  const response = await createAndActivateModule(baseUrl, name);
-  btn.disabled = false;
-  btn.textContent = "Module";
-  if (response) showNotice(`Module ${name} created & activated in the open flow.`);
+  try {
+    const designer = await send({ type: "GET_DESIGNER_STATUS" });
+    const blocked = designer && designer.ok !== false ? designerBlockReason(designer) : "";
+    if (blocked) return showError(blocked, true);
+    btn.textContent = "Creating & activating…";
+    const response = await createAndActivateModule(baseUrl, name);
+    if (response) showNotice(`Module ${name} created & activated in the open flow.`);
+  } catch (err) {
+    showError(err && err.message ? err.message : String(err), true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Module";
+  }
 }
 
 function buildClEnvRow(baseUrl, lu) {
@@ -133,6 +152,7 @@ function refreshCustomLus() {
 function initCustomLusPanel() {
   document.getElementById("clNewBtn").onclick = () => openClEditor("mode=new");
   document.getElementById("clImportBtn").onclick = () => openClEditor("mode=import");
+  document.getElementById("clLibrarySearch").oninput = renderClLibrary;
   document.getElementById("clRefreshBtn").onclick = () => { refreshClLibrary(); refreshClEnvironment(); };
   document.getElementById("clInstanceSelect").onchange = refreshClEnvironment;
 }

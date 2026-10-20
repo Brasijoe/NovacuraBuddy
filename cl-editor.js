@@ -44,7 +44,24 @@ function definitionOf(b) {
   return CustomLuModel.normalizeLu({ name: b.name, prompt: b.prompt, attributes });
 }
 
-const problemsOf = (b) => CustomLuModel.validateLu(definitionOf(b));
+/** The model's validation plus editor-only checks: a blank String length (the model would default it to 100)
+ *  and, in Existing mode, a new row named like an attribute the LU already has. */
+function problemsOf(b) {
+  const problems = CustomLuModel.validateLu(definitionOf(b));
+  const lockedNames = new Set(b.attributes.filter((a) => a.locked).map((a) => String(a.name).toUpperCase()));
+  b.attributes.forEach((a, i) => {
+    if (a.locked) return;
+    const name = String(a.name || "").trim();
+    const label = name || "Row " + (i + 1);
+    if (a.type === "STRING" && String(a.length === undefined || a.length === null ? "" : a.length).trim() === "") {
+      problems.push({ index: i, field: "length", message: label + ": length can't be empty." });
+    }
+    if (mode === "existing" && name && lockedNames.has(name.toUpperCase())) {
+      problems.push({ index: i, field: "name", message: name.toUpperCase() + ": already exists on this LU." });
+    }
+  });
+  return problems;
+}
 const activeBlocks = () => blocks.filter((b) => (mode === "import" ? b.checked : true));
 
 function input(value, { type = "text", placeholder = "", disabled = false, onInput }) {
@@ -192,7 +209,13 @@ async function loadLibrary(id) {
 
 async function loadExisting(baseUrl, name) {
   els.modeHint.textContent = "Loading the LU from IFS…";
-  const origin = new URL(baseUrl).origin;
+  let origin;
+  try {
+    origin = new URL(baseUrl).origin;
+  } catch {
+    els.modeHint.textContent = "";
+    return showError("This link has no valid IFS instance address — open the LU again from the side panel.", true);
+  }
   const has = await new Promise((resolve) => chrome.permissions.contains({ origins: [origin + "/*"] }, resolve));
   if (!has) { els.modeHint.textContent = ""; return showError(`No permission for ${origin} yet — open the LU from the side panel's instance list once.`, true); }
   const response = await send({ type: "CL_ENV_GET", baseUrl, name, masterPassword: "" });
@@ -222,7 +245,7 @@ function importFile(file) {
 }
 
 function start() {
-  renderClDeployForm(els.deployForm, lusToDeploy, { send, onError: (message) => showError(message, true) });
+  renderClDeployForm(els.deployForm, lusToDeploy, { send, onError: (message) => showError(message, true), moduleFromPanelOnly: true });
   if (mode === "new") {
     els.title.textContent = "New Custom LU";
     els.save.hidden = false;

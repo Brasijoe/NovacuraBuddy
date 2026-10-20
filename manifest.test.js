@@ -81,3 +81,10 @@ test("side panel has the Custom LUs tab and loads its scripts in order", () => {
   assert.match(js, /"custom-lus"/);
   assert.match(js, /initCustomLusPanel\(\)/);
 });
+
+test("library filter input exists and the editor defers the Module button to the side panel", () => {
+  const html = fs.readFileSync(path.join(__dirname, "sidepanel.html"), "utf8");
+  assert.ok(html.includes('id="clLibrarySearch"'));
+  const js = fs.readFileSync(path.join(__dirname, "cl-editor.js"), "utf8");
+  assert.ok(js.includes("moduleFromPanelOnly: true"));
+});
