@@ -69,3 +69,15 @@ test("the Custom LU editor loads its libraries before cl-editor.js", () => {
   const order = ["lib/custom-lu-model.js", "lib/flow-properties.js", "panels/common.js", "panels/permission-picker.js", "panels/cl-deploy-form.js", "cl-editor.js"];
   assert.deepEqual(srcs.filter((s) => order.includes(s)), order);
 });
+
+test("side panel has the Custom LUs tab and loads its scripts in order", () => {
+  const html = fs.readFileSync(path.join(__dirname, "sidepanel.html"), "utf8");
+  assert.match(html, /id="tab-custom-lus"/);
+  assert.match(html, /id="panel-custom-lus"/);
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(srcs.indexOf("panels/cl-deploy-form.js") < srcs.indexOf("panels/custom-lus.js"));
+  assert.ok(srcs.indexOf("panels/custom-lus.js") < srcs.indexOf("sidepanel.js"));
+  const js = fs.readFileSync(path.join(__dirname, "sidepanel.js"), "utf8");
+  assert.match(js, /"custom-lus"/);
+  assert.match(js, /initCustomLusPanel\(\)/);
+});

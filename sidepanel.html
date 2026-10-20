@@ -28,6 +28,7 @@
       <button id="tab-tracker" class="tab" role="tab">Projection Tracker</button>
       <button id="tab-recorder" class="tab" role="tab">Traffic Recorder</button>
       <button id="tab-quick-reports" class="tab" role="tab">Quick Reports</button>
+      <button id="tab-custom-lus" class="tab" role="tab">Custom LUs</button>
       <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
     </nav>
 
@@ -88,6 +89,22 @@
       <ul id="qrList" class="qr-list"></ul>
     </section>
 
+    <section id="panel-custom-lus" role="tabpanel" hidden>
+      <div class="list-toolbar">
+        <button id="clNewBtn" class="btn-primary">New LU</button>
+        <button id="clImportBtn">Import Properties</button>
+        <button id="clRefreshBtn">Refresh</button>
+      </div>
+      <h2>My library</h2>
+      <div id="clLibraryHint" class="empty-state" hidden></div>
+      <ul id="clLibraryList" class="qr-list"></ul>
+      <hr class="section-divider" />
+      <h2>On an IFS instance</h2>
+      <select id="clInstanceSelect"></select>
+      <div id="clEnvHint" class="empty-state" hidden></div>
+      <ul id="clEnvList" class="qr-list"></ul>
+    </section>
+
     <section id="panel-basic-data" role="tabpanel" hidden>
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
@@ -124,6 +141,7 @@
     <script src="panels/qr-deploy-form.js"></script>
     <script src="panels/cl-deploy-form.js"></script>
     <script src="panels/quick-reports.js"></script>
+    <script src="panels/custom-lus.js"></script>
     <script src="panels/update-banner.js"></script>
     <script src="sidepanel.js"></script>
   </body>

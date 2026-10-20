@@ -1,7 +1,7 @@
 # Custom LU Deployer — Design Spec
 
 Date: 2026-10-20
-Status: draft for review
+Status: implemented on feat/custom-lu-deployer — live check pending (see §9)
 Branch: `feat/custom-lu-deployer` (based on `master` feb261d)
 
 ## 1. Purpose
