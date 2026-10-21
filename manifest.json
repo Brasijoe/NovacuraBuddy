@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IFS Projection Tracker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Traces IFS Cloud projection calls and turns them into Novacura Flow Connect modules.",
   "permissions": ["storage", "sidePanel", "webRequest", "debugger", "alarms", "unlimitedStorage", "tabs", "downloads"],
   "host_permissions": ["https://build.novacura.com/*", "https://api.github.com/*"],
