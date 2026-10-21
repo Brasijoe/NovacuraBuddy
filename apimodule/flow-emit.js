@@ -20,13 +20,26 @@
 
   const RUNTIME_NAMES = [
     "basePath", "restTranslation", "restOp", "restGet", "restOpOf", "restFieldName", "restFilter", "restParamName",
-    "restParams", "restValueOf", "restCompare", "restLike", "restTest", "restKeep", "restOrder", "restShape", "restText",
+    "restParams", "restMember", "restValueOf", "restCompare", "restLike", "restTest", "restKeep", "restOrder", "restShape", "restText",
     "restPath", "restQueryString", "restHeaders", "restRemap", "restJsonBody", "restFormBody", "whenNotNull", "enumMapping",
     "mappingFinderFunction", "recordMappingFunction", "fromTextFunction", "renamerFunction", "HandleHeaders",
     "MergeHeaders", "HandleFailedRequest", "HandleHTTPResponse", "addBasePath", "GetResponse", "PostResponse",
     "PatchResponse", "PutResponse", "DeleteResponse", "HandleHTTPResponseBinary", "PostResponseBinary",
     "PatchResponseBinary", "PutResponseBinary", "headers", "input", "body"
   ];
+
+  // Standard-library names: Flow rejects a parameter that shadows one ("The identifier 'left' is
+  // already declared", live 2026-10-21), so an API parameter called `filter` becomes `filter_`.
+  const STDLIB_NAMES = new Set([
+    "upper", "lower", "len", "left", "right", "mid", "trim", "instr", "replace", "split", "join", "chr", "str",
+    "regexmatch", "regexmatches", "regexreplace", "urlencode", "urldecode", "guid", "ceil", "floor", "round", "max",
+    "min", "pow", "val", "isnumber", "isnan", "random", "isnull", "isnullorempty", "identity", "unsafecast", "now",
+    "date", "todate", "format", "first", "firstornull", "firstordefault", "last", "lastornull", "count", "any", "take",
+    "skip", "eval", "flatten", "range", "sum", "map", "filter", "collect", "choose", "fold", "scan", "tolookup",
+    "groupby", "orderby", "orderbydescending", "distinctby", "zip", "reverse", "indexed", "exists", "forall",
+    "contains", "concat", "append", "prepend", "takewhile", "skipwhile", "memoize", "uncurry", "seq", "record",
+    "json", "http", "text", "math", "datetime", "try", "q", "condition", "params", "raw"
+  ]);
 
   const isJson = (contentType) => !!contentType && /^application\/json\b|[/+]json\b/i.test(contentType);
   const quote = (s) => `'${String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
@@ -90,7 +103,7 @@
       const queryParams = op.params.filter((p) => p.in === "query");
       const headerParams = op.params.filter((p) => p.in === "header");
       const argNames = new Map();
-      const usedArgs = new Set(["headers", "input", "body"]);
+      const usedArgs = new Set(["headers", "input", "body", ...STDLIB_NAMES]);
       for (const p of [...pathParams, ...queryParams, ...headerParams]) {
         let a = toIdentifier(p.name);
         for (let i = 2; usedArgs.has(a.toLowerCase()); i++) a = `${toIdentifier(p.name)}_${i}`;
@@ -201,7 +214,7 @@
       const rowsHeaders = headerParams.length ? headerExpr : "[]";
       const rowsUrl = `\`${pathExpr(op.path, argNames)}{restQueryString(${paramList})}\``;
       const raw = shape.wrapper
-        ? `unsafeCast<{}*>(Record.getValue(JSON.deserialize<{}>(GetResponse(${rowsUrl}, ${rowsHeaders})), ${quote(shape.wrapper)}, []))`
+        ? `unsafeCast<{}*>(restMember(JSON.deserialize<{}>(GetResponse(${rowsUrl}, ${rowsHeaders})), ${quote(shape.wrapper)}))`
         : `JSON.deserialize<{}*>(GetResponse(${rowsUrl}, ${rowsHeaders}))`;
       const whereList = `[${whereParams.map((p) => quote(p.name)).join(", ")}]`;
       const rowsArgs = [
@@ -213,10 +226,10 @@
       // Header params can't be optional before q, so a Queryable passes them all explicitly.
       const rowsFn = [
         `private function ${rowsName}(${rowsArgs.map((a) => a.replace(/ = (null|\[\])$/, "")).join(", ")}): {}* {`,
-        "    let filter = restFilter(q);",
-        `    let params = restParams(filter, ${whereList});`,
+        "    let condition = restFilter(q);",
+        `    let params = restParams(condition, ${whereList});`,
         `    let raw = ${raw};`,
-        `    return restShape(restKeep(raw, filter, ${whereList}), q, ${rowMapper ? `r => Record.mapValues(r, ${rowMapper})` : "identity"});`,
+        `    return restShape(restKeep(raw, condition, ${whereList}), q, ${rowMapper ? `r => Record.mapValues(r, ${rowMapper})` : "identity"});`,
         "}"
       ].join("\n");
       const create = `Queryable.Create<RestQueryTranslation, ${rowType}, text>(restTranslation()`;

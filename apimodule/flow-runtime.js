@@ -109,14 +109,7 @@ private function HandleHTTPResponse(response: { statusCode: number, reasonPhrase
      case when response.statusCode >= 200 and response.statusCode < 300 then response.contents
           else HandleFailedRequest(response) end;
 
-private function addBasePath(url): text {
-    if basePath = '':
-        return case when url.left(1) = '/' then url.mid(1, len(url) - 1) else url end;
-    if url.left(1) = '/':
-        return ${"`"}{basePath}{url}${"`"};
-    else:
-        return ${"`"}{basePath}/{url}${"`"};
-}
+/*ADD_BASE_PATH*/
 
 /** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
 private function GetResponse(url: text, headers: Header* = []): text =>
@@ -163,7 +156,7 @@ private function PutResponseBinary(url: text, body: binary, headers: Header* = [
 // A parameter value as the API expects it in a URL: enum values by name, booleans lower-case.
 private function restText(value: unknown): text? =>
     case when value = null then null
-         when value is { name: text } then value.name
+         when value is { name: text } then unsafeCast<{ name: text }>(value).name
          when value is boolean then lower(str(value))
          else str(value) end;
 
@@ -180,13 +173,13 @@ private function restHeaders(values: { Name: text, Value: text? }*): Header* =>
 // Typed enum values back to their plain text, nested records and sequences included.
 private function restRemap(value: unknown): unknown {
     if (value is { enumerationNamespace: text, name: text }) {
-        return value.name;
+        return unsafeCast<{ name: text }>(value).name;
     }
     if (value is {}*) {
-        return value.map(restRemap).eval();
+        return unsafeCast<unknown*>(value).map(restRemap).eval();
     }
     if (value is {}) {
-        return Record.fromMembers(Record.getMembers(value).map(m => { label: m.label, value: restRemap(m.value) }));
+        return Record.fromMembers(Record.getMembers(unsafeCast<{}>(value)).map(m => { label: m.label, value: restRemap(m.value) }));
     }
     return value;
 }
@@ -194,7 +187,7 @@ private function restRemap(value: unknown): unknown {
 private function restJsonBody(input: unknown): text => JSON.serialize(restRemap(input));
 
 private function restFormBody(input: {}): text =>
-    Record.getMembers(restRemap(input)).filter(m => m.value != null).map(m => urlEncode(m.label) & '=' & urlEncode(isNull(restText(m.value), ''))).join('&');
+    Record.getMembers(unsafeCast<{}>(restRemap(input))).filter(m => m.value != null).map(m => urlEncode(m.label) & '=' & urlEncode(isNull(restText(m.value), ''))).join('&');
 
 /* ---------- Queryable: where -> query parameters + in-memory test ---------- */
 
@@ -229,8 +222,12 @@ private function restTranslation(): RestQueryTranslation {
     };
 }
 
+// A record's field by name, null when missing (dynamic access: the row types aren't known here).
+private function restMember(rec: {}, label: text): unknown =>
+    Record.getMembers(rec).filter(m => m.label == label).map(m => m.value).firstOrNull();
+
 private function restGet(node: unknown, label: text): unknown =>
-    case when node is {} then Record.getValue(node, label, null) else null end;
+    case when node is {} then restMember(unsafeCast<{}>(node), label) else null end;
 
 private function restOpOf(node: unknown): text => isNull(restText(restGet(node, 'op')), '');
 
@@ -277,13 +274,13 @@ private function restParams(node: unknown, queryParams: text*): RestParam* {
 private function restValueOf(node: unknown, row: {}): unknown {
     let field = restGet(node, 'f');
     if field != null {
-        return Record.getValue(row, isNull(restText(field), ''), null);
+        return restMember(row, isNull(restText(field), ''));
     }
     let op = restOpOf(node);
     if op = 'dot' {
         let parent = restValueOf(restGet(node, 'a'), row);
         let child = restGet(restGet(node, 'b'), 'f');
-        return case when parent is {} and child != null then Record.getValue(parent, isNull(restText(child), ''), null) else null end;
+        return restGet(parent, isNull(restText(child), ''));
     }
     if op = 'upper' {
         return upper(isNull(restText(restValueOf(restGet(node, 'a'), row)), ''));
@@ -292,9 +289,9 @@ private function restValueOf(node: unknown, row: {}): unknown {
 }
 
 // -1 / 0 / 1; numbers numerically, everything else as text; null sorts first.
-private function restCompare(left: unknown, right: unknown): number {
-    let l = restText(left);
-    let r = restText(right);
+private function restCompare(a: unknown, b: unknown): number {
+    let l = restText(a);
+    let r = restText(b);
     if l = null or r = null {
         return case when l = null and r = null then 0 when l = null then -1 else 1 end;
     }
@@ -325,16 +322,16 @@ private function restTest(node: unknown, row: {}, queryParams: text*, top: boole
     if top and restParamName(node, queryParams) != null {
         return true;
     }
-    let left = restValueOf(restGet(node, 'a'), row);
+    let lhs = restValueOf(restGet(node, 'a'), row);
     if op = 'in' or op = 'notin' {
-        let found = unsafeCast<{}*>(restGet(node, 'b')).exists(v => restCompare(left, restValueOf(v, row)) = 0);
+        let found = unsafeCast<{}*>(restGet(node, 'b')).exists(v => restCompare(lhs, restValueOf(v, row)) = 0);
         return case when op = 'in' then found else not found end;
     }
-    let right = restValueOf(restGet(node, 'b'), row);
+    let rhs = restValueOf(restGet(node, 'b'), row);
     if op = 'like' {
-        return restLike(restText(left), restText(right));
+        return restLike(restText(lhs), restText(rhs));
     }
-    let c = restCompare(left, right);
+    let c = restCompare(lhs, rhs);
     return case when op = 'eq' then c = 0
                 when op = 'neq' then c != 0
                 when op = 'gt' then c > 0
@@ -344,15 +341,15 @@ private function restTest(node: unknown, row: {}, queryParams: text*, top: boole
                 else error ${"`"}The operator '{op}' is not supported on REST data sources.${"`"} end;
 }
 
-private function restKeep(rows: {}*, filter: unknown, queryParams: text*): {}* =>
-    rows.filter(r => restTest(filter, r, queryParams, true));
+private function restKeep(rows: {}*, condition: unknown, queryParams: text*): {}* =>
+    rows.filter(r => restTest(condition, r, queryParams, true));
 
 private function restOrder(rows: {}*, q: Queryable.QuerySpec<text>): {}* {
     let result = rows;
     for o in q.orderBy.reverse() {
         let field = restFieldName(o.field);
-        set result = case when o.descending then result.orderByDescending(r => Record.getValue(r, field, null))
-                          else result.orderBy(r => Record.getValue(r, field, null)) end;
+        set result = case when o.descending then result.orderByDescending(r => restMember(r, field))
+                          else result.orderBy(r => restMember(r, field)) end;
     }
     return result;
 }
@@ -375,7 +372,23 @@ private function restShape(rows: {}*, q: Queryable.QuerySpec<text>, mapRow: {} -
   /** The module source up to the generated part: base path, `open Seq;` and the runtime above. */
   function runtimePreamble(basePath) {
     const quoted = String(basePath || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    return `let basePath = '${quoted}';\n\nopen Seq;\n\n${RUNTIME}\n`;
+    // Chosen here, not tested at runtime: Flow types basePath as its literal ('api/v3') and
+    // rejects `basePath = ''` as a comparison of non-overlapping types.
+    const addBasePath = quoted
+      ? [
+        "private function addBasePath(url): text {",
+        "    if url.left(1) = '/':",
+        "        return `{basePath}{url}`;",
+        "    else:",
+        "        return `{basePath}/{url}`;",
+        "}"
+      ].join("\n")
+      : [
+        "// No base path: the connector's base URL is the API root.",
+        "private function addBasePath(url): text =>",
+        "    case when url.left(1) = '/' then url.mid(1, len(url) - 1) else url end;"
+      ].join("\n");
+    return `let basePath = '${quoted}';\n\nopen Seq;\n\n${RUNTIME.replace("/*ADD_BASE_PATH*/", addBasePath)}\n`;
   }
 
   const api = { runtimePreamble, RUNTIME };

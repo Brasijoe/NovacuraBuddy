@@ -75,9 +75,9 @@ test("a list GET without required params becomes a `let` Queryable whose optiona
   const { code } = generateModule(buildModel(load("oas3-petstore-expanded.yaml")), opts);
   assert.match(code, /let basePath = 'api';/);
   assert.match(code, /let FindPetsSet = Queryable\.Create<RestQueryTranslation, Pet, text>\(restTranslation\(\), getFindPetsSetRows\);/);
-  assert.match(code, /let params = restParams\(filter, \['tags', 'limit'\]\);/);
+  assert.match(code, /let params = restParams\(condition, \['tags', 'limit'\]\);/);
   assert.match(code, /GetResponse\(`\/pets\{restQueryString\(params\)\}`, \[\]\)/);
-  assert.match(code, /return restShape\(restKeep\(raw, filter, \['tags', 'limit'\]\), q, identity\);/);
+  assert.match(code, /return restShape\(restKeep\(raw, condition, \['tags', 'limit'\]\), q, identity\);/);
   // the plain function stays too
   assert.match(code, /function findPets\(tags: text\* = \[\], limit: number\? = null, headers: Header\* = \[\]\): Pet\* \{/);
 });
@@ -101,11 +101,41 @@ test("required path/query params turn the Queryable into a function; header para
   assert.equal(moduleName, "Shop_API");
   assert.match(code, /let basePath = '';/);
   assert.match(code, /private function getListOrdersSetRows\(ownerId: number, since: text, X_Tenant: text, headers: Header\*, q: Queryable\.QuerySpec<text>\): \{\}\* \{/);
-  assert.match(code, /unsafeCast<\{\}\*>\(Record\.getValue\(JSON\.deserialize<\{\}>\(GetResponse\(`\/owners\/\{restPath\(ownerId\)\}\/orders\{restQueryString\(\[new RestParam \{ name: 'since', value: restText\(since\) \}\] & params\)\}`, MergeHeaders\(restHeaders\(\[\{ Name: 'X-Tenant', Value: restText\(X_Tenant\) \}\]\), headers\)\)\), 'items', \[\]\)\)/);
+  assert.match(code, /unsafeCast<\{\}\*>\(restMember\(JSON\.deserialize<\{\}>\(GetResponse\(`\/owners\/\{restPath\(ownerId\)\}\/orders\{restQueryString\(\[new RestParam \{ name: 'since', value: restText\(since\) \}\] & params\)\}`, MergeHeaders\(restHeaders\(\[\{ Name: 'X-Tenant', Value: restText\(X_Tenant\) \}\]\), headers\)\)\), 'items'\)\)/);
   assert.match(code, /function ListOrdersSet\(ownerId: number, since: text, X_Tenant: text, headers: Header\* = \[\]\) \{\n    return Queryable\.Create<RestQueryTranslation, Order, text>\(restTranslation\(\), getListOrdersSetRows\(ownerId, since, X_Tenant, headers, _\)\);/);
-  assert.match(code, /restParams\(filter, \['state'\]\)/);
+  assert.match(code, /restParams\(condition, \['state'\]\)/);
   assert.match(code, /r => Record\.mapValues\(r, recordMapperForOrder\)/);
   assertBalanced(code);
+});
+
+test("generated code avoids what the Flow compiler rejected in the first live test (2026-10-21)", () => {
+  const withBase = generateModule(buildModel(load("swagger-petstore-oas3.yaml")), opts).code;
+  const noBase = generateModule(buildModel({ ...load("oas3-petstore.yaml"), servers: [{ url: "https://petstore.test" }] }), opts).code;
+  for (const code of [withBase, noBase]) {
+    // "The variable 'getValue' does not exist"
+    assert.doesNotMatch(code, /Record\.getValue/);
+    // "Possibly unintended comparison of non-overlapping types '"api/v3"' and '""'"
+    assert.doesNotMatch(code, /(if|when|and|or) basePath/);
+    // "The identifier 'left' / 'right' / 'filter' is already declared"
+    assert.doesNotMatch(code, /\blet (left|right|filter) =|\((left|right|filter): /);
+    // "Argument 'rec' was expected to have type {}" — never hand an `unknown` to Record.getMembers
+    assert.doesNotMatch(code, /Record\.getMembers\(restRemap\(/);
+  }
+  assert.match(noBase, /private function addBasePath\(url\): text =>\n    case when url\.left\(1\) = '\/' then url\.mid\(1, len\(url\) - 1\) else url end;/);
+  assert.match(withBase, /private function addBasePath\(url\): text \{\n    if url\.left\(1\) = '\/':\n        return `\{basePath\}\{url\}`;/);
+});
+
+test("API parameters named like standard functions are renamed so they don't shadow them", () => {
+  const model = buildModel({
+    openapi: "3.0.0", info: { title: "t", version: "1" },
+    paths: { "/s": { get: { operationId: "search", parameters: [
+      { name: "filter", in: "query", schema: { type: "string" } },
+      { name: "count", in: "query", schema: { type: "integer" } }
+    ], responses: { 204: { description: "" } } } } }
+  });
+  const { code } = generateModule(model, opts);
+  assert.match(code, /function search\(filter_2: text\? = null, count_2: number\? = null, headers: Header\* = \[\]\): text \{/);
+  assert.match(code, /name: 'filter', value: restText\(filter_2\)/);
 });
 
 test("only selected operations, and the types they reach, are emitted", () => {
