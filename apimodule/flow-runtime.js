@@ -5,7 +5,8 @@
    fromTextFunction, enumMapping, recordMappingFunction,
    renamerFunction) so a Flow developer recognises them.
 
-   The REST part is new: a list GET is a Queryable whose
+   The REST part is new: a list GET with query parameters is a
+   Queryable (the only kind that gets this part) whose
    translation compiles a `where` into a small JSON tree —
      {"f":"status"}                      a field
      {"v":"sold"}                        a literal
@@ -18,7 +19,9 @@
    row, as rows have no `limit` field).
    ============================================================ */
 (function (global) {
-  const RUNTIME = String.raw`
+  // Queryable-only parts: emitted only when the module has a data source (a list GET with query
+  // params). Everywhere else Flow's own select / where on the function's rows does the job.
+  const RUNTIME_QUERY_TYPE = String.raw`
 type RestQueryTranslation = {
     iden: text -> text,
     num:  number -> text,
@@ -41,7 +44,9 @@ type RestQueryTranslation = {
     notin: (text, text*) -> text,
     agg_sum: true
 }
+`.trim();
 
+  const RUNTIME_BASE = String.raw`
 type Header = {
     Name: text,
     Value: text
@@ -188,7 +193,9 @@ private function restJsonBody(input: unknown): text => JSON.serialize(restRemap(
 
 private function restFormBody(input: {}): text =>
     Record.getMembers(unsafeCast<{}>(restRemap(input))).filter(m => m.value != null).map(m => urlEncode(m.label) & '=' & urlEncode(isNull(restText(m.value), ''))).join('&');
+`.trim();
 
+  const RUNTIME_QUERY = String.raw`
 /* ---------- Queryable: where -> query parameters + in-memory test ---------- */
 
 private function restOp(op: text, a: text, b: text): text => '{"op":"' & op & '","a":' & a & ',"b":' & b & '}';
@@ -397,8 +404,11 @@ private function restShape(rows: {}*, q: Queryable.QuerySpec<text>, mapRow: {} -
 }
 `.trim();
 
-  /** The module source up to the generated part: base path, `open Seq;` and the runtime above. */
-  function runtimePreamble(basePath) {
+  const RUNTIME = `${RUNTIME_QUERY_TYPE}\n\n${RUNTIME_BASE}\n\n${RUNTIME_QUERY}`;
+
+  /** The module source up to the generated part: base path, `open Seq;` and the runtime above,
+   *  without the Queryable parts when `queryables` is false. */
+  function runtimePreamble(basePath, { queryables = true } = {}) {
     const quoted = String(basePath || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
     // Chosen here, not tested at runtime: Flow types basePath as its literal ('api/v3') and
     // rejects `basePath = ''` as a comparison of non-overlapping types.
@@ -416,7 +426,8 @@ private function restShape(rows: {}*, q: Queryable.QuerySpec<text>, mapRow: {} -
         "private function addBasePath(url): text =>",
         "    case when url.left(1) = '/' then url.mid(1, len(url) - 1) else url end;"
       ].join("\n");
-    return `let basePath = '${quoted}';\n\nopen Seq;\n\n${RUNTIME.replace("/*ADD_BASE_PATH*/", addBasePath)}\n`;
+    const runtime = queryables ? RUNTIME : RUNTIME_BASE;
+    return `let basePath = '${quoted}';\n\nopen Seq;\n\n${runtime.replace("/*ADD_BASE_PATH*/", addBasePath)}\n`;
   }
 
   const api = { runtimePreamble, RUNTIME };

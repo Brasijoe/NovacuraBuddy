@@ -5,7 +5,8 @@
      runtime preamble (flow-runtime.js)
      enum modules + record types (flow-types.js)
      record mappers
-     Queryables          a list GET whose rows are records:
+     Queryables          a list GET with query params whose rows are records (without query
+                         params the plain function's rows already serve select … where):
                            let FindPetsByStatusSet = Queryable.Create<...>(restTranslation(), getFindPetsByStatusSetRows);
                          or, when the path needs values first, a function returning one:
                            function OwnerPetsSet(ownerId: number) { return Queryable.Create<...>(...(ownerId, _)); }
@@ -249,7 +250,9 @@
       functions.push(`${doc ? doc + "\n" : ""}function ${fnName}(${args.join(", ")})${returnType} {\n${body}\n}`);
 
       // ---- Queryable for a list GET of records ----
-      if (op.method !== "get" || !jsonResponse) continue;
+      // Only worth it when `where` has a query param to send to the API; otherwise Flow's own
+      // select on the plain function's rows does the same in memory.
+      if (op.method !== "get" || !jsonResponse || !queryParams.length) continue;
       const shape = SpecModel.listShape(resp.schema, deref);
       if (!shape) continue;
       const rowType = registry.typeOf(shape.item, `${fnName}_Row`);
@@ -289,7 +292,7 @@
       ].join("\n");
       const create = `Queryable.Create<RestQueryTranslation, ${rowType}, text>(restTranslation()`;
       const sent = whereParams.map((p) => p.name + (p.required ? " (required)" : ""));
-      const shortDoc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.length ? sent.join(", ") : "nothing"} is sent to the API, everything else is filtered in memory. */`;
+      const shortDoc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.join(", ")} is sent to the API, everything else is filtered in memory. */`;
       // A value for the usage example: the spec's example, its first enum value, or a typed placeholder.
       const sampleValue = (p) => {
         const sch = deref(p.schema);
@@ -311,12 +314,8 @@
           `Data source for ${op.method.toUpperCase()} ${op.path}${docLine(op) ? `: ${docLine(op)}` : ""}${op.deprecated ? " (deprecated)" : ""}`,
           `Rows: ${rowType}.`,
           fnArgs.length ? `Arguments: ${[...fixedArgs, ...rowHeaderParams].map(facts).join(". ")}.` : null,
-          whereParams.length
-            ? `\`where\` conditions (= or in, joined with and) on these query parameters are sent to the API: ${whereParams.map(facts).join(". ")}.`
-            : null,
-          whereParams.length
-            ? "Any other condition, order by and select are applied in memory to the rows the API returns."
-            : "Every `where` condition, order by and select are applied in memory to the rows the API returns.",
+          `\`where\` conditions (= or in, joined with and) on these query parameters are sent to the API: ${whereParams.map(facts).join(". ")}.`,
+          "Any other condition, order by and select are applied in memory to the rows the API returns.",
           `Example: return select * from ${from}${filter};`
         ]);
       };
@@ -347,7 +346,7 @@
     const decls = registry.declarations();
     const sections = [
       header,
-      FlowRuntime.runtimePreamble(model.basePath),
+      FlowRuntime.runtimePreamble(model.basePath, { queryables: queryables.length > 0 }),
       "/* ---------- Enumerations ---------- */",
       ...decls.filter((d) => d.kind === "enum").map((d) => d.text),
       "/* ---------- Types ---------- */",
@@ -401,6 +400,7 @@
     return model.operations.filter((op) => {
       const r = op.response;
       if (op.method !== "get" || !r || !r.schema || !isJson(r.contentType)) return false;
+      if (!op.params.some((p) => p.in === "query")) return false;
       const shape = SpecModel.listShape(r.schema, model.deref);
       return !!shape && registry.isRecord(registry.typeOf(shape.item, `${op.id}_Row`));
     }).map((op) => op.id);
