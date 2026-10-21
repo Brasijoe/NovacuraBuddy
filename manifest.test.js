@@ -28,8 +28,63 @@ test("every script background.js imports exists", () => {
   const src = fs.readFileSync(path.join(__dirname, "background.js"), "utf8");
   const block = src.match(/importScripts\(([\s\S]*?)\);/)[1];
   const files = [...block.matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]);
-  for (const f of ["lib/qr-deploy.js", "lib/qr-history.js", "lib/qr-library.js", "lib/github-settings.js", "lib/qr-service.js", "lib/update-check.js"]) {
+  for (const f of ["lib/ifs-client.js", "lib/ifs-permissions.js", "lib/qr-deploy.js", "lib/qr-history.js", "lib/gh-library.js", "lib/qr-library.js", "lib/cl-library.js", "lib/custom-lu-model.js", "lib/custom-lu-deploy.js", "lib/github-settings.js", "lib/qr-service.js", "lib/cl-service.js", "lib/update-check.js"]) {
     assert.ok(files.includes(f), `importScripts is missing ${f}`);
   }
   for (const f of files) assert.ok(fs.existsSync(path.join(__dirname, f)), `${f} does not exist`);
+});
+
+test("importScripts loads the IFS client before its users", () => {
+  const src = fs.readFileSync(path.join(__dirname, "background.js"), "utf8");
+  const block = src.match(/importScripts\(([\s\S]*?)\);/)[1];
+  const files = [...block.matchAll(/"([^"]+\.js)"/g)].map((m) => m[1]);
+  const at = (f) => files.indexOf(f);
+  assert.ok(at("lib/ifs-client.js") < at("lib/ifs-permissions.js"));
+  assert.ok(at("lib/gh-library.js") < at("lib/qr-library.js"));
+  assert.ok(at("lib/gh-library.js") < at("lib/cl-library.js"));
+  assert.ok(at("lib/ifs-permissions.js") < at("lib/qr-deploy.js"));
+  assert.ok(at("lib/custom-lu-model.js") < at("lib/custom-lu-deploy.js"));
+  for (const dep of ["lib/ifs-client.js", "lib/cl-library.js", "lib/custom-lu-model.js", "lib/custom-lu-deploy.js"]) assert.ok(at(dep) < at("lib/cl-service.js"), dep);
+});
+
+test("every <script src> in the extension pages exists", () => {
+  for (const page of ["sidepanel.html", "qr-editor.html", "cl-editor.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, page), "utf8");
+    for (const m of html.matchAll(/<script src="([^"]+)"/g)) assert.ok(fs.existsSync(path.join(__dirname, m[1])), `${page}: ${m[1]} does not exist`);
+  }
+});
+
+test("pages load the shared picker before the forms that use it", () => {
+  for (const page of ["sidepanel.html", "qr-editor.html"]) {
+    const html = fs.readFileSync(path.join(__dirname, page), "utf8");
+    const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(srcs.indexOf("panels/common.js") < srcs.indexOf("panels/permission-picker.js"), page);
+    assert.ok(srcs.indexOf("panels/permission-picker.js") < srcs.indexOf("panels/qr-deploy-form.js"), page);
+  }
+});
+
+test("the Custom LU editor loads its libraries before cl-editor.js", () => {
+  const html = fs.readFileSync(path.join(__dirname, "cl-editor.html"), "utf8");
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  const order = ["lib/custom-lu-model.js", "lib/flow-properties.js", "panels/common.js", "panels/permission-picker.js", "panels/cl-deploy-form.js", "cl-editor.js"];
+  assert.deepEqual(srcs.filter((s) => order.includes(s)), order);
+});
+
+test("side panel has the Custom LUs tab and loads its scripts in order", () => {
+  const html = fs.readFileSync(path.join(__dirname, "sidepanel.html"), "utf8");
+  assert.match(html, /id="tab-custom-lus"/);
+  assert.match(html, /id="panel-custom-lus"/);
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(srcs.indexOf("panels/cl-deploy-form.js") < srcs.indexOf("panels/custom-lus.js"));
+  assert.ok(srcs.indexOf("panels/custom-lus.js") < srcs.indexOf("sidepanel.js"));
+  const js = fs.readFileSync(path.join(__dirname, "sidepanel.js"), "utf8");
+  assert.match(js, /"custom-lus"/);
+  assert.match(js, /initCustomLusPanel\(\)/);
+});
+
+test("library filter input exists and the editor defers the Module button to the side panel", () => {
+  const html = fs.readFileSync(path.join(__dirname, "sidepanel.html"), "utf8");
+  assert.ok(html.includes('id="clLibrarySearch"'));
+  const js = fs.readFileSync(path.join(__dirname, "cl-editor.js"), "utf8");
+  assert.ok(js.includes("moduleFromPanelOnly: true"));
 });

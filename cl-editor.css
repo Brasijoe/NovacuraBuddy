@@ -1,0 +1,13 @@
+/* Custom LU editor: attribute table on top of qr-editor.css's layout. */
+.lu-block { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); margin-bottom: var(--space-3); }
+.lu-head { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.lu-head input[type="text"] { flex: 1 1 200px; }
+.attr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.attr-table th { text-align: left; color: var(--ink-muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--surface-raised); }
+.attr-table td { padding: 4px 6px; border-bottom: 1px solid var(--surface-raised); }
+.attr-table input, .attr-table select { width: 100%; box-sizing: border-box; }
+.attr-table input[type="number"] { max-width: 90px; }
+.attr-table tr.is-locked td { color: var(--ink-muted); }
+.lu-problems { margin: 0; padding-left: 18px; color: var(--accent-red, #b91c1c); font-size: 13px; }
+.lu-note { font-size: 13px; color: var(--ink-muted); margin: 0; }
+.btn-like { display: inline-block; cursor: pointer; padding: 6px 12px; border: 1px solid var(--surface-raised); border-radius: var(--radius-md); }

@@ -1,0 +1,505 @@
+/*
+#importSource("/b2b/ifsapplications/projection/v1/CustomProjectionShopRepairPickingLocat.svc")
+Auto generated code: 2026-10-20 21:01:32 (build 115548)
+*/
+let basePath = 'b2b/ifsapplications/projection/v1';
+
+open Seq;
+
+type ODataQueryTranslation = {
+    iden: text -> text,
+    num:  number -> text,
+    bool: boolean -> text,
+    txt:  text -> text,
+    parens: text -> text,
+    conj: (text, text) -> text,
+    disj: (text, text) -> text,
+    eq: (text, text) -> text,
+    neq: (text, text) -> text,
+    gt: (text, text) -> text,
+    ge: (text, text) -> text,
+    lt: (text, text) -> text,
+    le: (text, text) -> text,
+    dot: (text, text) -> text,
+    func_upper: text* -> text,
+    func_lower: text* -> text,
+    rec: { } -> text,
+    like: (text, text) -> text,
+    in: (text, text*) -> text,
+    notin: (text, text*) -> text,
+    agg_sum: true,
+    agg_min: true,
+    agg_max: true,
+    agg_countDistinct: true,
+    agg_average: true
+}
+
+type IFSErrorMessage = {
+    code: text,
+    message: text,
+    details: IFSErrorMessage*
+}
+
+type IFSError = {
+    error: IFSErrorMessage
+};
+
+type Header = {
+    Name: text,
+    Value: text
+};
+
+// Extract the enum name from a typed Enum record or a plain string (e.g. from external data sources).
+private function enumName(enumValue: { name: text } | text): text =>
+    case when enumValue is { name: text } then enumValue.name else str(enumValue) end;
+
+// Rewrite a datetime term into date only format if the flag is true
+private function rewriteDateTime(value: text, isDateOnly: boolean) =>
+    case when isDateOnly
+            then value.left(10)
+        else
+            value
+        end;
+
+// Write a binary operator (e.g. X = Y) but rewrite the RHS if the LHS is the name of a date only column
+private function writeBinaryOperator(lhs, op, rhs, isDateOnlyColumn: (text -> boolean)) {
+    return lhs & op & rewriteDateTime(rhs, isDateOnlyColumn(lhs));
+}
+
+// Change a name like "Foo_FromBar" into "Foo"
+private function removeNavigationPropertySuffix(name: text) {
+    return name.regexReplace(@"_From(\w+|_)", "")
+}
+
+// Take a text value, e.g. hello, and turn it into an OData literal 'hello'
+private function toSanitizedLiteral(lit: text): text => `'{lit.replace("'", "''")}'`;
+
+// Write a boolean in the format understood by OData
+private function toBooleanLiteral(b: boolean): text => case when b then 'true' else 'false' end
+
+// Create a translation record in light of some metadata containing the names of all the date-only columns for this projection.
+private function getTranslation(dateOnlyColumns: text*) : ODataQueryTranslation {
+    let isDateOnlyColumn = memoize(c => c in dateOnlyColumns);
+    return {
+        iden: removeNavigationPropertySuffix,
+        num:  str,
+        bool: toBooleanLiteral,
+        txt:  toSanitizedLiteral,
+        arr:  (xs: text*) => xs,
+        parens: x => `({x})`,
+        null: () => 'null',
+        conj: (x, y) => `{x} and {y}`,
+        disj: (x, y) => `{x} or {y}`,
+
+        eq:   (x, y) => writeBinaryOperator(x, ' eq ',  y, isDateOnlyColumn),
+        gt:   (x, y) => writeBinaryOperator(x, ' gt ',  y, isDateOnlyColumn),
+        ge:   (x, y) => writeBinaryOperator(x, ' ge ',  y, isDateOnlyColumn),
+        lt:   (x, y) => writeBinaryOperator(x, ' lt ',  y, isDateOnlyColumn),
+        le:   (x, y) => writeBinaryOperator(x, ' le ',  y, isDateOnlyColumn),
+        neq:  (x, y) => writeBinaryOperator(x, ' ne ',  y, isDateOnlyColumn),
+        dot:  (x, y) => writeBinaryOperator(x, '/',  y, isDateOnlyColumn),
+        like: function (source, pattern) {
+            if pattern.right(2) == "%'" and pattern.left(2) == "'%":
+                return "contains(" & source & ", " & pattern.replace("%", "") & ")";
+            if pattern.right(2) == "%'":
+                return "startswith(" & source & ", " & pattern.replace("%", "") & ")";
+            if pattern.left(2) == "'%":
+                return "endswith(" & source & ", " & pattern.replace("%", "") & ")";
+
+            error "Pattern could not be translated";
+        },
+        in: (field, values) => "(" & values.map(v => field & " eq " & v).join(" or ") & ")",
+        notin: (field, values) => " not " & "(" & values.map(v => field & " eq " & v).join(" or ") & ")",
+        func_upper: xs => "toupper(" & xs.join(", ") & ")",
+        func_lower: xs => "tolower(" & xs.join(", ") & ")",
+        func_Date: (xs: text*) => str(xs[0]).replace("'", ""),
+        func_date: (xs: text*) => str(xs[0]).replace("'", ""),
+        rec: r => case when r is { enumerationNamespace: text, name: text } then r.enumerationNamespace.replace("'", "") & r.name else "unknown" end,
+        agg_sum: true,
+        agg_min: true,
+        agg_max: true,
+        agg_countDistinct: true,
+        agg_average: true
+    };
+}
+
+private function buildQueryString(q: Queryable.QuerySpec<text>): text {
+
+    // Add selection and apply. Here, we have to rewrite things a bit. In FlowScript, like in SQL,
+    // we do the aggregation in the select clause:  select sum(foo) as fooSum from bar.
+    // But in OData, that aggregation goes into the apply param: $apply(aggregate(foo with sum as fooSum)).
+    // We do not write $select if we have written $apply.
+
+    let queryApply = null;
+    let useApply = q.groupBy.any();
+    if useApply {
+        let groupings = `({q.groupBy.join(",")})`;
+        let individualAggregations = q.selection.filter(s => s.aggregation != null).map(s => `{s.name} with {isNull(s.aggregation, "").lower()} as {isNull(s.alias, "")}`).eval();
+        let aggregations = case when individualAggregations.any()
+                            then `,aggregate({individualAggregations.join(",")})`
+                            else ""
+                            end;
+
+        queryApply = `$apply=groupby({groupings}{aggregations})`;
+        if q.filter != null {
+            queryApply = `{isNull(queryApply, "")}/filter({q.filter})`;
+        }
+    }
+
+    // Add the query filter param (if there is a filter)
+    let queryFilter =
+        case when q.filter != null and not useApply then "$filter=" & q.filter
+             else null
+        end;
+
+    // Now add the selections -- excluding expanded fields and OData annotations -- and only if we have not written $apply.
+    let selections = q.selections.filter(s => not q.expansions.exists(e => e.name == s) and not (left(s, 1) == "@")).eval();
+    let querySelection =
+        case when selections.any() and not useApply then "$select=" & selections.join(",")
+             else null
+        end;
+
+    // Add orderBy, which is simple
+    let queryOrder =
+        case when q.orderBy.any() then "$orderby=" & q.orderBy.map(o => o.field & " " & (case when o.descending then "desc" else "asc" end)).join(",")
+             else null
+        end;
+
+    // Add expansions
+    let queryExpansions =
+        case when q.expansions.any() then "$expand=" & q.expansions.map(e => removeNavigationPropertySuffix(e.name)).join(",")
+             else null
+        end;
+
+    // Now put them all together with the ampersand sign between.
+    let query = Seq.choose([queryFilter, querySelection, queryApply, queryOrder, queryExpansions], x => x).join("&");
+    return query;
+}
+
+// Given a set of expansions, take names like Foo_FromBar and rename them to Foo if "Foo" is in the expansions list
+private function navPropRestoreFunction(expansions: text*): (text -> text) {
+    if not expansions.any() {
+        return identity;
+    }
+
+    return (name) => case when shortForm in expansions then shortForm else name end
+        given {
+            shortForm = removeNavigationPropertySuffix(name)
+        }
+}
+
+// Given a set of selections in the form {name, alias}, create a function which renames a field if needed.
+private function renamerFunction(selects: {name, alias}*): text -> text {
+    if not selects.exists(s => s.alias != null) {
+        return identity;
+    }
+
+    return (label) => isNull(selects.filter(s => s.name == label).firstOrNull().alias, label);
+}
+
+type Mapping = any -> any;
+
+type Enum<TNamespace, TName> = { enumerationNamespace: TNamespace, name: TName }
+
+private function whenNotNull(f: any -> any) =>
+    x => case when x = null then null else f(x) end;
+
+// Create an enum mapping record
+private function enumMapping(label, mapping: Mapping) => { label, mapping: whenNotNull(mapping) };
+
+// Create a memoized "find mapping" function from a list of enum mappings
+private function mappingFinderFunction(mappings: { label, mapping: Mapping }*) =>
+    lookup >> Seq.map(_, m => m.mapping) >> firstOrDefault(_, identity)
+        given {
+            lookup = mappings.toLookup(m => m.label)
+        };
+
+private function recordMappingFunction(mappings: { label, mapping: Mapping }*) =>
+    uncurry(finder) given { finder = memoize(mappingFinderFunction(mappings)) };
+
+private function ToEnumQueryStringParam(value: { enumerationNamespace: text, name: text }?): text {
+    if value != null {
+        return value.enumerationNamespace & `'{value.name}'`;
+    }
+    else {
+        return 'null'
+    }
+}
+
+private function ToQueryStringParam(value: text? | text?* | number? | number?* | datetime? | datetime?* | boolean? | boolean?*, isDateOnly: boolean = false ): text {
+    if value is boolean? and value != null {
+        return isNull(lower(str(value)), 'null')
+    }
+    else if value is datetime? and value != null {
+        return case when isDateOnly then rewriteDateTime(value, true) else isNull(str(value), 'null') end;
+    }
+    else if value is number? and value is not null {
+        return isNull(str(value), 'null')
+    }
+    else if value is text? and value != null {
+        return `'{isNull(value, "null").regexReplace("'", '')}'`;
+    }
+    else if value is text?* {
+        return value.choose(x => x).map(x => ToQueryStringParam(x)).join(",")
+    }
+    else if value is number?* {
+        return value.choose(x => x).map(x => ToQueryStringParam(x)).join(",")
+    }
+    else if value is datetime?* {
+        return value.choose(x => x).map(x => ToQueryStringParam(x, isDateOnly)).join(",")
+    }
+    else if value is boolean?* {
+        return value.choose(x => x).map(x => ToQueryStringParam(x)).join(",")
+    }
+    else {
+        return 'null'
+    }
+}
+
+private function GetMemberValues(t: unknown): any {
+    if (t is { label: text, value: any? })
+    {
+        if (t.value is null)
+        {
+            return null
+        }
+
+        if (t.value is {enumerationNamespace: text, name: text})
+        {
+            return `"{t.label}":"{t.value.name}"`;
+        }
+
+        if (isNumber(str(t.value)))
+        {
+            return `"{t.label}":{val(t.value)}`
+        }
+
+        if (lower(str(t.value)) == 'true')
+        {
+            return `"{t.label}":true`;
+        }
+
+        if (lower(str(t.value)) == 'false')
+        {
+            return `"{t.label}":false`;
+        }
+
+        return `"{t.label}":"{str(t.value)}"`
+    }
+
+    return null;
+}
+
+private function HandleHeaders(headers: Header* = []): {} {
+    let localHeaders = headers;
+    if (not headers.exists(h => h.Name == "Content-Type")):
+        localHeaders = localHeaders & [new Header { Name: "Content-Type", Value: "application/json" }];
+    return Record.fromMembers(localHeaders.map(h => Record.getMembers(h)).map(x => { label:str(x.value[0]), value: x.value[1] }))
+}
+
+/** Merges required headers with user-provided headers. Required headers take precedence — duplicates by name are removed, keeping the required value. */
+private function MergeHeaders(required: Header*, userHeaders: Header*): Header* =>
+    (required & userHeaders).distinctBy(h => h.Name);
+
+private function HandleFailedRequest(response: text) {
+    let errorResponse = JSON.deserialize<IFSError>(response)
+    let errorMsg = `{errorResponse.error.message} {errorResponse.error.details.map(e => e.message).join(",")}`
+    error errorMsg;
+}
+
+private function HandleHTTPResponse(response: { statusCode: number, reasonPhrase: text, headers: { name: text, values: text* }*, contents: text}): text =>
+     case when response.statusCode == 200 then response.contents
+          when response.statusCode == 201 then response.contents
+          when response.statusCode == 202 then response.statusCode
+          when response.statusCode == 204 then response.statusCode
+          else HandleFailedRequest(response.contents) end;
+
+private function addBasePath(url): text {
+    if url.left(1) = '/':
+        return `{basePath}{url}`;
+    else:
+        return `{basePath}/{url}`;
+}
+
+private function request(url: text, headers: Header*, modifyOptions: HTTP.RequestOptions -> HTTP.RequestOptions) =>
+    HTTP.request(finalUrl, modifyOptions(options with {continueOnError: true})) given {
+        finalUrl = case when baseUrl is text then baseUrl & addBasePath(url)
+                             else addBasePath(url)
+                             end,
+        baseUrl = ContextParams.get("BaseURL"),
+        options = case when oidcParams is HTTP.OpenIDConnectParameters then baseOptions with { authParameters: oidcParams } else baseOptions end,
+        baseOptions = {headers: HandleHeaders(headers)},
+        oidcParams = ContextParams.get("OIDC")
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function GetResponse(url: text, headers: Header* = []) =>
+    HandleHTTPResponse(response as r with {contents: response.asText()}) given {
+        response = request(url, headers, identity)
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PostResponse(url: text, body: text, headers: Header* = []): text =>
+    HandleHTTPResponse(response as r with {contents: response.asText()}) given {
+        response = request(url, headers, o => o with { method: "POST", body: body })
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PatchResponse(url: text, body: text, headers: Header* = []): text =>
+    HandleHTTPResponse(response as r with {contents: response.asText()}) given {
+        response = request(url, headers, o => o with { method: "PATCH", body: body })
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PutResponse(url: text, body: text, headers: Header* = []): text =>
+    HandleHTTPResponse(response as r with {contents: response.asText()}) given {
+        response = request(url, headers, o => o with { method: "PUT", body: body })
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function DeleteResponse(url: text, headers: Header* = []): text {
+    let response = request(url, headers, o => o with { method: "DELETE" });
+    return case when response.statusCode == 204 then response.statusCode
+           else error response.reasonPhrase end;
+}
+
+ private function HandleHTTPResponseBinary(response: { statusCode: number, reasonPhrase: text, headers: { name: text, values: text* }*, contents: binary}): binary | text {
+    if (response.statusCode == 202 or response.statusCode == 204):
+        return response.statusCode;
+
+    return case when response.statusCode == 200 then response.contents
+           when response.statusCode == 201 then response.contents
+           else error response.reasonPhrase end;
+}
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PostResponseBinary(url: text, body: binary, headers: Header* = []): binary | text =>
+    HandleHTTPResponseBinary(response as r with {contents: response.asBinary()}) given {
+        response = request(url, headers, o => o with { method: "POST", body: body })
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PatchResponseBinary(url: text, body: binary, headers: Header* = []): binary | text =>
+    HandleHTTPResponseBinary(response as r with {contents: response.asBinary()}) given {
+        response = request(url, headers, o => o with { method: "PATCH", body: body })
+    }
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PutResponseBinary(url: text, body: binary, headers: Header* = []): text | binary =>
+    HandleHTTPResponseBinary(response as r with {contents: response.asBinary()}) given {
+        response = request(url, headers, o => o with { method: "PUT", body: body })
+    }
+
+private function BuildKeysFilter(keys: {}): text {
+    return join(Seq.map(Record.getMembers(keys), m => m.label & '=' & str(m.value)), ',');
+}
+
+private function fromTextFunction(values: { enumerationNamespace: text, name: text }*, enumerationName: text, name: text) {
+    let value = firstOrNull(values as v where v.name = name);
+    if value != null:
+        return value;
+    error `Could not convert {name} to the corresponding {enumerationName} enumeration value.`;
+}
+
+private function expandOne<T>(url, recordMapper: (text, any) -> any) {
+    let __result = JSON.deserialize<{value:{}}>(GetResponse(url)).value
+    return unsafeCast<T>(Record.mapValues(__result, recordMapper));
+}
+
+function RemapInput(input: {}, dateOnlyColumns: text*, stripNulls: boolean = false): {} {
+    return Record.fromMembers(
+        Record.getMembers(input).map(m => transform(m.label, m.value) given {
+            transform = function(label: text, value: unknown) {
+                if (value is { enumerationNamespace: text, name: text }) {
+                    return { label, value: value.name }
+                }
+                if (value != null and label in dateOnlyColumns) {
+                    return { label, value: rewriteDateTime(str(value), true) }
+                }
+                // Nested object (not an enum): recurse
+                if (value is {}) {
+                    return { label, value: RemapInput(value, dateOnlyColumns, stripNulls) }
+                }
+                return { label, value }
+            }
+        })
+        .filter(m => not stripNulls or m.value != null)  // Optionally strip null values to keep URLs short
+    )
+}
+
+function GetTypeMismatchErrorMessage(type: text) =>
+    `The response did not match the expected type '{type}'. Make sure that the module is up to date with the IFS Applications installation.`
+type ShopRepairPickingLocat = {
+    "@odata.etag": text,
+    luname: text? = null,
+    keyref: text? = null,
+    Objgrants: text? = null,
+    Objkey: text,
+    Cf_Locationno: text? = null,
+    Cf_Site: text? = null,
+}
+type ShopRepairPickingLocat_Keys = {
+    Objkey: text,
+}
+private function keyFilterForShopRepairPickingLocat(entity: ShopRepairPickingLocat_Keys): text {
+    let keys = {
+        Objkey: toSanitizedLiteral(entity.Objkey),
+    };
+    return BuildKeysFilter(keys);
+}
+
+
+type ShopRepairPickingLocatCopyValues = {
+    ParentSource: ShopRepairPickingLocat,
+    ModifiedSource: ShopRepairPickingLocat,
+}
+
+type ConfigEntityDec = {
+    ETag: text? = null,
+    Info: text? = null,
+    Attr: text? = null,
+}
+
+private function getShopRepairPickingLocatSetRows(q: Queryable.QuerySpec<text>): {}* {
+    let raw = JSON.deserialize<{value: {}*}>(GetResponse(`/CustomProjectionShopRepairPickingLocat.svc/ShopRepairPickingLocatSet?{buildQueryString(q)}`)).value;
+    let renamer = memoize(renamerFunction(q.selection));
+    return raw.map(r => Record.mapLabels(r, renamer)).eval();
+}
+
+let ShopRepairPickingLocatSet = Queryable.Create<ODataQueryTranslation, ShopRepairPickingLocat, text>(getTranslation([]), getShopRepairPickingLocatSetRows);
+
+private function getReference_ShopRepairPickingLocatRows(q: Queryable.QuerySpec<text>): {}* {
+    let raw = JSON.deserialize<{value: {}*}>(GetResponse(`/CustomProjectionShopRepairPickingLocat.svc/Reference_ShopRepairPickingLocat?{buildQueryString(q)}`)).value;
+    let renamer = memoize(renamerFunction(q.selection));
+    return raw.map(r => Record.mapLabels(r, renamer)).eval();
+}
+
+let Reference_ShopRepairPickingLocat = Queryable.Create<ODataQueryTranslation, ShopRepairPickingLocat, text>(getTranslation([]), getReference_ShopRepairPickingLocatRows);
+
+function GetReference_ShopRepairPickingLocatByKey(Objkey: text, headers: Header* = []): ShopRepairPickingLocat{
+    let keys = { Objkey };
+    let __raw = JSON.deserialize<{}>(GetResponse(`/CustomProjectionShopRepairPickingLocat.svc/Reference_ShopRepairPickingLocat({keyFilterForShopRepairPickingLocat(keys)})`, headers))
+    let __result = __raw;
+    return unsafeCast<ShopRepairPickingLocat>(__result);
+}
+function GetShopRepairPickingLocatSetByKey(Objkey: text, headers: Header* = []): ShopRepairPickingLocat{
+    let keys = { Objkey };
+    let __raw = JSON.deserialize<{}>(GetResponse(`/CustomProjectionShopRepairPickingLocat.svc/ShopRepairPickingLocatSet({keyFilterForShopRepairPickingLocat(keys)})`, headers))
+    let __result = __raw;
+    return unsafeCast<ShopRepairPickingLocat>(__result);
+}
+type ShopRepairPickingLocatInsertRequest = {
+    optional Cf_Locationno: text,
+    optional Cf_Site: text,
+};
+/** Add new entity to ShopRepairPickingLocatSet */
+function ShopRepairPickingLocatSet_Create(input: ShopRepairPickingLocatInsertRequest, headers: Header* = []): ShopRepairPickingLocat {
+    let __raw = JSON.deserialize<{}>(PostResponse(`/CustomProjectionShopRepairPickingLocat.svc/ShopRepairPickingLocatSet`, JSON.serialize(input), headers))
+    let __result = __raw;
+    return unsafeCast<ShopRepairPickingLocat>(__result);
+}
+
+/** Delete entity from ShopRepairPickingLocatSet */
+function ShopRepairPickingLocatSet_Delete(Objkey:text, ifMatch: text = "*", headers: Header* = []){
+    return DeleteResponse(`/CustomProjectionShopRepairPickingLocat.svc/ShopRepairPickingLocatSet(Objkey='{str(Objkey)}')`, MergeHeaders([{ Name: 'If-Match', Value: ifMatch }], headers))
+}

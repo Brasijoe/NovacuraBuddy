@@ -364,13 +364,17 @@ input.rename-input { width: 100%; }
 .qr-preview { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .deploy-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .checklist { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; font-size: 13px; }
-.deploy-actions { display: flex; gap: var(--space-2); }
+.deploy-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cl-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .qr-picker { display: flex; flex-direction: column; gap: 6px; }
 .qr-picker[hidden] { display: none; }
 .qr-picker-title { font-size: 12px; color: var(--ink-muted); }
 .qr-pick { text-align: left; }
 .update-banner:not([hidden]) { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .update-howto { flex-basis: 100%; margin: 0; font-size: 12px; }
+.cl-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.cl-results li { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cl-warning { font-weight: 400; color: var(--ink); }
 
 /* ---------- API modules ---------- */
 .api-source-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }

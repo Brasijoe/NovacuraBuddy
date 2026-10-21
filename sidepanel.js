@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "api-modules", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "api-modules", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -8,6 +8,7 @@ function showTab(name) {
   }
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
+  if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
 }
 
 for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => showTab(tab));
@@ -53,6 +54,7 @@ async function refreshUnmatchedHosts() {
 
 initRecorderPanel();
 initQuickReportsPanel();
+initCustomLusPanel();
 initApiModulesPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
