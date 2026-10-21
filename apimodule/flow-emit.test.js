@@ -82,7 +82,7 @@ test("a list GET without required params becomes a `let` Queryable whose optiona
   assert.match(code, /function findPets\(tags: text\* = \[\], limit: number\? = null, headers: Header\* = \[\]\): Pet\* \{/);
 });
 
-test("required path/query params turn the Queryable into a function; header params are passed through", () => {
+test("path params and required headers turn the Queryable into a function; required query params must come from `where`", () => {
   const model = buildModel({
     openapi: "3.0.0", info: { title: "Shop API", version: "2" }, servers: [{ url: "https://shop.test" }],
     paths: { "/owners/{ownerId}/orders": { get: {
@@ -100,10 +100,10 @@ test("required path/query params turn the Queryable into a function; header para
   const { code, moduleName } = generateModule(model, { now: NOW });
   assert.equal(moduleName, "Shop_API");
   assert.match(code, /let basePath = '';/);
-  assert.match(code, /private function getListOrdersSetRows\(ownerId: number, since: text, X_Tenant: text, headers: Header\*, q: Queryable\.QuerySpec<text>\): \{\}\* \{/);
-  assert.match(code, /unsafeCast<\{\}\*>\(restMember\(JSON\.deserialize<\{\}>\(GetResponse\(`\/owners\/\{restPath\(ownerId\)\}\/orders\{restQueryString\(\[new RestParam \{ name: 'since', value: restText\(since\) \}\] & params\)\}`, MergeHeaders\(restHeaders\(\[\{ Name: 'X-Tenant', Value: restText\(X_Tenant\) \}\]\), headers\)\)\), 'items'\)\)/);
-  assert.match(code, /function ListOrdersSet\(ownerId: number, since: text, X_Tenant: text, headers: Header\* = \[\]\) \{\n    return Queryable\.Create<RestQueryTranslation, Order, text>\(restTranslation\(\), getListOrdersSetRows\(ownerId, since, X_Tenant, headers, _\)\);/);
-  assert.match(code, /restParams\(condition, \['state'\]\)/);
+  assert.match(code, /private function getListOrdersSetRows\(ownerId: number, X_Tenant: text, headers: Header\*, q: Queryable\.QuerySpec<text>\): \{\}\* \{/);
+  assert.match(code, /let params = restRequire\(restParams\(condition, \['since', 'state'\]\), \['since'\]\);/);
+  assert.match(code, /unsafeCast<\{\}\*>\(restMember\(JSON\.deserialize<\{\}>\(GetResponse\(`\/owners\/\{restPath\(ownerId\)\}\/orders\{restQueryString\(params\)\}`, MergeHeaders\(restHeaders\(\[\{ Name: 'X-Tenant', Value: restText\(X_Tenant\) \}\]\), headers\)\)\), 'items'\)\)/);
+  assert.match(code, /function ListOrdersSet\(ownerId: number, X_Tenant: text, headers: Header\* = \[\]\) \{\n    return Queryable\.Create<RestQueryTranslation, Order, text>\(restTranslation\(\), getListOrdersSetRows\(ownerId, X_Tenant, headers, _\)\);/);
   assert.match(code, /r => Record\.mapValues\(r, recordMapperForOrder\)/);
   assertBalanced(code);
 });
@@ -136,6 +136,13 @@ test("API parameters named like standard functions are renamed so they don't sha
   const { code } = generateModule(model, opts);
   assert.match(code, /function search\(filter_2: text\? = null, count_2: number\? = null, headers: Header\* = \[\]\): text \{/);
   assert.match(code, /name: 'filter', value: restText\(filter_2\)/);
+});
+
+test("a list GET with only query params is a `let` data source even when a param is required", () => {
+  const { code } = generateModule(buildModel(load("swagger-petstore-oas3.yaml")), opts);
+  assert.match(code, /let FindPetsByStatusSet = Queryable\.Create<RestQueryTranslation, Pet, text>\(restTranslation\(\), getFindPetsByStatusSetRows\);/);
+  assert.match(code, /let params = restRequire\(restParams\(condition, \['status'\]\), \['status'\]\);/);
+  assert.match(code, /let FindPetsByTagsSet = /);
 });
 
 test("only selected operations, and the types they reach, are emitted", () => {

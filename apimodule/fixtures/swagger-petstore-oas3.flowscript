@@ -266,6 +266,15 @@ private function restParams(node: unknown, queryParams: text*): RestParam* {
     return unsafeCast<{}*>(restGet(node, 'b')).map(v => new RestParam { name: isNull(name, ''), value: restText(restGet(v, 'v')) }).eval();
 }
 
+// A query parameter the API requires can only come from the where clause of a data source.
+private function restRequire(params: RestParam*, required: text*): RestParam* {
+    let missing = required.filter(n => not params.exists(p => p.name == n)).eval();
+    if missing.any() {
+        error `This data source needs {missing.join(', ')} in its where clause (for example: where {missing.first()} = ...).`;
+    }
+    return params;
+}
+
 private function restValueOf(node: unknown, row: {}): unknown {
     let field = restGet(node, 'f');
     if field != null {
@@ -490,29 +499,25 @@ private let recordMapperForOrder = recordMappingFunction(enumMappingsForOrder);
 
 /* ---------- Data sources ---------- */
 
-private function getFindPetsByStatusSetRows(status: text, q: Queryable.QuerySpec<text>): {}* {
+private function getFindPetsByStatusSetRows(q: Queryable.QuerySpec<text>): {}* {
     let condition = restFilter(q);
-    let params = restParams(condition, []);
-    let raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }] & params)}`, []));
-    return restShape(restKeep(raw, condition, []), q, r => Record.mapValues(r, recordMapperForPet));
+    let params = restRequire(restParams(condition, ['status']), ['status']);
+    let raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString(params)}`, []));
+    return restShape(restKeep(raw, condition, ['status']), q, r => Record.mapValues(r, recordMapperForPet));
 }
 
-/** GET /pet/findByStatus as a data source: `where` on nothing is sent to the API, everything else is filtered in memory. */
-function FindPetsByStatusSet(status: text) {
-    return Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByStatusSetRows(status, _));
-}
+/** GET /pet/findByStatus as a data source: `where` on status (required) is sent to the API, everything else is filtered in memory. */
+let FindPetsByStatusSet = Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByStatusSetRows);
 
-private function getFindPetsByTagsSetRows(tags: text*, q: Queryable.QuerySpec<text>): {}* {
+private function getFindPetsByTagsSetRows(q: Queryable.QuerySpec<text>): {}* {
     let condition = restFilter(q);
-    let params = restParams(condition, []);
-    let raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval() & params)}`, []));
-    return restShape(restKeep(raw, condition, []), q, r => Record.mapValues(r, recordMapperForPet));
+    let params = restRequire(restParams(condition, ['tags']), ['tags']);
+    let raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(params)}`, []));
+    return restShape(restKeep(raw, condition, ['tags']), q, r => Record.mapValues(r, recordMapperForPet));
 }
 
-/** GET /pet/findByTags as a data source: `where` on nothing is sent to the API, everything else is filtered in memory. */
-function FindPetsByTagsSet(tags: text*) {
-    return Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByTagsSetRows(tags, _));
-}
+/** GET /pet/findByTags as a data source: `where` on tags (required) is sent to the API, everything else is filtered in memory. */
+let FindPetsByTagsSet = Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByTagsSetRows);
 
 /* ---------- Operations ---------- */
 

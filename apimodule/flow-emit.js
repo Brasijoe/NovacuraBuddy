@@ -20,7 +20,7 @@
 
   const RUNTIME_NAMES = [
     "basePath", "restTranslation", "restOp", "restGet", "restOpOf", "restFieldName", "restFilter", "restParamName",
-    "restParams", "restMember", "restValueOf", "restCompare", "restLike", "restTest", "restKeep", "restOrder", "restShape", "restText",
+    "restParams", "restRequire", "restMember", "restValueOf", "restCompare", "restLike", "restTest", "restKeep", "restOrder", "restShape", "restText",
     "restPath", "restQueryString", "restHeaders", "restRemap", "restJsonBody", "restFormBody", "whenNotNull", "enumMapping",
     "mappingFinderFunction", "recordMappingFunction", "fromTextFunction", "renamerFunction", "HandleHeaders",
     "MergeHeaders", "HandleFailedRequest", "HandleHTTPResponse", "addBasePath", "GetResponse", "PostResponse",
@@ -206,39 +206,45 @@
       if (!registry.isRecord(rowType)) continue;
       const setName = registry.claimName(`${SpecModel.pascal(op.id)}Set`);
       const rowsName = registry.claimName(`get${setName}Rows`);
-      const fixedArgs = [...pathParams, ...requiredQuery];
-      const whereParams = optionalQuery;
-      const fixedParams = paramsExpr(requiredQuery, argNames, deref);
-      const paramList = fixedParams === "[]" ? "params" : `${fixedParams} & params`;
+      // Only path parameters (and required headers) make it a function; every query parameter,
+      // required ones included, is set from `where`, so a plain list GET stays a `let` data source
+      // the Designer lists (live 2026-10-21: function-shaped ones didn't show up).
+      const fixedArgs = pathParams;
+      const rowHeaderParams = headerParams.filter((p) => p.required);
+      const whereParams = queryParams;
       const rowMapper = registry.recordMapperName(rowType);
-      const rowsHeaders = headerParams.length ? headerExpr : "[]";
-      const rowsUrl = `\`${pathExpr(op.path, argNames)}{restQueryString(${paramList})}\``;
+      const rowsHeaders = rowHeaderParams.length
+        ? `MergeHeaders(restHeaders([${rowHeaderParams.map((p) => `{ Name: ${quote(p.name)}, Value: restText(${argNames.get(p.name)}) }`).join(", ")}]), headers)`
+        : "[]";
+      const rowsUrl = `\`${pathExpr(op.path, argNames)}{restQueryString(params)}\``;
       const raw = shape.wrapper
         ? `unsafeCast<{}*>(restMember(JSON.deserialize<{}>(GetResponse(${rowsUrl}, ${rowsHeaders})), ${quote(shape.wrapper)}))`
         : `JSON.deserialize<{}*>(GetResponse(${rowsUrl}, ${rowsHeaders}))`;
       const whereList = `[${whereParams.map((p) => quote(p.name)).join(", ")}]`;
-      const rowsArgs = [
+      const requiredList = `[${requiredQuery.map((p) => quote(p.name)).join(", ")}]`;
+      const fnArgs = [
         ...fixedArgs.map((p) => argDecl(p, false)),
-        ...headerParams.map((p) => argDecl(p, !p.required)),
-        ...(headerParams.length ? ["headers: Header* = []"] : []),
-        "q: Queryable.QuerySpec<text>"
+        ...rowHeaderParams.map((p) => argDecl(p, false)),
+        ...(rowHeaderParams.length ? ["headers: Header*"] : [])
       ];
-      // Header params can't be optional before q, so a Queryable passes them all explicitly.
       const rowsFn = [
-        `private function ${rowsName}(${rowsArgs.map((a) => a.replace(/ = (null|\[\])$/, "")).join(", ")}): {}* {`,
+        `private function ${rowsName}(${[...fnArgs, "q: Queryable.QuerySpec<text>"].join(", ")}): {}* {`,
         "    let condition = restFilter(q);",
-        `    let params = restParams(condition, ${whereList});`,
+        requiredQuery.length
+          ? `    let params = restRequire(restParams(condition, ${whereList}), ${requiredList});`
+          : `    let params = restParams(condition, ${whereList});`,
         `    let raw = ${raw};`,
         `    return restShape(restKeep(raw, condition, ${whereList}), q, ${rowMapper ? `r => Record.mapValues(r, ${rowMapper})` : "identity"});`,
         "}"
       ].join("\n");
       const create = `Queryable.Create<RestQueryTranslation, ${rowType}, text>(restTranslation()`;
-      const doc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${whereParams.length ? whereParams.map((p) => p.name).join(", ") : "nothing"} is sent to the API, everything else is filtered in memory. */`;
-      if (!fixedArgs.length && !headerParams.length) {
+      const sent = whereParams.map((p) => p.name + (p.required ? " (required)" : ""));
+      const doc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.length ? sent.join(", ") : "nothing"} is sent to the API, everything else is filtered in memory. */`;
+      if (!fnArgs.length) {
         queryables.push(`${rowsFn}\n\n${doc2}\nlet ${setName} = ${create}, ${rowsName});`);
       } else {
-        const outerArgs = [...fixedArgs.map((p) => argDecl(p, false)), ...headerParams.map((p) => argDecl(p, !p.required)), ...(headerParams.length ? ["headers: Header* = []"] : [])];
-        const passArgs = [...fixedArgs, ...headerParams].map((p) => argNames.get(p.name)).concat(headerParams.length ? ["headers"] : []);
+        const outerArgs = [...fnArgs.slice(0, -1), ...(rowHeaderParams.length ? ["headers: Header* = []"] : fnArgs.slice(-1))];
+        const passArgs = [...fixedArgs, ...rowHeaderParams].map((p) => argNames.get(p.name)).concat(rowHeaderParams.length ? ["headers"] : []);
         queryables.push(`${rowsFn}\n\n${doc2}\nfunction ${setName}(${outerArgs.join(", ")}) {\n    return ${create}, ${rowsName}(${passArgs.join(", ")}, _));\n}`);
       }
     }

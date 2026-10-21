@@ -271,6 +271,15 @@ private function restParams(node: unknown, queryParams: text*): RestParam* {
     return unsafeCast<{}*>(restGet(node, 'b')).map(v => new RestParam { name: isNull(name, ''), value: restText(restGet(v, 'v')) }).eval();
 }
 
+// A query parameter the API requires can only come from the where clause of a data source.
+private function restRequire(params: RestParam*, required: text*): RestParam* {
+    let missing = required.filter(n => not params.exists(p => p.name == n)).eval();
+    if missing.any() {
+        error ${"`"}This data source needs {missing.join(', ')} in its where clause (for example: where {missing.first()} = ...).${"`"};
+    }
+    return params;
+}
+
 private function restValueOf(node: unknown, row: {}): unknown {
     let field = restGet(node, 'f');
     if field != null {
