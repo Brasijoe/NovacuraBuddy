@@ -193,12 +193,17 @@ private function restFormBody(input: {}): text =>
 
 private function restOp(op: text, a: text, b: text): text => '{"op":"' & op & '","a":' & a & ',"b":' & b & '}';
 
+// Flow hands an enum literal to txt after rec already compiled it (live 2026-10-21: the API got
+// status={"v":"available"}), so an already-compiled node passes through unchanged.
+private function restIsNode(t: text): boolean =>
+    t.left(5) = '{"v":' or t.left(5) = '{"f":' or t.left(6) = '{"op":';
+
 private function restTranslation(): RestQueryTranslation {
     return {
         iden: name => '{"f":' & JSON.serialize(name) & '}',
         num:  n => '{"v":' & str(n) & '}',
         bool: b => '{"v":' & (case when b then 'true' else 'false' end) & '}',
-        txt:  t => '{"v":' & JSON.serialize(t) & '}',
+        txt:  t => case when restIsNode(t) then t else '{"v":' & JSON.serialize(t) & '}' end,
         arr:  (xs: text*) => xs,
         parens: x => x,
         null: () => '{"v":null}',

@@ -19,7 +19,7 @@
   const { toIdentifier } = FlowTypes;
 
   const RUNTIME_NAMES = [
-    "basePath", "restTranslation", "restOp", "restGet", "restOpOf", "restFieldName", "restFilter", "restParamName",
+    "basePath", "restTranslation", "restOp", "restIsNode", "restGet", "restOpOf", "restFieldName", "restFilter", "restParamName",
     "restParams", "restRequire", "restMember", "restValueOf", "restCompare", "restLike", "restTest", "restKeep", "restOrder", "restShape", "restText",
     "restPath", "restQueryString", "restHeaders", "restRemap", "restJsonBody", "restFormBody", "whenNotNull", "enumMapping",
     "mappingFinderFunction", "recordMappingFunction", "fromTextFunction", "renamerFunction", "HandleHeaders",
