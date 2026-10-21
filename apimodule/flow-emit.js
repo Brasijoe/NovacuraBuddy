@@ -16,6 +16,7 @@
   const SpecModel = typeof require === "function" ? require("./spec-model.js") : global.ApiSpecModel;
   const FlowTypes = typeof require === "function" ? require("./flow-types.js") : global.ApiFlowTypes;
   const FlowRuntime = typeof require === "function" ? require("./flow-runtime.js") : global.ApiFlowRuntime;
+  const FlowDocs = typeof require === "function" ? require("./flow-docs.js") : global.ApiFlowDocs;
   const { toIdentifier } = FlowTypes;
 
   const RUNTIME_NAMES = [
@@ -88,7 +89,11 @@
     const selected = options.selectedIds ? new Set(options.selectedIds) : null;
     const ops = model.operations.filter((o) => !selected || selected.has(o.id));
     const deref = model.deref;
-    const registry = FlowTypes.createTypeRegistry(model, { namespace: moduleName, reserved: RUNTIME_NAMES });
+    // "full" (default): every comment the spec allows; "short": one line per function / data
+    // source; "off": only the header.
+    const comments = ["full", "short", "off"].includes(options.comments) ? options.comments : "full";
+    const docBase = options.source || "";
+    const registry = FlowTypes.createTypeRegistry(model, { namespace: moduleName, reserved: RUNTIME_NAMES, comments, source: docBase });
     const warnings = [...model.warnings];
 
     // Function names first, so types never take an operation's name.
@@ -164,7 +169,7 @@
         "headers: Header* = []"
       ];
       const url = `\`${pathExpr(op.path, argNames)}${queryParams.length ? `{restQueryString(${paramsExpr(queryParams, argNames, deref)})}` : ""}\``;
-      const doc = `/** ${op.method.toUpperCase()} ${op.path}${docLine(op) ? ` — ${docLine(op)}` : ""}${op.deprecated ? " (deprecated)" : ""} */`;
+      const shortDoc = `/** ${op.method.toUpperCase()} ${op.path}${docLine(op) ? ` — ${docLine(op)}` : ""}${op.deprecated ? " (deprecated)" : ""} */`;
 
       let call;
       if (op.method === "get") call = `GetResponse(${url}, ${bodyHeaders})`;
@@ -196,7 +201,52 @@
         ].join("\n");
         returnType = `: ${respType}`;
       }
-      functions.push(`${doc}\nfunction ${fnName}(${args.join(", ")})${returnType} {\n${body}\n}`);
+      const fullDoc = () => {
+        const paramLine = (p) => {
+          const arg = argNames.get(p.name);
+          const facts = FlowDocs.schemaFacts(deref(p.schema), { required: p.required, listEnum: true });
+          if (p.deprecated) facts.unshift("DEPRECATED");
+          if (p.example !== undefined && !facts.some((f) => f.startsWith("e.g. "))) facts.push(`e.g. ${JSON.stringify(p.example)}`);
+          const where = `${p.in}${arg !== p.name ? ` '${p.name}'` : ""}`;
+          return `@param ${arg} ${FlowDocs.describe([where, ...facts], p.description, docBase)}`;
+        };
+        const bodyLine = () => {
+          if (!op.body) return null;
+          const name = bodyArg.split(":")[0];
+          const typeText = bodyArg.slice(name.length + 1).trim();
+          const ex = FlowDocs.firstExample(op.body.media, deref(op.body.schema));
+          const head = `@param ${name} ${op.body.contentType} body, ${typeText}${op.body.required ? ", required" : ""}`;
+          const desc = op.body.description ? ` — ${FlowDocs.oneLine(op.body.description, docBase)}` : "";
+          return `${head}${desc}${ex ? `. Example: ${FlowDocs.compactJson(ex.value)}` : ""}`;
+        };
+        const ok = (op.responses || []).filter((r) => /^2/.test(r.status));
+        const errors = (op.responses || []).filter((r) => !/^2/.test(r.status));
+        // "**400 Bad Request.** …" -> "400 Bad Request. …", not "400 400 Bad Request."
+        const respText = (r) => {
+          const text = r.description ? FlowDocs.oneLine(r.description, docBase, 200) : "";
+          return text.startsWith(r.status) ? text : `${r.status}${text ? ` ${text}` : ""}`;
+        };
+        const returnsWhat = returnType ? returnType.slice(2) : op.method === "delete" ? "the HTTP status code" : "nothing";
+        const description = FlowDocs.cleanText(op.description, docBase);
+        const summary = FlowDocs.oneLine(op.summary, docBase, 300);
+        return FlowDocs.docBlock([
+          summary || null,
+          description && description !== summary ? FlowDocs.cap(description, FlowDocs.MAX_DESCRIPTION) : null,
+          `HTTP: ${op.method.toUpperCase()} ${op.path}${op.operationId ? ` (operationId ${op.operationId})` : ""}${op.tag && op.tag !== "default" ? `, tag ${op.tag}` : ""}`,
+          op.deprecated ? "DEPRECATED: the API marks this operation as deprecated." : null,
+          ...pathParams.map(paramLine),
+          ...requiredQuery.map(paramLine),
+          bodyLine(),
+          ...optionalQuery.map(paramLine),
+          ...headerParams.map(paramLine),
+          "@param headers extra HTTP headers, merged over the generated ones",
+          `@returns ${returnsWhat}${ok.length ? ` — ${ok.map(respText).join("; ")}` : ""}`,
+          ...errors.map((r) => `@error ${respText(r)}`),
+          errors.length ? "Any non-2xx status raises an error carrying the status and the response text." : null
+        ]);
+      };
+      const doc = comments === "full" ? fullDoc() : comments === "short" ? shortDoc : null;
+      functions.push(`${doc ? doc + "\n" : ""}function ${fnName}(${args.join(", ")})${returnType} {\n${body}\n}`);
 
       // ---- Queryable for a list GET of records ----
       if (op.method !== "get" || !jsonResponse) continue;
@@ -239,13 +289,45 @@
       ].join("\n");
       const create = `Queryable.Create<RestQueryTranslation, ${rowType}, text>(restTranslation()`;
       const sent = whereParams.map((p) => p.name + (p.required ? " (required)" : ""));
-      const doc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.length ? sent.join(", ") : "nothing"} is sent to the API, everything else is filtered in memory. */`;
+      const shortDoc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.length ? sent.join(", ") : "nothing"} is sent to the API, everything else is filtered in memory. */`;
+      // A value for the usage example: the spec's example, its first enum value, or a typed placeholder.
+      const sampleValue = (p) => {
+        const sch = deref(p.schema);
+        const v = p.example !== undefined ? p.example : sch.example !== undefined ? sch.example
+          : Array.isArray(sch.enum) && sch.enum.length ? sch.enum[0] : sch.default;
+        const t = paramType(p.schema, deref);
+        if (v !== undefined && v !== null && typeof v !== "object") return t === "text" ? quote(v) : String(v);
+        return t === "number" ? "0" : t === "boolean" ? "true" : `'<${p.name}>'`;
+      };
+      const fullDoc2 = () => {
+        const facts = (p) => {
+          const f = FlowDocs.describe(FlowDocs.schemaFacts(deref(p.schema), { required: p.required, listEnum: true }), p.description, docBase, 200);
+          return `${p.name}${f ? `: ${f}` : ""}`;
+        };
+        const callArgs = [...fixedArgs, ...rowHeaderParams].map(sampleValue);
+        const from = fnArgs.length ? `${setName}(${callArgs.join(", ")})` : setName;
+        const filter = requiredQuery.length ? ` where ${requiredQuery.map((p) => `${p.name} = ${sampleValue(p)}`).join(" and ")}` : "";
+        return FlowDocs.docBlock([
+          `Data source for ${op.method.toUpperCase()} ${op.path}${docLine(op) ? `: ${docLine(op)}` : ""}${op.deprecated ? " (deprecated)" : ""}`,
+          `Rows: ${rowType}.`,
+          fnArgs.length ? `Arguments: ${[...fixedArgs, ...rowHeaderParams].map(facts).join(". ")}.` : null,
+          whereParams.length
+            ? `\`where\` conditions (= or in, joined with and) on these query parameters are sent to the API: ${whereParams.map(facts).join(". ")}.`
+            : null,
+          whereParams.length
+            ? "Any other condition, order by and select are applied in memory to the rows the API returns."
+            : "Every `where` condition, order by and select are applied in memory to the rows the API returns.",
+          `Example: return select * from ${from}${filter};`
+        ]);
+      };
+      const doc2 = comments === "full" ? fullDoc2() : comments === "short" ? shortDoc2 : null;
+      const docPrefix = doc2 ? `${doc2}\n` : "";
       if (!fnArgs.length) {
-        queryables.push(`${rowsFn}\n\n${doc2}\nlet ${setName} = ${create}, ${rowsName});`);
+        queryables.push(`${rowsFn}\n\n${docPrefix}let ${setName} = ${create}, ${rowsName});`);
       } else {
         const outerArgs = [...fnArgs.slice(0, -1), ...(rowHeaderParams.length ? ["headers: Header* = []"] : fnArgs.slice(-1))];
         const passArgs = [...fixedArgs, ...rowHeaderParams].map((p) => argNames.get(p.name)).concat(rowHeaderParams.length ? ["headers"] : []);
-        queryables.push(`${rowsFn}\n\n${doc2}\nfunction ${setName}(${outerArgs.join(", ")}) {\n    return ${create}, ${rowsName}(${passArgs.join(", ")}, _));\n}`);
+        queryables.push(`${rowsFn}\n\n${docPrefix}function ${setName}(${outerArgs.join(", ")}) {\n    return ${create}, ${rowsName}(${passArgs.join(", ")}, _));\n}`);
       }
     }
 
@@ -258,6 +340,7 @@
       `API: ${docText(model.title)} ${docText(model.version)}${options.specVersion ? ` (${options.specVersion})` : ""}`,
       `Auto generated code: ${stamp} (NovacuraBuddy${options.generatorVersion ? " " + options.generatorVersion : ""})`,
       "Base URL and authentication come from the connector; this module only adds the base path below.",
+      ...(comments === "full" ? headerDocs(model, ops, docBase) : []),
       "*/"
     ].join("\r\n");
 
@@ -281,6 +364,35 @@
       queryableCount: queryables.length,
       functionCount: functions.length
     };
+  }
+
+  /** What a reader (or an AI) needs before the code: the connector settings the spec implies,
+   *  what the API is, and its tags' notes (often the workflow and rate limits). */
+  function headerDocs(model, ops, docBase) {
+    const lines = [];
+    const auth = Object.entries(model.securitySchemes || {}).map(([name, d]) => {
+      d = model.deref(d);
+      if (!d || !d.type) return null;
+      if (d.type === "apiKey") return `API key '${name}' in ${d.in || "header"} ${d.name || ""}`.trim();
+      if (d.type === "http") return `HTTP ${d.scheme || "auth"}${d.bearerFormat ? ` (${d.bearerFormat})` : ""}`;
+      if (d.type === "oauth2") return `OAuth 2 (${Object.keys(d.flows || {}).join(", ") || d.flow || "flow not given"})`;
+      if (d.type === "openIdConnect") return `OpenID Connect (${d.openIdConnectUrl || ""})`;
+      return d.type;
+    }).filter(Boolean);
+    if (model.serverUrl || auth.length) {
+      lines.push("", `Connector settings from the spec: base URL ${model.serverUrl || "(not given)"}${auth.length ? `; authentication: ${auth.join(" or ")}` : ""}.`);
+    }
+    const para = (title, text) => {
+      const clean = FlowDocs.cap(FlowDocs.cleanText(text, docBase), FlowDocs.MAX_DESCRIPTION);
+      if (clean) lines.push("", ...FlowDocs.wrap(`${title}: ${clean}`));
+    };
+    para("About the API", model.description);
+    if (model.externalDocs && model.externalDocs.url) {
+      lines.push("", `More documentation: ${FlowDocs.oneLine(model.externalDocs.description || "", docBase, 200)} ${FlowDocs.absolute(model.externalDocs.url, docBase)}`.replace(": ", ": ").replace(/\s+/g, " ").trim());
+    }
+    const usedTags = [...new Set(ops.map((o) => o.tag))];
+    for (const tag of usedTags) if ((model.tagDescriptions || {})[tag]) para(`Tag ${tag}`, model.tagDescriptions[tag]);
+    return lines.map((l) => l.replace(/\*\//g, "* /"));
   }
 
   /** Which operations would become Queryables (for the picker's badge), without emitting. */

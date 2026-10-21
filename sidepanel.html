@@ -109,6 +109,13 @@
       <div id="apiLoaded" class="api-loaded" hidden>
         <div class="api-summary"><strong id="apiTitle"></strong><span class="list-count" id="apiMeta"></span></div>
         <label class="api-field">Module name <input id="apiModuleName" spellcheck="false" /></label>
+        <label class="api-field">Comments
+          <select id="apiComments" title="Full: descriptions, formats, allowed values, examples and errors from the spec on every type, field, function and data source, so people and AI can read the module. Short: one line per function. Off: none.">
+            <option value="full">Full (types, fields, functions)</option>
+            <option value="short">Short (one line per function)</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
         <div class="list-toolbar">
           <label class="api-check"><input type="checkbox" id="apiSelectAll" /> Select all</label>
           <span class="list-count" id="apiSelectedCount"></span>
@@ -119,6 +126,7 @@
           <button id="apiPreviewBtn">Preview code</button>
           <button id="apiCreateBtn" class="btn-primary">Create module</button>
         </div>
+        <p id="apiCreateHint" class="api-hint" hidden></p>
         <div id="apiPreview" class="api-preview" hidden>
           <textarea id="apiPreviewText" readonly rows="16" spellcheck="false"></textarea>
           <button id="apiCopyBtn" class="btn-ghost">Copy</button>
@@ -163,6 +171,7 @@
     <script src="apimodule/spec-load.js"></script>
     <script src="apimodule/swagger2-to-oas3.js"></script>
     <script src="apimodule/spec-model.js"></script>
+    <script src="apimodule/flow-docs.js"></script>
     <script src="apimodule/flow-types.js"></script>
     <script src="apimodule/flow-runtime.js"></script>
     <script src="apimodule/flow-emit.js"></script>

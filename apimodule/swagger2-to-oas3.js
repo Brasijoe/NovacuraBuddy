@@ -93,11 +93,15 @@
       info: doc.info || { title: "API", version: "" },
       servers: doc.host || doc.basePath ? [{ url: doc.host ? `${scheme}://${doc.host}${doc.basePath || ""}` : doc.basePath }] : [],
       tags: doc.tags || [],
+      ...(doc.externalDocs ? { externalDocs: doc.externalDocs } : {}),
       paths: {},
       components: {
         schemas: rewriteRefs(doc.definitions || {}),
         parameters: {},
-        responses: {}
+        responses: {},
+        // Only read for the generated module's header comment; "basic" is OpenAPI 3's http/basic.
+        securitySchemes: Object.fromEntries(Object.entries(doc.securityDefinitions || {}).map(([name, d]) =>
+          [name, d && d.type === "basic" ? { type: "http", scheme: "basic", description: d.description } : d]))
       }
     };
     for (const [name, p] of Object.entries(sharedParams)) {

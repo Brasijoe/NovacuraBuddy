@@ -221,12 +221,38 @@ function apiSelectionChanged(skipSave) {
   all.checked = apiSelected.size === model.operations.length;
   all.indeterminate = apiSelected.size > 0 && apiSelected.size < model.operations.length;
   apiEl("apiSelectedCount").textContent = `${apiSelected.size} of ${model.operations.length} selected`;
-  apiEl("apiCreateBtn").disabled = apiSelected.size === 0;
   apiEl("apiPreviewBtn").disabled = apiSelected.size === 0;
+  apiApplyCreateState();
   if (!skipSave) {
     const unticked = model.operations.map((o) => o.id).filter((id) => !apiSelected.has(id));
     apiWriteState({ unticked: { [apiSpec.source]: unticked } }).catch(() => {});
   }
+}
+
+// The Designer tab Create acts on, from GET_DESIGNER_STATUS; refreshed by the side panel's poll.
+let apiDesigner = { open: false, hasFlowToken: false };
+let apiCreating = false;
+
+/** Create is enabled only with operations ticked and a known Connect session (the active Designer
+ *  tab plus a Flow token); otherwise the hint under the buttons says why. Re-run on every poll, so
+ *  switching to the Designer tab enables it without reloading the panel. */
+function apiApplyCreateState() {
+  const btn = apiEl("apiCreateBtn");
+  const hint = apiEl("apiCreateHint");
+  if (apiCreating) return;
+  const reason = apiSelected.size === 0 ? "Tick at least one operation." : designerBlockReason(apiDesigner);
+  btn.disabled = !!reason;
+  btn.title = reason || "Save the module in the open flow's package and activate it in that flow";
+  hint.textContent = reason;
+  hint.hidden = !reason;
+}
+
+/** Called from the side panel's 5s poll and when the panel opens. */
+async function refreshApiDesignerState() {
+  const response = await send({ type: "GET_DESIGNER_STATUS" });
+  if (!response.ok) return;
+  apiDesigner = { open: response.open, hasFlowToken: response.hasFlowToken };
+  apiApplyCreateState();
 }
 
 function apiGenerate() {
@@ -240,7 +266,8 @@ function apiGenerate() {
     selectedIds: [...apiSelected],
     source: apiSpec.source,
     specVersion: apiSpec.specVersion,
-    generatorVersion: chrome.runtime.getManifest().version
+    generatorVersion: chrome.runtime.getManifest().version,
+    comments: apiEl("apiComments").value
   });
 }
 
@@ -276,7 +303,11 @@ async function apiCreate() {
 }
 
 function initApiModulesPanel() {
-  apiReadState().then((state) => { if (state.lastUrl && !apiEl("apiUrl").value) apiEl("apiUrl").value = state.lastUrl; });
+  apiReadState().then((state) => {
+    if (state.lastUrl && !apiEl("apiUrl").value) apiEl("apiUrl").value = state.lastUrl;
+    if (state.comments) apiEl("apiComments").value = state.comments;
+  });
+  apiEl("apiComments").addEventListener("change", () => apiWriteState({ comments: apiEl("apiComments").value }).catch(() => {}));
 
   apiEl("apiLoadUrlBtn").addEventListener("click", async () => {
     const url = apiEl("apiUrl").value.trim();
@@ -337,5 +368,25 @@ function initApiModulesPanel() {
       apiEl("apiPreviewText").select();
     }
   });
-  apiEl("apiCreateBtn").addEventListener("click", () => runAction(apiEl("apiCreateBtn"), "Creating…", apiCreate));
+  // Not runAction: that leaves re-enabling to the tracker's re-render, which never touches this button.
+  apiEl("apiCreateBtn").addEventListener("click", async () => {
+    const btn = apiEl("apiCreateBtn");
+    apiCreating = true;
+    btn.disabled = true;
+    btn.textContent = "Creating…";
+    try {
+      await apiCreate();
+    } finally {
+      apiCreating = false;
+      btn.textContent = "Create module";
+      await refreshApiDesignerState();
+    }
+  });
+  // The background re-reads the active tab on these same events, so ask it a moment later.
+  let tabTimer = null;
+  const soon = () => { clearTimeout(tabTimer); tabTimer = setTimeout(refreshApiDesignerState, 300); };
+  chrome.tabs.onActivated.addListener(soon);
+  chrome.tabs.onUpdated.addListener(soon);
+  chrome.windows.onFocusChanged.addListener(soon);
+  refreshApiDesignerState();
 }

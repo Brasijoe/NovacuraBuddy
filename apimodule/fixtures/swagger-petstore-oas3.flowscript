@@ -3,6 +3,28 @@ Source: https://petstore3.swagger.io/api/v3/openapi.json
 API: Swagger Petstore - OpenAPI 3.0 1.0.29-SNAPSHOT (OpenAPI 3.0.4)
 Auto generated code: 2026-10-21 12:00:00 (NovacuraBuddy 0.3.0)
 Base URL and authentication come from the connector; this module only adds the base path below.
+
+Connector settings from the spec: base URL https://petstore3.swagger.io/api/v3; authentication: OAuth 2 (implicit) or API key 'api_key' in header api_key.
+
+About the API: This is a sample Pet Store Server based on the OpenAPI 3.0 specification. You can
+find out more about
+Swagger at https://swagger.io (https://swagger.io). In the third iteration of the pet store, we've
+switched to the design first approach!
+You can now help us improve the API whether it's by making changes to the definition itself or to
+the code.
+That way, with time, we can improve the API in general, and expose some of the new features in OAS3.
+Some useful links:
+- The Pet Store repository (https://github.com/swagger-api/swagger-petstore)
+- The source API definition for the Pet Store
+(https://github.com/swagger-api/swagger-petstore/blob/master/src/main/resources/openapi.yaml)
+
+More documentation: Find out more about Swagger https://swagger.io
+
+Tag pet: Everything about your Pets
+
+Tag store: Access to Petstore orders
+
+Tag user: Operations about user
 */
 
 let basePath = 'api/v3';
@@ -394,6 +416,10 @@ private function restShape(rows: {}*, q: Queryable.QuerySpec<text>, mapRow: {} -
 
 /* ---------- Enumerations ---------- */
 
+/** pet status in the store
+ *  Values: available | pending | sold (plain text converts with Pet_status.fromText).
+ *  Used by: PetRequest.status, Pet.status.
+ */
 module Pet_status {
     type Namespace = 'SwaggerPetstore.Pet_status'
     type available = Enum<Namespace, 'available'>;
@@ -406,6 +432,10 @@ module Pet_status {
     let fromText = memoize(fromTextFunction(values, 'Pet_status', _) >> unsafeCast<Value>);
 };
 
+/** Order Status
+ *  Values: placed | approved | delivered (plain text converts with Order_status.fromText).
+ *  Used by: OrderRequest.status, Order.status.
+ */
 module Order_status {
     type Namespace = 'SwaggerPetstore.Order_status'
     type placed = Enum<Namespace, 'placed'>;
@@ -420,88 +450,93 @@ module Order_status {
 
 /* ---------- Types ---------- */
 
+/** Request body variant: `optional` fields may be left out. */
 type CategoryRequest = {
-	optional id: number,
-	optional name: text,
+	optional id: number,  // whole number; e.g. 1
+	optional name: text,  // e.g. "Dogs"
 }
 
+/** Request body variant: `optional` fields may be left out. */
 type TagRequest = {
-	optional id: number,
+	optional id: number,  // whole number
 	optional name: text,
 }
 
+/** Request body variant: `optional` fields may be left out; required: name, photoUrls. */
 type PetRequest = {
-	optional id: number,
-	name: text,
+	optional id: number,  // whole number; e.g. 10
+	name: text,  // required; e.g. "doggie"
 	optional category: CategoryRequest,
-	photoUrls: text*,
+	photoUrls: text*,  // required
 	optional tags: TagRequest*,
-	optional status: Pet_status.Value,
+	optional status: Pet_status.Value,  // pet status in the store
 }
 
 type Category = {
-	id: number? = null,
-	name: text? = null,
+	id: number? = null,  // whole number; e.g. 1
+	name: text? = null,  // e.g. "Dogs"
 }
 
 type Tag = {
-	id: number? = null,
+	id: number? = null,  // whole number
 	name: text? = null,
 }
 
 type Pet = {
-	id: number? = null,
-	name: text,
+	id: number? = null,  // whole number; e.g. 10
+	name: text,  // required; e.g. "doggie"
 	category: Category,
-	photoUrls: text*,
+	photoUrls: text*,  // required
 	tags: Tag*,
-	status: Pet_status.Value,
+	status: Pet_status.Value,  // pet status in the store
 }
 
 type ApiResponse = {
-	code: number? = null,
+	code: number? = null,  // whole number
 	"type": text? = null,
 	message: text? = null,
 }
 
+/** Request body variant: `optional` fields may be left out. */
 type OrderRequest = {
-	optional id: number,
-	optional petId: number,
-	optional quantity: number,
-	optional shipDate: datetime,
-	optional status: Order_status.Value,
+	optional id: number,  // whole number; e.g. 10
+	optional petId: number,  // whole number; e.g. 198772
+	optional quantity: number,  // whole number; e.g. 7
+	optional shipDate: datetime,  // ISO 8601 date-time
+	optional status: Order_status.Value,  // e.g. "approved" — Order Status
 	optional complete: boolean,
 }
 
 type Order = {
-	id: number? = null,
-	petId: number? = null,
-	quantity: number? = null,
-	shipDate: datetime? = null,
-	status: Order_status.Value,
+	id: number? = null,  // whole number; e.g. 10
+	petId: number? = null,  // whole number; e.g. 198772
+	quantity: number? = null,  // whole number; e.g. 7
+	shipDate: datetime? = null,  // ISO 8601 date-time
+	status: Order_status.Value,  // e.g. "approved" — Order Status
 	complete: boolean? = null,
 }
 
+/** Request body variant: `optional` fields may be left out. */
 type UserRequest = {
-	optional id: number,
-	optional username: text,
-	optional firstName: text,
-	optional lastName: text,
-	optional email: text,
-	optional password: text,
-	optional phone: text,
-	optional userStatus: number,
+	optional id: number,  // whole number; e.g. 10
+	optional username: text,  // e.g. "theUser"
+	optional firstName: text,  // e.g. "John"
+	optional lastName: text,  // e.g. "James"
+	optional email: text,  // e.g. "john@email.com"
+	optional password: text,  // e.g. "12345"
+	optional phone: text,  // e.g. "12345"
+	optional userStatus: number,  // whole number; e.g. 1 — User Status
 }
 
 type User = {
-	id: number? = null,
-	username: text? = null,
-	firstName: text? = null,
-	lastName: text? = null,
-	email: text? = null,
-	password: text? = null,
-	phone: text? = null,
-	userStatus: number? = null,
+	id: number? = null,  // whole number; e.g. 10
+	username: text? = null,  // e.g. "theUser"
+	firstName: text? = null,  // e.g. "John"
+	lastName: text? = null,  // e.g. "James"
+	email: text? = null,  // e.g. "john@email.com"
+	password: text? = null,  // e.g. "12345"
+	phone: text? = null,  // e.g. "12345"
+	userStatus: number? = null,  // whole number; e.g. 1 — User Status
 }
 
 /* ---------- Enum mappings ---------- */
@@ -525,7 +560,14 @@ private function getFindPetsByStatusSetRows(q: Queryable.QuerySpec<text>): {}* {
     return restShape(restKeep(raw, condition, ['status']), q, r => Record.mapValues(r, recordMapperForPet));
 }
 
-/** GET /pet/findByStatus as a data source: `where` on status (required) is sent to the API, everything else is filtered in memory. */
+/** Data source for GET /pet/findByStatus: Finds Pets by status.
+ *  Rows: Pet.
+ *  `where` conditions (= or in, joined with and) on these query parameters are sent to the API: status:
+ *  required; one of available | pending | sold; default "available" — Status values that need to be
+ *  considered for filter.
+ *  Any other condition, order by and select are applied in memory to the rows the API returns.
+ *  Example: return select * from FindPetsByStatusSet where status = 'available';
+ */
 let FindPetsByStatusSet = Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByStatusSetRows);
 
 private function getFindPetsByTagsSetRows(q: Queryable.QuerySpec<text>): {}* {
@@ -535,114 +577,303 @@ private function getFindPetsByTagsSetRows(q: Queryable.QuerySpec<text>): {}* {
     return restShape(restKeep(raw, condition, ['tags']), q, r => Record.mapValues(r, recordMapperForPet));
 }
 
-/** GET /pet/findByTags as a data source: `where` on tags (required) is sent to the API, everything else is filtered in memory. */
+/** Data source for GET /pet/findByTags: Finds Pets by tags.
+ *  Rows: Pet.
+ *  `where` conditions (= or in, joined with and) on these query parameters are sent to the API: tags:
+ *  required — Tags to filter by.
+ *  Any other condition, order by and select are applied in memory to the rows the API returns.
+ *  Example: return select * from FindPetsByTagsSet where tags = '<tags>';
+ */
 let FindPetsByTagsSet = Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByTagsSetRows);
 
 /* ---------- Operations ---------- */
 
-/** POST /pet — Add a new pet to the store. */
+/** Add a new pet to the store.
+ *  HTTP: POST /pet (operationId addPet), tag pet
+ *  @param input application/json body, PetRequest, required — Create a new pet in the store
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Pet — 200 Successful operation
+ *  @error 400 Invalid input
+ *  @error 422 Validation exception
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function addPet(input: PetRequest, headers: Header* = []): Pet {
     let __raw = JSON.deserialize<{}>(PostResponse(`/pet`, restJsonBody(input), headers));
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
-/** PUT /pet — Update an existing pet. */
+/** Update an existing pet.
+ *  Update an existing pet by Id.
+ *  HTTP: PUT /pet (operationId updatePet), tag pet
+ *  @param input application/json body, PetRequest, required — Update an existent pet in the store
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Pet — 200 Successful operation
+ *  @error 400 Invalid ID supplied
+ *  @error 404 Pet not found
+ *  @error 422 Validation exception
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function updatePet(input: PetRequest, headers: Header* = []): Pet {
     let __raw = JSON.deserialize<{}>(PutResponse(`/pet`, restJsonBody(input), headers));
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
-/** GET /pet/findByStatus — Finds Pets by status. */
+/** Finds Pets by status.
+ *  Multiple status values can be provided with comma separated strings.
+ *  HTTP: GET /pet/findByStatus (operationId findPetsByStatus), tag pet
+ *  @param status query; required; one of available | pending | sold; default "available" — Status
+ *  values that need to be considered for filter
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Pet* — 200 successful operation
+ *  @error 400 Invalid status value
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function findPetsByStatus(status: text, headers: Header* = []): Pet* {
     let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }])}`, headers));
     return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
 }
 
-/** GET /pet/findByTags — Finds Pets by tags. */
+/** Finds Pets by tags.
+ *  Multiple tags can be provided with comma separated strings. Use tag1, tag2, tag3 for testing.
+ *  HTTP: GET /pet/findByTags (operationId findPetsByTags), tag pet
+ *  @param tags query; required — Tags to filter by
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Pet* — 200 successful operation
+ *  @error 400 Invalid tag value
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function findPetsByTags(tags: text*, headers: Header* = []): Pet* {
     let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval())}`, headers));
     return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
 }
 
-/** GET /pet/{petId} — Find pet by ID. */
+/** Find pet by ID.
+ *  Returns a single pet.
+ *  HTTP: GET /pet/{petId} (operationId getPetById), tag pet
+ *  @param petId path; required; whole number — ID of pet to return
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Pet — 200 successful operation
+ *  @error 400 Invalid ID supplied
+ *  @error 404 Pet not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function getPetById(petId: number, headers: Header* = []): Pet {
     let __raw = JSON.deserialize<{}>(GetResponse(`/pet/{restPath(petId)}`, headers));
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
-/** POST /pet/{petId} — Updates a pet in the store with form data. */
+/** Updates a pet in the store with form data.
+ *  Updates a pet resource based on the form data.
+ *  HTTP: POST /pet/{petId} (operationId updatePetWithForm), tag pet
+ *  @param petId path; required; whole number — ID of pet that needs to be updated
+ *  @param name query — Name of pet that needs to be updated
+ *  @param status query — Status of pet that needs to be updated
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Pet — 200 successful operation
+ *  @error 400 Invalid input
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function updatePetWithForm(petId: number, name: text? = null, status: text? = null, headers: Header* = []): Pet {
     let __raw = JSON.deserialize<{}>(PostResponse(`/pet/{restPath(petId)}{restQueryString([new RestParam { name: 'name', value: restText(name) }] & [new RestParam { name: 'status', value: restText(status) }])}`, '', headers));
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
-/** DELETE /pet/{petId} — Deletes a pet. */
+/** Deletes a pet.
+ *  Delete a pet.
+ *  HTTP: DELETE /pet/{petId} (operationId deletePet), tag pet
+ *  @param petId path; required; whole number — Pet id to delete
+ *  @param api_key header
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns the HTTP status code — 200 Pet deleted
+ *  @error 400 Invalid pet value
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function deletePet(petId: number, api_key: text? = null, headers: Header* = []) {
     return DeleteResponse(`/pet/{restPath(petId)}`, MergeHeaders(restHeaders([{ Name: 'api_key', Value: restText(api_key) }]), headers));
 }
 
-/** POST /pet/{petId}/uploadImage — Uploads an image. */
+/** Uploads an image.
+ *  Upload image of the pet.
+ *  HTTP: POST /pet/{petId}/uploadImage (operationId uploadFile), tag pet
+ *  @param petId path; required; whole number — ID of pet to update
+ *  @param body application/octet-stream body, binary
+ *  @param additionalMetadata query — Additional Metadata
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns nothing — 200 successful operation
+ *  @error 400 No file uploaded
+ *  @error 404 Pet not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function uploadFile(petId: number, body: binary, additionalMetadata: text? = null, headers: Header* = []) {
     return PostResponseBinary(`/pet/{restPath(petId)}/uploadImage{restQueryString([new RestParam { name: 'additionalMetadata', value: restText(additionalMetadata) }])}`, body, MergeHeaders([{ Name: 'Content-Type', Value: 'application/octet-stream' }], headers));
 }
 
-/** GET /store/inventory — Returns pet inventories by status. */
+/** Returns pet inventories by status.
+ *  Returns a map of status codes to quantities.
+ *  HTTP: GET /store/inventory (operationId getInventory), tag store
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns {} — 200 successful operation
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function getInventory(headers: Header* = []): {} {
     let __raw = JSON.deserialize<{}>(GetResponse(`/store/inventory`, headers));
     return unsafeCast<{}>(__raw);
 }
 
-/** POST /store/order — Place an order for a pet. */
+/** Place an order for a pet.
+ *  Place a new order in the store.
+ *  HTTP: POST /store/order (operationId placeOrder), tag store
+ *  @param input application/json body, OrderRequest
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Order — 200 successful operation
+ *  @error 400 Invalid input
+ *  @error 422 Validation exception
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function placeOrder(input: OrderRequest, headers: Header* = []): Order {
     let __raw = JSON.deserialize<{}>(PostResponse(`/store/order`, restJsonBody(input), headers));
     return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
 }
 
-/** GET /store/order/{orderId} — Find purchase order by ID. */
+/** Find purchase order by ID.
+ *  For valid response try integer IDs with value 10. Other values will generate exceptions.
+ *  HTTP: GET /store/order/{orderId} (operationId getOrderById), tag store
+ *  @param orderId path; required; whole number — ID of order that needs to be fetched
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns Order — 200 successful operation
+ *  @error 400 Invalid ID supplied
+ *  @error 404 Order not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function getOrderById(orderId: number, headers: Header* = []): Order {
     let __raw = JSON.deserialize<{}>(GetResponse(`/store/order/{restPath(orderId)}`, headers));
     return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
 }
 
-/** DELETE /store/order/{orderId} — Delete purchase order by identifier. */
+/** Delete purchase order by identifier.
+ *  For valid response try integer IDs with value < 1000. Anything above 1000 or non-integers will
+ *  generate API errors.
+ *  HTTP: DELETE /store/order/{orderId} (operationId deleteOrder), tag store
+ *  @param orderId path; required; whole number — ID of the order that needs to be deleted
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns the HTTP status code — 200 order deleted
+ *  @error 400 Invalid ID supplied
+ *  @error 404 Order not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function deleteOrder(orderId: number, headers: Header* = []) {
     return DeleteResponse(`/store/order/{restPath(orderId)}`, headers);
 }
 
-/** POST /user — Create user. */
+/** Create user.
+ *  This can only be done by the logged in user.
+ *  HTTP: POST /user (operationId createUser), tag user
+ *  @param input application/json body, UserRequest — Created user object
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns User — 200 successful operation
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function createUser(input: UserRequest, headers: Header* = []): User {
     let __raw = JSON.deserialize<{}>(PostResponse(`/user`, restJsonBody(input), headers));
     return unsafeCast<User>(__raw);
 }
 
-/** POST /user/createWithList — Creates list of users with given input array. */
+/** Creates list of users with given input array.
+ *  HTTP: POST /user/createWithList (operationId createUsersWithListInput), tag user
+ *  @param input application/json body, UserRequest*
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns User — 200 Successful operation
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function createUsersWithListInput(input: UserRequest*, headers: Header* = []): User {
     let __raw = JSON.deserialize<{}>(PostResponse(`/user/createWithList`, restJsonBody(input), headers));
     return unsafeCast<User>(__raw);
 }
 
-/** GET /user/login — Logs user into the system. */
+/** Logs user into the system.
+ *  Log into the system.
+ *  HTTP: GET /user/login (operationId loginUser), tag user
+ *  @param username query — The user name for login
+ *  @param password query — The password for login in clear text
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns text — 200 successful operation
+ *  @error 400 Invalid username/password supplied
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function loginUser(username: text? = null, password: text? = null, headers: Header* = []): text {
     return GetResponse(`/user/login{restQueryString([new RestParam { name: 'username', value: restText(username) }] & [new RestParam { name: 'password', value: restText(password) }])}`, headers);
 }
 
-/** GET /user/logout — Logs out current logged in user session. */
+/** Logs out current logged in user session.
+ *  Log user out of the system.
+ *  HTTP: GET /user/logout (operationId logoutUser), tag user
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns text — 200 successful operation
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function logoutUser(headers: Header* = []): text {
     return GetResponse(`/user/logout`, headers);
 }
 
-/** GET /user/{username} — Get user by user name. */
+/** Get user by user name.
+ *  Get user detail based on username.
+ *  HTTP: GET /user/{username} (operationId getUserByName), tag user
+ *  @param username path; required — The name that needs to be fetched. Use user1 for testing
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns User — 200 successful operation
+ *  @error 400 Invalid username supplied
+ *  @error 404 User not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function getUserByName(username: text, headers: Header* = []): User {
     let __raw = JSON.deserialize<{}>(GetResponse(`/user/{restPath(username)}`, headers));
     return unsafeCast<User>(__raw);
 }
 
-/** PUT /user/{username} — Update user resource. */
+/** Update user resource.
+ *  This can only be done by the logged in user.
+ *  HTTP: PUT /user/{username} (operationId updateUser), tag user
+ *  @param username path; required — name that need to be deleted
+ *  @param input application/json body, UserRequest — Update an existent user in the store
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns text — 200 successful operation
+ *  @error 400 bad request
+ *  @error 404 user not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function updateUser(username: text, input: UserRequest, headers: Header* = []): text {
     return PutResponse(`/user/{restPath(username)}`, restJsonBody(input), headers);
 }
 
-/** DELETE /user/{username} — Delete user resource. */
+/** Delete user resource.
+ *  This can only be done by the logged in user.
+ *  HTTP: DELETE /user/{username} (operationId deleteUser), tag user
+ *  @param username path; required — The name that needs to be deleted
+ *  @param headers extra HTTP headers, merged over the generated ones
+ *  @returns the HTTP status code — 200 User deleted
+ *  @error 400 Invalid username supplied
+ *  @error 404 User not found
+ *  @error default Unexpected error
+ *  Any non-2xx status raises an error carrying the status and the response text.
+ */
 function deleteUser(username: text, headers: Header* = []) {
     return DeleteResponse(`/user/{restPath(username)}`, headers);
 }

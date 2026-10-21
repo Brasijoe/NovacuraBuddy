@@ -20,6 +20,7 @@
    enum values.
    ============================================================ */
 (function (global) {
+  const FlowDocs = typeof require === "function" ? require("./flow-docs.js") : global.ApiFlowDocs;
   const KEYWORDS = new Set([
     "and", "as", "break", "by", "case", "continue", "distinct", "else", "end", "error", "expand", "false", "for",
     "from", "function", "given", "group", "if", "in", "is", "join", "left", "let", "like", "map", "module", "new",
@@ -57,8 +58,12 @@
   function createTypeRegistry(model, options = {}) {
     const deref = model.deref;
     const namespace = options.namespace || "Api";
+    // "full": enum, type and field comments from the spec; anything else: none here.
+    const fullDocs = (options.comments || "full") === "full";
+    const docBase = options.source || "";
     const usedNames = new Set([...BUILTIN_TYPES, ...(options.reserved || [])].map((n) => n.toLowerCase()));
-    const declarations = []; // { kind: "enum"|"record", name, text }
+    const declarations = []; // { kind: "enum"|"record", name, render() } — rendered last, once every use is known
+    const enumUsage = new Map(); // enum module name -> ["Record.field", ...]
     const byKey = new Map(); // "<mode>|<ref or inline key>" -> type name
     const records = new Map(); // record name -> { fields: [{ name, kind, target }] } (response mode only)
     const mappers = new Map(); // record name -> mapper name | null
@@ -100,10 +105,21 @@
       return !!(s.properties || s.allOf || typeList(s).includes("object"));
     }
 
-    function enumModule(schema, hint, key) {
-      if (byKey.has(key)) return byKey.get(key);
+    function noteUsage(name, usage) {
+      if (!usage) return;
+      const list = enumUsage.get(name) || [];
+      if (!list.includes(usage)) list.push(usage);
+      enumUsage.set(name, list);
+    }
+
+    function enumModule(schema, hint, key, usage, description) {
+      if (byKey.has(key)) {
+        noteUsage(byKey.get(key), usage);
+        return byKey.get(key);
+      }
       const name = claimName(hint);
       byKey.set(key, name);
+      noteUsage(name, usage);
       const values = [...new Set(schema.enum.filter((v) => v !== null).map(String))];
       const members = [];
       const seen = new Set();
@@ -114,18 +130,34 @@
         members.push({ member: m, value: v });
       }
       const lit = (v) => `'${v.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
-      const lines = [
+      const valueDocs = FlowDocs.enumValueDescriptions(schema);
+      const valueDoc = (v) => {
+        const i = schema.enum.findIndex((x) => x !== null && String(x) === v);
+        const text = fullDocs && i >= 0 && valueDocs[i] ? FlowDocs.oneLine(valueDocs[i], docBase) : "";
+        return text ? `  // ${text}` : "";
+      };
+      const head = [
         `module ${name} {`,
         `    type Namespace = '${namespace}.${name}'`,
-        ...members.map((m) => `    type ${m.member} = Enum<Namespace, ${lit(m.value)}>;`),
+        ...members.map((m) => `    type ${m.member} = Enum<Namespace, ${lit(m.value)}>;${valueDoc(m.value)}`),
         "",
         `    type Value = ${members.map((m) => m.member).join(" | ")};`,
         `    let values: Value* = [${members.map((m) => m.member).join(", ")}];`,
         "",
         `    let fromText = memoize(fromTextFunction(values, '${name}', _) >> unsafeCast<Value>);`,
         "};"
-      ];
-      declarations.push({ kind: "enum", name, text: lines.join("\n") });
+      ].join("\n");
+      const render = () => {
+        if (!fullDocs) return head;
+        const used = enumUsage.get(name) || [];
+        const doc = FlowDocs.docBlock([
+          description || schema.description ? FlowDocs.cap(FlowDocs.cleanText(description || schema.description, docBase), FlowDocs.MAX_DESCRIPTION) : null,
+          `Values: ${values.join(" | ")} (plain text converts with ${name}.fromText).`,
+          used.length ? `Used by: ${used.join(", ")}.` : null
+        ]);
+        return doc ? `${doc}\n${head}` : head;
+      };
+      declarations.push({ kind: "enum", name, render });
       return name;
     }
 
@@ -140,35 +172,61 @@
         const propSchema = deref(rawPropSchema);
         if (mode === "request" && propSchema.readOnly) continue;
         if (mode === "response" && propSchema.writeOnly) continue;
-        const t = typeOf(rawPropSchema, `${hint.replace(/Request$/, "")}_${prop}`, mode);
+        const isRef = !!(rawPropSchema && rawPropSchema.$ref);
+        const ownDescription = (rawPropSchema && rawPropSchema.description) || (isRef ? "" : propSchema.description);
+        const t = typeOf(rawPropSchema, `${hint.replace(/Request$/, "")}_${prop}`, mode, `${name}.${prop}`, ownDescription || propSchema.description);
         const isRequired = required.includes(prop);
         const scalar = !t.endsWith("*") && /^(text|number|boolean|datetime|binary)$/.test(t);
+        // The `//` goes after the comma, so it never swallows it.
+        let comment = "";
+        if (fullDocs) {
+          const { $ref, ...siblings } = rawPropSchema || {};
+          const facts = FlowDocs.schemaFacts({ ...propSchema, ...siblings }, {
+            required: isRequired,
+            listEnum: !/\.Value\*?$/.test(t) // enum values Flow only knows as text/number
+          });
+          const text = FlowDocs.describe(facts, ownDescription, docBase);
+          if (text) comment = `  // ${text}`;
+        }
         if (mode === "request") {
-          fieldLines.push(`\t${isRequired ? "" : "optional "}${fieldLabel(prop)}: ${t},`);
+          fieldLines.push(`\t${isRequired ? "" : "optional "}${fieldLabel(prop)}: ${t},${comment}`);
         } else {
-          fieldLines.push(`\t${fieldLabel(prop)}: ${t}${scalar && !isRequired ? "? = null" : ""},`);
+          fieldLines.push(`\t${fieldLabel(prop)}: ${t}${scalar && !isRequired ? "? = null" : ""},${comment}`);
           fields.push({ name: prop, type: t });
         }
       }
-      declarations.push({ kind: "record", name, text: `type ${name} = {\n${fieldLines.join("\n")}\n}` });
+      const self = deref(schema);
+      const text = `type ${name} = {\n${fieldLines.join("\n")}\n}`;
+      const render = () => {
+        if (!fullDocs) return text;
+        const example = FlowDocs.firstExample(self);
+        const doc = FlowDocs.docBlock([
+          self.title && self.title !== name ? FlowDocs.oneLine(self.title, docBase) : null,
+          self.description ? FlowDocs.cap(FlowDocs.cleanText(self.description, docBase), FlowDocs.MAX_DESCRIPTION) : null,
+          mode === "request" ? `Request body variant: \`optional\` fields may be left out${required.length ? `; required: ${required.join(", ")}` : ""}.` : null,
+          example ? `Example: ${FlowDocs.compactJson(example.value)}` : null
+        ]);
+        return doc ? `${doc}\n${text}` : text;
+      };
+      declarations.push({ kind: "record", name, render });
       if (mode === "response") records.set(name, { fields });
       return name;
     }
 
     /** The Flowscript type for a schema. `hint` names a type made for an inline object/enum;
      *  `mode` "request" makes request-body variants (optional markers, no readOnly fields). */
-    function typeOf(rawSchema, hint, mode = "response") {
+    function typeOf(rawSchema, hint, mode = "response", usage = null, description = "") {
       if (!rawSchema) return "any";
       const ref = rawSchema.$ref;
       const s = deref(rawSchema);
       const keyBase = ref ? `ref:${ref}` : null;
       const nameHint = ref ? refName(ref) : hint;
-      if (isEnum(s)) return `${enumModule(s, nameHint, `enum|${keyBase || "inline:" + hint}`)}.Value`;
+      if (isEnum(s)) return `${enumModule(s, nameHint, `enum|${keyBase || "inline:" + hint}`, usage, description)}.Value`;
       const types = typeList(s).filter((t) => t !== "null");
       const t = types.length === 1 ? types[0] : null;
       if (t === "array" || (!t && s.items)) {
         const items = s.items || {};
-        return `${typeOf(items, isEnum(deref(items)) ? hint : `${hint}Item`, mode)}*`;
+        return `${typeOf(items, isEnum(deref(items)) ? hint : `${hint}Item`, mode, usage, description)}*`;
       }
       if (t === "string") {
         if (s.format === "date-time" || s.format === "date") return "datetime";
@@ -244,7 +302,7 @@
       recordMapperName,
       responseMapping,
       isRecord: (name) => records.has(name),
-      declarations: () => declarations.slice(),
+      declarations: () => declarations.map((d) => ({ kind: d.kind, name: d.name, text: d.render() })),
       mapperDeclarations: () => mapperDecls.slice(),
       warnings: () => warnings.slice(),
       claimName
