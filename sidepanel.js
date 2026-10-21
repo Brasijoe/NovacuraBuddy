@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "api-modules", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -53,6 +53,7 @@ async function refreshUnmatchedHosts() {
 
 initRecorderPanel();
 initQuickReportsPanel();
+initApiModulesPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
 setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); }, 5000);

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const jsyaml = require("../lib/vendor/js-yaml.min.js");
-const { parseSpecText, detectSpecVersion, findSpecUrlInHtml } = require("./spec-load.js");
+const { parseSpecText, detectSpecVersion, findSpecUrlInHtml, resolveFetched } = require("./spec-load.js");
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8");
 
@@ -45,4 +45,24 @@ test("findSpecUrlInHtml finds the spec behind Swagger UI, Redoc and RapiDoc page
   assert.equal(findSpecUrlInHtml(`<rapi-doc spec-url="/spec.yaml">`, page), "https://api.example.com/spec.yaml");
   assert.equal(findSpecUrlInHtml("<html>nothing here</html>", "https://p.test/ui/?url=/api/openapi.json"), "https://p.test/api/openapi.json");
   assert.equal(findSpecUrlInHtml("<html>nothing here</html>", page), null);
+});
+
+test("resolveFetched follows docs pages, Swagger UI initializer scripts and springdoc's swagger-config", () => {
+  const page = "https://api.example.com/swagger-ui/index.html";
+  assert.deepEqual(
+    resolveFetched({ text: '<html><script src="./swagger-initializer.js" charset="UTF-8"></script></html>', url: page, contentType: "text/html" }, jsyaml),
+    { next: "https://api.example.com/swagger-ui/swagger-initializer.js" }
+  );
+  assert.deepEqual(
+    resolveFetched({ text: 'window.ui = SwaggerUIBundle({ configUrl: "/v3/api-docs/swagger-config", url: "/v3/api-docs" })', url: "https://api.example.com/swagger-ui/swagger-initializer.js", contentType: "application/javascript" }, jsyaml),
+    { next: "https://api.example.com/v3/api-docs" }
+  );
+  assert.deepEqual(
+    resolveFetched({ text: '{"urls":[{"url":"/v3/api-docs/public","name":"public"}]}', url: "https://api.example.com/v3/api-docs/swagger-config", contentType: "application/json" }, jsyaml),
+    { next: "https://api.example.com/v3/api-docs/public" }
+  );
+  assert.equal(resolveFetched({ text: fixture("oas3-petstore.yaml"), url: "https://x.test/p.yaml", contentType: "text/yaml" }, jsyaml).doc.openapi, "3.0.0");
+  assert.throws(() => resolveFetched({ text: "<html>hi</html>", url: page, contentType: "text/html" }, jsyaml), /does not point at/);
+  assert.throws(() => resolveFetched({ text: "var x = 1;", url: "https://x.test/a.js", contentType: "" }, jsyaml), /does not name/);
+  assert.throws(() => resolveFetched({ text: '{"hello":1}', url: "https://x.test/a.json", contentType: "" }, jsyaml), /not an OpenAPI/);
 });

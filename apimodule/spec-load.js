@@ -69,6 +69,37 @@
     return null;
   }
 
+  /** Swagger UI 4+ keeps its config in a separate script (swagger-initializer.js). */
+  function findInitializerScript(html, pageUrl) {
+    const m = String(html || "").match(/<script[^>]+src\s*=\s*["']([^"']*(?:initializer|swagger-config)[^"']*)["']/i);
+    return m ? resolveUrl(m[1], pageUrl) : null;
+  }
+
+  /** One fetched response on the way to the spec: `{ doc }` when it is the spec itself, `{ next }`
+   *  when it only points at it (a docs page, Swagger UI's initializer script, springdoc's
+   *  swagger-config JSON), or a thrown, readable error. */
+  function resolveFetched({ text, url, contentType }, yaml) {
+    const trimmed = String(text || "").replace(/^\uFEFF/, "").trim();
+    let pathname = "";
+    try { pathname = new URL(url).pathname; } catch (e) { /* keep "" */ }
+    if (/javascript|ecmascript/i.test(contentType || "") || /\.m?js$/i.test(pathname)) {
+      const next = findSpecUrlInHtml(trimmed, url);
+      if (next) return { next };
+      throw new Error(`The script ${url} does not name an API description URL.`);
+    }
+    if (trimmed.startsWith("<")) {
+      const next = findSpecUrlInHtml(trimmed, url) || findInitializerScript(trimmed, url);
+      if (next) return { next };
+      throw new Error("This page does not point at an OpenAPI/Swagger description I can find. Open the raw openapi.json / swagger.json (or .yaml) and try again.");
+    }
+    const doc = parseSpecText(trimmed, yaml);
+    if (doc.openapi || doc.swagger) return { doc };
+    if (typeof doc.url === "string") return { next: resolveUrl(doc.url, url) };
+    if (Array.isArray(doc.urls) && doc.urls[0] && typeof doc.urls[0].url === "string") return { next: resolveUrl(doc.urls[0].url, url) };
+    detectSpecVersion(doc); // throws the readable "not an OpenAPI…" error
+    return { doc };
+  }
+
   function resolveUrl(url, base) {
     try {
       return new URL(url, base).href;
@@ -77,7 +108,7 @@
     }
   }
 
-  const api = { parseSpecText, detectSpecVersion, findSpecUrlInHtml };
+  const api = { parseSpecText, detectSpecVersion, findSpecUrlInHtml, findInitializerScript, resolveFetched };
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;

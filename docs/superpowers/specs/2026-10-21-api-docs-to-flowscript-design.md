@@ -91,9 +91,10 @@ lib/vendor/js-yaml.min.js     js-yaml 4.1.0, dist/js-yaml.min.js (UMD), recorded
 
 ```
 /*
-#importSource("<spec URL, or 'uploaded: <file name>'>")
-#apiTitle("<info.title> <info.version>")
+Source: <spec URL, "uploaded: <file name>" or "pasted text">
+API: <info.title> <info.version> (OpenAPI 3.0.4)
 Auto generated code: 2026-10-21 11:30:00 (NovacuraBuddy <extension version>)
+Base URL and authentication come from the connector; this module only adds the base path below.
 */
 let basePath = 'v2';
 open Seq;
@@ -243,4 +244,4 @@ the Firefox build.
 
 1. Tab name **API Modules**.
 2. Plain list GETs are emitted both as a Queryable and as a plain function.
-3. Generated header uses `#importSource` with the spec URL, so a later "regenerate" can reload it.
+3. The header names the source in a plain comment, not `#importSource(...)`: Connect reads that directive for IFS projections, and a REST spec URL there could confuse it.
