@@ -238,6 +238,20 @@ private function restFieldName(name: text): text =>
 private function restFilter(q: Queryable.QuerySpec<text>): unknown =>
     case when q.filter = null then null else JSON.deserialize<{}>(q.filter) end;
 
+// A literal node's value. Flow may wrap a literal more than once (an enum literal goes through rec
+// and then txt), so nested {"v":...} layers, as records or as text, are peeled off.
+private function restLiteral(node: unknown): unknown {
+    let v = restGet(node, 'v');
+    if v is {} {
+        return restLiteral(v);
+    }
+    let t = restText(v);
+    if t != null and restIsNode(isNull(t, '')) {
+        return restLiteral(JSON.deserialize<{}>(isNull(t, '')));
+    }
+    return v;
+}
+
 // The declared query parameter an and-reachable condition can be sent as, or null.
 private function restParamName(node: unknown, queryParams: text*): text? {
     let op = restOpOf(node);
@@ -266,9 +280,9 @@ private function restParams(node: unknown, queryParams: text*): RestParam* {
         return [];
     }
     if restOpOf(node) = 'eq' {
-        return [new RestParam { name: isNull(name, ''), value: restText(restGet(restGet(node, 'b'), 'v')) }];
+        return [new RestParam { name: isNull(name, ''), value: restText(restLiteral(restGet(node, 'b'))) }];
     }
-    return unsafeCast<{}*>(restGet(node, 'b')).map(v => new RestParam { name: isNull(name, ''), value: restText(restGet(v, 'v')) }).eval();
+    return unsafeCast<{}*>(restGet(node, 'b')).map(v => new RestParam { name: isNull(name, ''), value: restText(restLiteral(v)) }).eval();
 }
 
 // A query parameter the API requires can only come from the where clause of a data source.
@@ -294,7 +308,7 @@ private function restValueOf(node: unknown, row: {}): unknown {
     if op = 'upper' {
         return upper(isNull(restText(restValueOf(restGet(node, 'a'), row)), ''));
     }
-    return restGet(node, 'v');
+    return restLiteral(node);
 }
 
 // -1 / 0 / 1; numbers numerically, everything else as text; null sorts first.
