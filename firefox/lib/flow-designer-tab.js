@@ -59,10 +59,10 @@
     return ref.assetVersion === moduleAsset.mainBranch.headVersionId ? "activated" : "activated_stale";
   }
 
-  /** Adds (or re-versions) a module in a flow exactly the way the Designer does it — captured live
-   *  2026-10-16: POST .../designer with `If-Match: <etag header>`, the full assets[] list, and in
-   *  `data` ONLY the new events (the server appends them to the flow's event log — sending the
-   *  whole log back would duplicate every step). Adding a module is one
+  /** Adds (or re-versions) a module in a flow: POST .../designer with `If-Match: <etag header>`,
+   *  the full assets[] list, and in `data` the flow's FULL existing data followed by the new
+   *  events — the save replaces the flow's data, so sending only the new events wiped every step
+   *  (user, 2026-10-21). Adding a module is one
    *  { type: "module-added", name, moduleId } event. No commit: the Designer doesn't commit on
    *  adding a module either, and committing would also commit the user's unfinished changes. */
   async function activateModule({ flowFetch, orgId, itemId, assetId, headVersionId, moduleName }) {
@@ -81,7 +81,10 @@
       architecture: designerData.architecture || "sequential",
       // A version bump of an already-added module carries no event — UNVERIFIED, only the
       // first-time add was captured.
-      data: added ? [{ type: "module-added", name: moduleName, moduleId: assetId }] : []
+      data: [
+        ...(Array.isArray(designerData.data) ? designerData.data : []),
+        ...(added ? [{ type: "module-added", name: moduleName, moduleId: assetId }] : [])
+      ]
     };
     const postRes = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/items/${itemId}/designer`, {
       method: "POST",
