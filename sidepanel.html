@@ -29,6 +29,7 @@
       <button id="tab-recorder" class="tab" role="tab">Traffic Recorder</button>
       <button id="tab-quick-reports" class="tab" role="tab">Quick Reports</button>
       <button id="tab-custom-lus" class="tab" role="tab">Custom LUs</button>
+      <button id="tab-api-modules" class="tab" role="tab">API Modules</button>
       <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
     </nav>
 
@@ -106,6 +107,51 @@
       <ul id="clEnvList" class="qr-list"></ul>
     </section>
 
+    <section id="panel-api-modules" role="tabpanel" hidden>
+      <div class="search-row">
+        <input id="apiUrl" placeholder="https://…/openapi.json, or a Swagger UI / Redoc page" />
+        <button id="apiLoadUrlBtn">Load</button>
+      </div>
+      <div class="api-source-actions">
+        <button id="apiCurrentTabBtn" class="btn-ghost" title="Load the API description (or docs page) open in the current browser tab">Use current tab</button>
+        <button id="apiUploadBtn" class="btn-ghost">Upload file…</button>
+        <button id="apiPasteBtn" class="btn-ghost">Paste…</button>
+        <input id="apiFile" type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml" hidden />
+      </div>
+      <div id="apiPasteBox" class="api-paste" hidden>
+        <textarea id="apiPasteText" rows="8" placeholder="Paste an OpenAPI 3.x or Swagger 2.0 description (JSON or YAML)"></textarea>
+        <button id="apiPasteLoadBtn" class="btn-primary">Load pasted text</button>
+      </div>
+      <hr class="section-divider" />
+      <p id="apiEmpty" class="empty-state">Load an OpenAPI 3.x or Swagger 2.0 description to pick the operations for a Flow module. Base URL and authentication stay in the Flow connector.</p>
+      <div id="apiLoaded" class="api-loaded" hidden>
+        <div class="api-summary"><strong id="apiTitle"></strong><span class="list-count" id="apiMeta"></span></div>
+        <label class="api-field">Module name <input id="apiModuleName" spellcheck="false" /></label>
+        <label class="api-field">Comments
+          <select id="apiComments" title="Full: descriptions, formats, allowed values, examples and errors from the spec on every type, field, function and data source, so people and AI can read the module. Short: one line per function. Off: none.">
+            <option value="full">Full (types, fields, functions)</option>
+            <option value="short">Short (one line per function)</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+        <div class="list-toolbar">
+          <label class="api-check"><input type="checkbox" id="apiSelectAll" /> Select all</label>
+          <span class="list-count" id="apiSelectedCount"></span>
+        </div>
+        <div id="apiOperations" class="api-operations"></div>
+        <details id="apiWarnings" class="api-warnings" hidden><summary></summary><ul></ul></details>
+        <div class="deploy-actions">
+          <button id="apiPreviewBtn">Preview code</button>
+          <button id="apiCreateBtn" class="btn-primary">Create module</button>
+        </div>
+        <p id="apiCreateHint" class="api-hint" hidden></p>
+        <div id="apiPreview" class="api-preview" hidden>
+          <textarea id="apiPreviewText" readonly rows="16" spellcheck="false"></textarea>
+          <button id="apiCopyBtn" class="btn-ghost">Copy</button>
+        </div>
+      </div>
+    </section>
+
     <section id="panel-basic-data" role="tabpanel" hidden>
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
@@ -145,6 +191,15 @@
     <script src="panels/quick-reports.js"></script>
     <script src="panels/custom-lus.js"></script>
     <script src="panels/update-banner.js"></script>
+    <script src="lib/vendor/js-yaml.min.js"></script>
+    <script src="apimodule/spec-load.js"></script>
+    <script src="apimodule/swagger2-to-oas3.js"></script>
+    <script src="apimodule/spec-model.js"></script>
+    <script src="apimodule/flow-docs.js"></script>
+    <script src="apimodule/flow-types.js"></script>
+    <script src="apimodule/flow-runtime.js"></script>
+    <script src="apimodule/flow-emit.js"></script>
+    <script src="panels/api-modules.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

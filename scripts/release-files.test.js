@@ -10,7 +10,7 @@ test("ships the extension, never tests, docs, firefox, scripts, dot-files or pac
   const files = [
     "manifest.json", "background.js", "sidepanel.html", "qr-editor.html",
     "lib/qr-deploy.js", "lib/qr-deploy.test.js", "lib/vendor/fuse.min.js", "lib/vendor/VENDOR.md",
-    "recorder/viewer.js", "icons/icon16.png",
+    "recorder/viewer.js", "icons/icon16.png", "apimodule/flow-emit.js", "apimodule/fixtures/petstore.yaml",
     "docs/superpowers/specs/x.md", "firefox/manifest.json", "scripts/release.js", "node_modules/a/index.js",
     ".git/HEAD", ".gitignore", "package.json", "package-lock.json", "manifest.test.js", "NovacuraBuddy-v0.1.0.zip"
   ];
@@ -19,7 +19,7 @@ test("ships the extension, never tests, docs, firefox, scripts, dot-files or pac
     fs.writeFileSync(path.join(root, f), "x");
   }
   assert.deepEqual(collectReleaseFiles(root), [
-    "background.js", "icons/icon16.png", "lib/qr-deploy.js", "lib/vendor/VENDOR.md", "lib/vendor/fuse.min.js",
+    "apimodule/flow-emit.js", "background.js", "icons/icon16.png", "lib/qr-deploy.js", "lib/vendor/VENDOR.md", "lib/vendor/fuse.min.js",
     "manifest.json", "qr-editor.html", "recorder/viewer.js", "sidepanel.html"
   ]);
 });

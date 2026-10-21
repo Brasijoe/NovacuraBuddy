@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const EXCLUDED_ROOT_DIRS = new Set(["node_modules", "docs", "firefox", "scripts", "dist"]);
 const EXCLUDED_ROOT_FILES = new Set(["package.json", "package-lock.json"]);
+const EXCLUDED_DIRS = new Set(["apimodule/fixtures"]); // test-only data
 
 /** Files that make up the installable extension, relative to `rootDir`, sorted. */
 function collectReleaseFiles(rootDir) {
@@ -15,6 +16,7 @@ function collectReleaseFiles(rootDir) {
       const atRoot = !rel;
       if (entry.isDirectory()) {
         if (atRoot && EXCLUDED_ROOT_DIRS.has(entry.name)) continue;
+        if (EXCLUDED_DIRS.has(relPath)) continue;
         walk(relPath);
         continue;
       }

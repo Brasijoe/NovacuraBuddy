@@ -22,7 +22,8 @@ importScripts(
   "lib/github-settings.js",
   "lib/qr-service.js",
   "lib/cl-service.js",
-  "lib/update-check.js"
+  "lib/update-check.js",
+  "apimodule/api-module-service.js"
 );
 
 // Without this, the toolbar icon has no default_popup and MV3 does nothing on click — the panel
@@ -405,7 +406,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const { masterPassword, fields, token, report, ...safeMessage } = message;
+      const { masterPassword, fields, token, report, code, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage, report ? { report: report.id } : "");
       const masterKey = () => instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
       switch (message.type) {
@@ -577,6 +578,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           // Live step updates for the page that asked; nobody listening is fine.
           const onProgress = (progress) => chrome.runtime.sendMessage({ type: "CL_DEPLOY_PROGRESS", deployId: message.deployId, ...progress }).catch(() => {});
           return sendResponse({ ok: true, results: await clService.deploy(await masterKey(), message, onProgress) });
+        }
+        case "API_FETCH_SPEC":
+          return sendResponse({ ok: true, result: await ApiModuleService.fetchSpec({ url: message.url, instanceStore, getMasterKey: masterKey }) });
+        case "API_CREATE_MODULE": { // like CREATE_MODULE: save, then activate in the open flow
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
+          log("API_CREATE_MODULE start:", message.moduleName, "(", (message.code || "").length, "bytes )");
+          const saved = await ApiModuleService.saveModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, moduleName: message.moduleName, code: message.code, log });
+          return sendResponse({ ok: true, result: await handleActivateModule(saved) });
         }
         case "GET_UPDATE_INFO": {
           const info = await readUpdateInfo();
