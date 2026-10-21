@@ -111,6 +111,10 @@
             required: p.in === "path" ? true : !!p.required,
             schema: p.schema || (p.content && pickContent(p.content) && pickContent(p.content).schema) || { type: "string" },
             description: p.description || "",
+            deprecated: !!p.deprecated,
+            example: p.example !== undefined ? p.example
+              : p.examples && typeof p.examples === "object" && Object.values(p.examples)[0] && Object.values(p.examples)[0].value !== undefined
+                ? Object.values(p.examples)[0].value : undefined,
             explode: p.explode !== undefined ? !!p.explode : true
           }));
         for (const p of params.filter((x) => x.in === "header" && /^(authorization|content-type|accept)$/i.test(x.name))) {
@@ -120,7 +124,15 @@
         if (op.requestBody) {
           const rb = deref(op.requestBody);
           const picked = pickContent(rb.content);
-          if (picked) body = { contentType: picked.contentType, schema: picked.schema || {}, required: !!rb.required };
+          if (picked) {
+            body = {
+              contentType: picked.contentType,
+              schema: picked.schema || {},
+              required: !!rb.required,
+              description: rb.description || "",
+              media: rb.content[picked.contentType] || {}
+            };
+          }
         }
         operations.push({
           operationId: op.operationId || null,
@@ -133,7 +145,9 @@
           deprecated: !!op.deprecated,
           params,
           body,
-          response: pickSuccessResponse(op.responses, deref)
+          response: pickSuccessResponse(op.responses, deref),
+          // Every documented status with its text, in spec order (for the doc comment).
+          responses: Object.entries(op.responses || {}).map(([status, r]) => ({ status, description: deref(r).description || "" }))
         });
       }
     }
@@ -151,6 +165,10 @@
       version: (doc.info && doc.info.version) || "",
       basePath: basePathFromServers(doc.servers),
       serverUrl: (doc.servers && doc.servers[0] && doc.servers[0].url) || "",
+      description: (doc.info && doc.info.description) || "",
+      externalDocs: doc.externalDocs || null,
+      tagDescriptions: Object.fromEntries((doc.tags || []).filter((t) => t && t.name && t.description).map((t) => [t.name, t.description])),
+      securitySchemes: (doc.components && doc.components.securitySchemes) || {},
       tags: [...new Set([...tagOrder.filter((t) => operations.some((o) => o.tag === t)), ...operations.map((o) => o.tag)])],
       operations,
       schemas: (doc.components && doc.components.schemas) || {},

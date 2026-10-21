@@ -41,7 +41,7 @@ test("scalar mapping", () => {
 });
 
 test("the Petstore Pet becomes a row type with an enum module, nested records and a record mapper", () => {
-  const r = createTypeRegistry(petstore(), { namespace: "SwaggerPetstore" });
+  const r = createTypeRegistry(petstore(), { namespace: "SwaggerPetstore", comments: "off" }); // shapes only; comments are tested below
   assert.equal(r.typeOf({ $ref: "#/components/schemas/Pet" }), "Pet");
   assert.equal(decl(r, "Pet"), [
     "type Pet = {",
@@ -79,7 +79,7 @@ test("the Petstore Pet becomes a row type with an enum module, nested records an
 test("request variants mark optional fields and drop readOnly ones", () => {
   const r = createTypeRegistry(modelOf({
     Thing: { type: "object", required: ["name"], properties: { id: { type: "integer", readOnly: true }, name: { type: "string" }, note: { type: "string" }, secret: { type: "string", writeOnly: true } } }
-  }));
+  }), { comments: "off" });
   assert.equal(r.typeOf({ $ref: "#/components/schemas/Thing" }, "x", "request"), "ThingRequest");
   assert.equal(decl(r, "ThingRequest"), "type ThingRequest = {\n\tname: text,\n\toptional note: text,\n\toptional secret: text,\n}");
   assert.equal(r.typeOf({ $ref: "#/components/schemas/Thing" }), "Thing");
@@ -91,7 +91,7 @@ test("allOf merges, recursion terminates, odd names and enum values are sanitize
     Base: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
     Node: { allOf: [{ $ref: "#/components/schemas/Base" }, { type: "object", properties: { children: { type: "array", items: { $ref: "#/components/schemas/Node" } }, "first-name": { type: "string" }, state: { type: "string", enum: ["in-progress", "Done", "done", "Value"] } } }] },
     text: { type: "object", properties: { a: { type: "string" } } }
-  }));
+  }), { comments: "off" });
   assert.equal(r.typeOf({ $ref: "#/components/schemas/Node" }), "Node");
   assert.equal(decl(r, "Node"), [
     "type Node = {",
@@ -124,4 +124,44 @@ test("a nested record with enums is mapped through its own mapper, sequences thr
   assert.equal(r.typeOf({ type: "object", properties: { a: { type: "string" } } }, "order"), "order_"); // keywords are never type names
   assert.equal(r.typeOf({ type: "object", properties: { a: { type: "string" } } }, "Order"), "Order"); // ...but they are case-sensitive
   assert.equal(r.responseMapping("text"), null);
+});
+
+test("full comments: type doc, a trailing field comment after the comma, enum doc with values and uses", () => {
+  const r = createTypeRegistry(modelOf({
+    Order: {
+      type: "object", description: "A transport <b>order</b>.", required: ["date"],
+      properties: {
+        id: { type: "integer", format: "int64", readOnly: true, description: "Set by the server." },
+        date: { type: "string", format: "date", description: "Pick-up date." },
+        division: { type: "string", enum: ["T", "F"], description: "'T': European, see [codelist](../codelist)." },
+        level: { type: "integer", enum: [1, 2, 3] },
+        city: { type: "string", maxLength: 35, example: "Kempten" }
+      }
+    }
+  }), { namespace: "Dx", source: "https://api.example.com/docs/spec.json" });
+  assert.equal(r.typeOf({ $ref: "#/components/schemas/Order" }), "Order");
+  assert.equal(decl(r, "Order"), [
+    "/** A transport order. */",
+    "type Order = {",
+    "\tid: number? = null,  // read-only, set by the API; whole number — Set by the server.",
+    "\tdate: datetime,  // required; date (YYYY-MM-DD) — Pick-up date.",
+    "\tdivision: Order_division.Value,  // 'T': European, see codelist (https://api.example.com/codelist).",
+    "\tlevel: number? = null,  // one of 1 | 2 | 3",
+    '\tcity: text? = null,  // max 35 characters; e.g. "Kempten"',
+    "}"
+  ].join("\n"));
+  const enumText = decl(r, "Order_division");
+  assert.match(enumText, /^\/\*\* 'T': European, see codelist \(https:\/\/api\.example\.com\/codelist\)\.\n/);
+  assert.match(enumText, / \*  Values: T \| F \(plain text converts with Order_division\.fromText\)\./);
+  assert.match(enumText, / \*  Used by: Order\.division\./);
+});
+
+test("enum value descriptions from x-enum-descriptions sit after the member's semicolon", () => {
+  const r = createTypeRegistry(modelOf({
+    Mode: { type: "string", enum: ["P", "Z"], "x-enum-descriptions": ["PDF", "ZPL label printer"] }
+  }));
+  r.typeOf({ $ref: "#/components/schemas/Mode" });
+  const text = decl(r, "Mode");
+  assert.match(text, /type P = Enum<Namespace, 'P'>;  \/\/ PDF\n/);
+  assert.match(text, /type Z = Enum<Namespace, 'Z'>;  \/\/ ZPL label printer\n/);
 });

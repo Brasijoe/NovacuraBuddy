@@ -185,3 +185,47 @@ test("queryableIds marks list GETs of records only", () => {
 test("pathExpr URL-encodes each path parameter", () => {
   assert.equal(pathExpr("/a/{id}/b/{x-y}", new Map([["id", "id"], ["x-y", "x_y"]])), "/a/{restPath(id)}/b/{restPath(x_y)}");
 });
+
+test("comments: full documents functions, data sources and the header; short and off trim it; code stays the same", () => {
+  const spec = {
+    openapi: "3.0.1",
+    info: { title: "Shop", version: "1", description: "A <b>shop</b>. See [codes](../codes)." },
+    servers: [{ url: "https://api.shop.test/v1" }],
+    tags: [{ name: "orders", description: "Max 5 calls per second." }],
+    components: {
+      securitySchemes: { key: { type: "apiKey", in: "header", name: "X-API-Key" } },
+      schemas: { Order: { type: "object", required: ["id"], properties: { id: { type: "integer", format: "int64" }, state: { type: "string", enum: ["open", "done"] } } } }
+    },
+    paths: {
+      "/orders": {
+        get: {
+          operationId: "listOrders", tags: ["orders"], summary: "List orders.", description: "Newest first.",
+          parameters: [{ name: "state", in: "query", schema: { type: "string", enum: ["open", "done"] }, description: "Filter by state." }],
+          responses: { 200: { description: "OK", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Order" } } } } }, 429: { description: "**429 Too Many Requests.** Slow down." } }
+        }
+      }
+    }
+  };
+  const source = "https://docs.shop.test/api/openapi.json";
+  const full = generateModule(buildModel(spec), { moduleName: "Shop", source, now: NOW });
+  assertBalanced(full.code);
+  assert.match(full.code, /Connector settings from the spec: base URL https:\/\/api\.shop\.test\/v1; authentication: API key 'key' in header X-API-Key\./);
+  assert.match(full.code, /About the API: A shop\. See codes \(https:\/\/docs\.shop\.test\/codes\)\./);
+  assert.match(full.code, /Tag orders: Max 5 calls per second\./);
+  assert.match(full.code, /\/\*\* List orders\.\n \*  Newest first\.\n \*  HTTP: GET \/orders \(operationId listOrders\), tag orders\n/);
+  assert.match(full.code, / \*  @param state query; one of open \| done — Filter by state\.\n/);
+  assert.match(full.code, / \*  @returns Order\* — 200 OK\n \*  @error 429 Too Many Requests\. Slow down\.\n/);
+  assert.match(full.code, /\/\*\* Data source for GET \/orders: List orders\.\n \*  Rows: Order\.\n/);
+  assert.match(full.code, / \*  Example: return select \* from ListOrdersSet;\n \*\/\nlet ListOrdersSet/);
+  assert.match(full.code, /\tid: number,  \/\/ required; whole number\n/);
+
+  const short = generateModule(buildModel(spec), { moduleName: "Shop", source, now: NOW, comments: "short" });
+  assert.match(short.code, /\/\*\* GET \/orders — List orders\. \*\/\nfunction listOrders/);
+  assert.doesNotMatch(short.code, /About the API|@param|  \/\/ required/);
+  const off = generateModule(buildModel(spec), { moduleName: "Shop", source, now: NOW, comments: "off" });
+  assert.doesNotMatch(off.code, /\/\*\* GET|Data source for/);
+  // Comments never change the code itself.
+  const strip = (code) => code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/  \/\/ [^\n]*/g, "").replace(/\n{2,}/g, "\n");
+  assert.equal(strip(full.code), strip(off.code));
+  assert.equal(strip(short.code), strip(off.code));
+});
