@@ -371,3 +371,30 @@ input.rename-input { width: 100%; }
 .qr-pick { text-align: left; }
 .update-banner:not([hidden]) { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .update-howto { flex-basis: 100%; margin: 0; font-size: 12px; }
+
+/* ---------- API modules ---------- */
+.api-source-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.api-paste { display: flex; flex-direction: column; gap: var(--space-2); }
+.api-paste[hidden], .api-loaded[hidden], .api-preview[hidden] { display: none; }
+.api-paste textarea, .api-preview textarea { width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: 12px; resize: vertical; }
+.api-loaded { display: flex; flex-direction: column; gap: var(--space-2); }
+.api-summary { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.api-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-muted); }
+.api-check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.api-operations { display: flex; flex-direction: column; gap: var(--space-2); }
+.api-tag > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; font-weight: 600; }
+.api-tag > summary::-webkit-details-marker { display: none; }
+.api-tag-name { flex: 1; }
+.api-op-list { list-style: none; margin: 4px 0 0; padding: 0 0 0 var(--space-3); display: flex; flex-direction: column; gap: 2px; }
+.api-op { display: flex; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; padding: 2px 0; }
+.api-op-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.api-op-path { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.api-op-id { font-size: 11px; color: var(--ink-muted); }
+.api-method { flex-shrink: 0; width: 46px; text-align: center; font-size: 10.5px; font-weight: 700; border-radius: 4px; padding: 1px 0; color: var(--on-accent); background: var(--neutral); }
+.api-method-get { background: var(--accent); }
+.api-method-post { background: var(--accent-green); }
+.api-method-put, .api-method-patch { background: var(--accent-orange); }
+.api-method-delete { background: var(--accent-red); }
+.api-warnings summary { cursor: pointer; font-size: 12px; color: var(--accent-orange); }
+.api-warnings ul { margin: 4px 0 0; padding-left: var(--space-3); font-size: 12px; color: var(--ink-muted); }
+.api-preview { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
