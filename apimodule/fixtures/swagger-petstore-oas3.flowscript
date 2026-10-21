@@ -1,0 +1,622 @@
+/*
+Source: https://petstore3.swagger.io/api/v3/openapi.json
+API: Swagger Petstore - OpenAPI 3.0 1.0.29-SNAPSHOT (OpenAPI 3.0.4)
+Auto generated code: 2026-10-21 12:00:00 (NovacuraBuddy 0.3.0)
+Base URL and authentication come from the connector; this module only adds the base path below.
+*/
+
+let basePath = 'api/v3';
+
+open Seq;
+
+type RestQueryTranslation = {
+    iden: text -> text,
+    num:  number -> text,
+    bool: boolean -> text,
+    txt:  text -> text,
+    parens: text -> text,
+    conj: (text, text) -> text,
+    disj: (text, text) -> text,
+    eq: (text, text) -> text,
+    neq: (text, text) -> text,
+    gt: (text, text) -> text,
+    ge: (text, text) -> text,
+    lt: (text, text) -> text,
+    le: (text, text) -> text,
+    dot: (text, text) -> text,
+    func_upper: text* -> text,
+    rec: { } -> text,
+    like: (text, text) -> text,
+    in: (text, text*) -> text,
+    notin: (text, text*) -> text,
+    agg_sum: true
+}
+
+type Header = {
+    Name: text,
+    Value: text
+};
+
+type RestParam = {
+    name: text,
+    value: text?
+};
+
+type Mapping = any -> any;
+
+type Enum<TNamespace, TName> = { enumerationNamespace: TNamespace, name: TName }
+
+private function whenNotNull(f: any -> any) =>
+    x => case when x = null then null else f(x) end;
+
+// Create an enum mapping record
+private function enumMapping(label, mapping: Mapping) => { label, mapping: whenNotNull(mapping) };
+
+// Create a memoized "find mapping" function from a list of enum mappings
+private function mappingFinderFunction(mappings: { label, mapping: Mapping }*) =>
+    lookup >> Seq.map(_, m => m.mapping) >> firstOrDefault(_, identity)
+        given {
+            lookup = mappings.toLookup(m => m.label)
+        };
+
+private function recordMappingFunction(mappings: { label, mapping: Mapping }*) =>
+    uncurry(finder) given { finder = memoize(mappingFinderFunction(mappings)) };
+
+private function fromTextFunction(values: { enumerationNamespace: text, name: text }*, enumerationName: text, name: text) {
+    let value = firstOrNull(values as v where v.name = name);
+    if value != null:
+        return value;
+    error `Could not convert {name} to the corresponding {enumerationName} enumeration value.`;
+}
+
+// Given a set of selections in the form {name, alias}, create a function which renames a field if needed.
+private function renamerFunction(selects: {name, alias}*): text -> text {
+    if not selects.exists(s => s.alias != null) {
+        return identity;
+    }
+
+    return (label) => isNull(selects.filter(s => s.name == label).firstOrNull().alias, label);
+}
+
+/* ---------- HTTP ---------- */
+
+private function HandleHeaders(headers: Header* = []): {} {
+    let localHeaders = headers;
+    if (not headers.exists(h => h.Name == "Content-Type")):
+        localHeaders = localHeaders & [new Header { Name: "Content-Type", Value: "application/json" }];
+    return Record.fromMembers(localHeaders.map(h => Record.getMembers(h)).map(x => { label:str(x.value[0]), value: x.value[1] }))
+}
+
+/** Merges required headers with user-provided headers. Required headers take precedence — duplicates by name are removed, keeping the required value. */
+private function MergeHeaders(required: Header*, userHeaders: Header*): Header* =>
+    (required & userHeaders).distinctBy(h => h.Name);
+
+private function HandleFailedRequest(response: { statusCode: number, reasonPhrase: text, headers: { name: text, values: text* }*, contents: text}) {
+    error `HTTP {response.statusCode} {response.reasonPhrase}: {left(isNull(response.contents, ""), 1000)}`;
+}
+
+private function HandleHTTPResponse(response: { statusCode: number, reasonPhrase: text, headers: { name: text, values: text* }*, contents: text}): text =>
+     case when response.statusCode >= 200 and response.statusCode < 300 then response.contents
+          else HandleFailedRequest(response) end;
+
+private function addBasePath(url): text {
+    if basePath = '':
+        return case when url.left(1) = '/' then url.mid(1, len(url) - 1) else url end;
+    if url.left(1) = '/':
+        return `{basePath}{url}`;
+    else:
+        return `{basePath}/{url}`;
+}
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function GetResponse(url: text, headers: Header* = []): text =>
+    HandleHTTPResponse(HTTP.getText(addBasePath(url), HandleHeaders(headers)));
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PostResponse(url: text, body: text, headers: Header* = []): text =>
+    HandleHTTPResponse(HTTP.postText(addBasePath(url), HandleHeaders(headers), body));
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PatchResponse(url: text, body: text, headers: Header* = []): text =>
+    HandleHTTPResponse(HTTP.patchText(addBasePath(url), HandleHeaders(headers), body));
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function PutResponse(url: text, body: text, headers: Header* = []): text =>
+    HandleHTTPResponse(HTTP.putText(addBasePath(url), HandleHeaders(headers), body));
+
+/** If no Content-Type header is specified, the Content-Type will be passed as application/json. */
+private function DeleteResponse(url: text, headers: Header* = []): number {
+    let response = HTTP.delete(addBasePath(url), HandleHeaders(headers))
+    return case when response.statusCode >= 200 and response.statusCode < 300 then response.statusCode
+           else error `HTTP {response.statusCode} {response.reasonPhrase}` end;
+}
+
+private function HandleHTTPResponseBinary(response: { statusCode: number, reasonPhrase: text, headers: { name: text, values: text* }*, contents: binary}): binary | text {
+    if (response.statusCode == 202 or response.statusCode == 204):
+        return response.statusCode;
+
+    return case when response.statusCode >= 200 and response.statusCode < 300 then response.contents
+           else error `HTTP {response.statusCode} {response.reasonPhrase}` end;
+}
+
+private function PostResponseBinary(url: text, body: binary, headers: Header* = []): binary | text =>
+    HandleHTTPResponseBinary(HTTP.postBinary(addBasePath(url), HandleHeaders(headers), body));
+
+private function PatchResponseBinary(url: text, body: binary, headers: Header* = []): binary | text =>
+    HandleHTTPResponseBinary(HTTP.patchBinary(addBasePath(url), HandleHeaders(headers), body));
+
+private function PutResponseBinary(url: text, body: binary, headers: Header* = []): binary | text =>
+    HandleHTTPResponseBinary(HTTP.putBinary(addBasePath(url), HandleHeaders(headers), body));
+
+/* ---------- Parameters and bodies ---------- */
+
+// A parameter value as the API expects it in a URL: enum values by name, booleans lower-case.
+private function restText(value: unknown): text? =>
+    case when value = null then null
+         when value is { name: text } then value.name
+         when value is boolean then lower(str(value))
+         else str(value) end;
+
+private function restPath(value: unknown): text => urlEncode(isNull(restText(value), ''));
+
+private function restQueryString(params: RestParam*): text {
+    let parts = params.filter(p => p.value != null).map(p => urlEncode(p.name) & '=' & urlEncode(isNull(p.value, ''))).eval();
+    return case when parts.any() then '?' & parts.join('&') else '' end;
+}
+
+private function restHeaders(values: { Name: text, Value: text? }*): Header* =>
+    values.filter(h => h.Value != null).map(h => new Header { Name: h.Name, Value: isNull(h.Value, '') }).eval();
+
+// Typed enum values back to their plain text, nested records and sequences included.
+private function restRemap(value: unknown): unknown {
+    if (value is { enumerationNamespace: text, name: text }) {
+        return value.name;
+    }
+    if (value is {}*) {
+        return value.map(restRemap).eval();
+    }
+    if (value is {}) {
+        return Record.fromMembers(Record.getMembers(value).map(m => { label: m.label, value: restRemap(m.value) }));
+    }
+    return value;
+}
+
+private function restJsonBody(input: unknown): text => JSON.serialize(restRemap(input));
+
+private function restFormBody(input: {}): text =>
+    Record.getMembers(restRemap(input)).filter(m => m.value != null).map(m => urlEncode(m.label) & '=' & urlEncode(isNull(restText(m.value), ''))).join('&');
+
+/* ---------- Queryable: where -> query parameters + in-memory test ---------- */
+
+private function restOp(op: text, a: text, b: text): text => '{"op":"' & op & '","a":' & a & ',"b":' & b & '}';
+
+private function restTranslation(): RestQueryTranslation {
+    return {
+        iden: name => '{"f":' & JSON.serialize(name) & '}',
+        num:  n => '{"v":' & str(n) & '}',
+        bool: b => '{"v":' & (case when b then 'true' else 'false' end) & '}',
+        txt:  t => '{"v":' & JSON.serialize(t) & '}',
+        arr:  (xs: text*) => xs,
+        parens: x => x,
+        null: () => '{"v":null}',
+        conj: (x, y) => restOp('and', x, y),
+        disj: (x, y) => restOp('or', x, y),
+        eq:   (x, y) => restOp('eq', x, y),
+        neq:  (x, y) => restOp('neq', x, y),
+        gt:   (x, y) => restOp('gt', x, y),
+        ge:   (x, y) => restOp('ge', x, y),
+        lt:   (x, y) => restOp('lt', x, y),
+        le:   (x, y) => restOp('le', x, y),
+        dot:  (x, y) => restOp('dot', x, y),
+        like: (x, y) => restOp('like', x, y),
+        in:   (x, ys) => restOp('in', x, '[' & ys.join(',') & ']'),
+        notin: (x, ys) => restOp('notin', x, '[' & ys.join(',') & ']'),
+        func_upper: xs => restOp('upper', xs[0], 'null'),
+        func_Date: (xs: text*) => xs[0],
+        func_date: (xs: text*) => xs[0],
+        rec: r => case when r is { enumerationNamespace: text, name: text } then '{"v":' & JSON.serialize(r.name) & '}' else '{"v":null}' end,
+        agg_sum: true
+    };
+}
+
+private function restGet(node: unknown, label: text): unknown =>
+    case when node is {} then Record.getValue(node, label, null) else null end;
+
+private function restOpOf(node: unknown): text => isNull(restText(restGet(node, 'op')), '');
+
+// A field name as the Queryable hands it over: compiled ({"f":"x"}) in a where, plain in order by / select.
+private function restFieldName(name: text): text =>
+    case when name.left(5) = '{"f":' then JSON.deserialize<{ f: text }>(name).f else name end;
+
+private function restFilter(q: Queryable.QuerySpec<text>): unknown =>
+    case when q.filter = null then null else JSON.deserialize<{}>(q.filter) end;
+
+// The declared query parameter an and-reachable condition can be sent as, or null.
+private function restParamName(node: unknown, queryParams: text*): text? {
+    let op = restOpOf(node);
+    if op != 'eq' and op != 'in' {
+        return null;
+    }
+    let field = restGet(restGet(node, 'a'), 'f');
+    if field = null or not (restText(field) in queryParams) {
+        return null;
+    }
+    if op = 'eq' and (restGet(restGet(node, 'b'), 'f') != null or restGet(restGet(node, 'b'), 'op') != null) {
+        return null;
+    }
+    return restText(field);
+}
+
+private function restParams(node: unknown, queryParams: text*): RestParam* {
+    if node = null {
+        return [];
+    }
+    if restOpOf(node) = 'and' {
+        return restParams(restGet(node, 'a'), queryParams) & restParams(restGet(node, 'b'), queryParams);
+    }
+    let name = restParamName(node, queryParams);
+    if name = null {
+        return [];
+    }
+    if restOpOf(node) = 'eq' {
+        return [new RestParam { name: isNull(name, ''), value: restText(restGet(restGet(node, 'b'), 'v')) }];
+    }
+    return unsafeCast<{}*>(restGet(node, 'b')).map(v => new RestParam { name: isNull(name, ''), value: restText(restGet(v, 'v')) }).eval();
+}
+
+private function restValueOf(node: unknown, row: {}): unknown {
+    let field = restGet(node, 'f');
+    if field != null {
+        return Record.getValue(row, isNull(restText(field), ''), null);
+    }
+    let op = restOpOf(node);
+    if op = 'dot' {
+        let parent = restValueOf(restGet(node, 'a'), row);
+        let child = restGet(restGet(node, 'b'), 'f');
+        return case when parent is {} and child != null then Record.getValue(parent, isNull(restText(child), ''), null) else null end;
+    }
+    if op = 'upper' {
+        return upper(isNull(restText(restValueOf(restGet(node, 'a'), row)), ''));
+    }
+    return restGet(node, 'v');
+}
+
+// -1 / 0 / 1; numbers numerically, everything else as text; null sorts first.
+private function restCompare(left: unknown, right: unknown): number {
+    let l = restText(left);
+    let r = restText(right);
+    if l = null or r = null {
+        return case when l = null and r = null then 0 when l = null then -1 else 1 end;
+    }
+    if isNumber(l) and isNumber(r) {
+        return case when val(l) < val(r) then -1 when val(l) > val(r) then 1 else 0 end;
+    }
+    if l = r {
+        return 0;
+    }
+    return case when [l, r].orderBy(x => x).first() = l then -1 else 1 end;
+}
+
+// SQL LIKE (% and _) as a whole-text regular expression.
+private function restLike(value: text?, pattern: text?): boolean =>
+    regexMatch(isNull(value, ''), '^' & isNull(pattern, '').regexReplace(@"[.*+?^${}()|\[\]\\]", @"\$0").replace('%', '.*').replace('_', '.') & '$');
+
+private function restTest(node: unknown, row: {}, queryParams: text*, top: boolean): boolean {
+    if node = null {
+        return true;
+    }
+    let op = restOpOf(node);
+    if op = 'and' {
+        return restTest(restGet(node, 'a'), row, queryParams, top) and restTest(restGet(node, 'b'), row, queryParams, top);
+    }
+    if op = 'or' {
+        return restTest(restGet(node, 'a'), row, queryParams, false) or restTest(restGet(node, 'b'), row, queryParams, false);
+    }
+    if top and restParamName(node, queryParams) != null {
+        return true;
+    }
+    let left = restValueOf(restGet(node, 'a'), row);
+    if op = 'in' or op = 'notin' {
+        let found = unsafeCast<{}*>(restGet(node, 'b')).exists(v => restCompare(left, restValueOf(v, row)) = 0);
+        return case when op = 'in' then found else not found end;
+    }
+    let right = restValueOf(restGet(node, 'b'), row);
+    if op = 'like' {
+        return restLike(restText(left), restText(right));
+    }
+    let c = restCompare(left, right);
+    return case when op = 'eq' then c = 0
+                when op = 'neq' then c != 0
+                when op = 'gt' then c > 0
+                when op = 'ge' then c >= 0
+                when op = 'lt' then c < 0
+                when op = 'le' then c <= 0
+                else error `The operator '{op}' is not supported on REST data sources.` end;
+}
+
+private function restKeep(rows: {}*, filter: unknown, queryParams: text*): {}* =>
+    rows.filter(r => restTest(filter, r, queryParams, true));
+
+private function restOrder(rows: {}*, q: Queryable.QuerySpec<text>): {}* {
+    let result = rows;
+    for o in q.orderBy.reverse() {
+        let field = restFieldName(o.field);
+        set result = case when o.descending then result.orderByDescending(r => Record.getValue(r, field, null))
+                          else result.orderBy(r => Record.getValue(r, field, null)) end;
+    }
+    return result;
+}
+
+// order by (on the raw rows), then typed enum values, then select / aliases.
+private function restShape(rows: {}*, q: Queryable.QuerySpec<text>, mapRow: {} -> {}): {}* {
+    if q.groupBy.any() {
+        error "group by and aggregates are not supported on REST data sources; select the rows and group them in memory instead.";
+    }
+    let names = q.selections.map(restFieldName).filter(s => not (left(s, 1) == "@")).eval();
+    let renamer = memoize(renamerFunction(q.selection));
+    return restOrder(rows, q)
+        .map(mapRow)
+        .map(r => case when names.any() then Record.fromMembers(Record.getMembers(r).filter(m => m.label in names)) else r end)
+        .map(r => Record.mapLabels(r, renamer))
+        .eval();
+}
+
+
+/* ---------- Enumerations ---------- */
+
+module Pet_status {
+    type Namespace = 'SwaggerPetstore.Pet_status'
+    type available = Enum<Namespace, 'available'>;
+    type pending = Enum<Namespace, 'pending'>;
+    type sold = Enum<Namespace, 'sold'>;
+
+    type Value = available | pending | sold;
+    let values: Value* = [available, pending, sold];
+
+    let fromText = memoize(fromTextFunction(values, 'Pet_status', _) >> unsafeCast<Value>);
+};
+
+module Order_status {
+    type Namespace = 'SwaggerPetstore.Order_status'
+    type placed = Enum<Namespace, 'placed'>;
+    type approved = Enum<Namespace, 'approved'>;
+    type delivered = Enum<Namespace, 'delivered'>;
+
+    type Value = placed | approved | delivered;
+    let values: Value* = [placed, approved, delivered];
+
+    let fromText = memoize(fromTextFunction(values, 'Order_status', _) >> unsafeCast<Value>);
+};
+
+/* ---------- Types ---------- */
+
+type CategoryRequest = {
+	optional id: number,
+	optional name: text,
+}
+
+type TagRequest = {
+	optional id: number,
+	optional name: text,
+}
+
+type PetRequest = {
+	optional id: number,
+	name: text,
+	optional category: CategoryRequest,
+	photoUrls: text*,
+	optional tags: TagRequest*,
+	optional status: Pet_status.Value,
+}
+
+type Category = {
+	id: number? = null,
+	name: text? = null,
+}
+
+type Tag = {
+	id: number? = null,
+	name: text? = null,
+}
+
+type Pet = {
+	id: number? = null,
+	name: text,
+	category: Category,
+	photoUrls: text*,
+	tags: Tag*,
+	status: Pet_status.Value,
+}
+
+type ApiResponse = {
+	code: number? = null,
+	"type": text? = null,
+	message: text? = null,
+}
+
+type OrderRequest = {
+	optional id: number,
+	optional petId: number,
+	optional quantity: number,
+	optional shipDate: datetime,
+	optional status: Order_status.Value,
+	optional complete: boolean,
+}
+
+type Order = {
+	id: number? = null,
+	petId: number? = null,
+	quantity: number? = null,
+	shipDate: datetime? = null,
+	status: Order_status.Value,
+	complete: boolean? = null,
+}
+
+type UserRequest = {
+	optional id: number,
+	optional username: text,
+	optional firstName: text,
+	optional lastName: text,
+	optional email: text,
+	optional password: text,
+	optional phone: text,
+	optional userStatus: number,
+}
+
+type User = {
+	id: number? = null,
+	username: text? = null,
+	firstName: text? = null,
+	lastName: text? = null,
+	email: text? = null,
+	password: text? = null,
+	phone: text? = null,
+	userStatus: number? = null,
+}
+
+/* ---------- Enum mappings ---------- */
+
+private let enumMappingsForPet = [
+    enumMapping('status', Pet_status.fromText),
+];
+private let recordMapperForPet = recordMappingFunction(enumMappingsForPet);
+
+private let enumMappingsForOrder = [
+    enumMapping('status', Order_status.fromText),
+];
+private let recordMapperForOrder = recordMappingFunction(enumMappingsForOrder);
+
+/* ---------- Data sources ---------- */
+
+private function getFindPetsByStatusSetRows(status: text, q: Queryable.QuerySpec<text>): {}* {
+    let filter = restFilter(q);
+    let params = restParams(filter, []);
+    let raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }] & params)}`, []));
+    return restShape(restKeep(raw, filter, []), q, r => Record.mapValues(r, recordMapperForPet));
+}
+
+/** GET /pet/findByStatus as a data source: `where` on nothing is sent to the API, everything else is filtered in memory. */
+function FindPetsByStatusSet(status: text) {
+    return Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByStatusSetRows(status, _));
+}
+
+private function getFindPetsByTagsSetRows(tags: text*, q: Queryable.QuerySpec<text>): {}* {
+    let filter = restFilter(q);
+    let params = restParams(filter, []);
+    let raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval() & params)}`, []));
+    return restShape(restKeep(raw, filter, []), q, r => Record.mapValues(r, recordMapperForPet));
+}
+
+/** GET /pet/findByTags as a data source: `where` on nothing is sent to the API, everything else is filtered in memory. */
+function FindPetsByTagsSet(tags: text*) {
+    return Queryable.Create<RestQueryTranslation, Pet, text>(restTranslation(), getFindPetsByTagsSetRows(tags, _));
+}
+
+/* ---------- Operations ---------- */
+
+/** POST /pet — Add a new pet to the store. */
+function addPet(input: PetRequest, headers: Header* = []): Pet {
+    let __raw = JSON.deserialize<{}>(PostResponse(`/pet`, restJsonBody(input), headers));
+    return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
+}
+
+/** PUT /pet — Update an existing pet. */
+function updatePet(input: PetRequest, headers: Header* = []): Pet {
+    let __raw = JSON.deserialize<{}>(PutResponse(`/pet`, restJsonBody(input), headers));
+    return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
+}
+
+/** GET /pet/findByStatus — Finds Pets by status. */
+function findPetsByStatus(status: text, headers: Header* = []): Pet* {
+    let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }])}`, headers));
+    return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
+}
+
+/** GET /pet/findByTags — Finds Pets by tags. */
+function findPetsByTags(tags: text*, headers: Header* = []): Pet* {
+    let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval())}`, headers));
+    return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
+}
+
+/** GET /pet/{petId} — Find pet by ID. */
+function getPetById(petId: number, headers: Header* = []): Pet {
+    let __raw = JSON.deserialize<{}>(GetResponse(`/pet/{restPath(petId)}`, headers));
+    return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
+}
+
+/** POST /pet/{petId} — Updates a pet in the store with form data. */
+function updatePetWithForm(petId: number, name: text? = null, status: text? = null, headers: Header* = []): Pet {
+    let __raw = JSON.deserialize<{}>(PostResponse(`/pet/{restPath(petId)}{restQueryString([new RestParam { name: 'name', value: restText(name) }] & [new RestParam { name: 'status', value: restText(status) }])}`, '', headers));
+    return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
+}
+
+/** DELETE /pet/{petId} — Deletes a pet. */
+function deletePet(petId: number, api_key: text? = null, headers: Header* = []) {
+    return DeleteResponse(`/pet/{restPath(petId)}`, MergeHeaders(restHeaders([{ Name: 'api_key', Value: restText(api_key) }]), headers));
+}
+
+/** POST /pet/{petId}/uploadImage — Uploads an image. */
+function uploadFile(petId: number, body: binary, additionalMetadata: text? = null, headers: Header* = []) {
+    return PostResponseBinary(`/pet/{restPath(petId)}/uploadImage{restQueryString([new RestParam { name: 'additionalMetadata', value: restText(additionalMetadata) }])}`, body, MergeHeaders([{ Name: 'Content-Type', Value: 'application/octet-stream' }], headers));
+}
+
+/** GET /store/inventory — Returns pet inventories by status. */
+function getInventory(headers: Header* = []): {} {
+    let __raw = JSON.deserialize<{}>(GetResponse(`/store/inventory`, headers));
+    return unsafeCast<{}>(__raw);
+}
+
+/** POST /store/order — Place an order for a pet. */
+function placeOrder(input: OrderRequest, headers: Header* = []): Order {
+    let __raw = JSON.deserialize<{}>(PostResponse(`/store/order`, restJsonBody(input), headers));
+    return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
+}
+
+/** GET /store/order/{orderId} — Find purchase order by ID. */
+function getOrderById(orderId: number, headers: Header* = []): Order {
+    let __raw = JSON.deserialize<{}>(GetResponse(`/store/order/{restPath(orderId)}`, headers));
+    return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
+}
+
+/** DELETE /store/order/{orderId} — Delete purchase order by identifier. */
+function deleteOrder(orderId: number, headers: Header* = []) {
+    return DeleteResponse(`/store/order/{restPath(orderId)}`, headers);
+}
+
+/** POST /user — Create user. */
+function createUser(input: UserRequest, headers: Header* = []): User {
+    let __raw = JSON.deserialize<{}>(PostResponse(`/user`, restJsonBody(input), headers));
+    return unsafeCast<User>(__raw);
+}
+
+/** POST /user/createWithList — Creates list of users with given input array. */
+function createUsersWithListInput(input: UserRequest*, headers: Header* = []): User {
+    let __raw = JSON.deserialize<{}>(PostResponse(`/user/createWithList`, restJsonBody(input), headers));
+    return unsafeCast<User>(__raw);
+}
+
+/** GET /user/login — Logs user into the system. */
+function loginUser(username: text? = null, password: text? = null, headers: Header* = []): text {
+    return GetResponse(`/user/login{restQueryString([new RestParam { name: 'username', value: restText(username) }] & [new RestParam { name: 'password', value: restText(password) }])}`, headers);
+}
+
+/** GET /user/logout — Logs out current logged in user session. */
+function logoutUser(headers: Header* = []): text {
+    return GetResponse(`/user/logout`, headers);
+}
+
+/** GET /user/{username} — Get user by user name. */
+function getUserByName(username: text, headers: Header* = []): User {
+    let __raw = JSON.deserialize<{}>(GetResponse(`/user/{restPath(username)}`, headers));
+    return unsafeCast<User>(__raw);
+}
+
+/** PUT /user/{username} — Update user resource. */
+function updateUser(username: text, input: UserRequest, headers: Header* = []): text {
+    return PutResponse(`/user/{restPath(username)}`, restJsonBody(input), headers);
+}
+
+/** DELETE /user/{username} — Delete user resource. */
+function deleteUser(username: text, headers: Header* = []) {
+    return DeleteResponse(`/user/{restPath(username)}`, headers);
+}
