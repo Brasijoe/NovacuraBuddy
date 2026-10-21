@@ -158,15 +158,20 @@
       const jsonResponse = resp && resp.schema && isJson(resp.contentType);
       const respType = jsonResponse ? registry.typeOf(resp.schema, `${fnName}_Result`) : null;
 
-      // ---- arguments: path, required query, body, optional query, headers ----
+      // ---- arguments: path, required query, body, required headers, optional query, optional
+      // headers, headers. Flow rejects a required argument after an optional one ("Optional
+      // arguments must be placed last in the argument list", live 2026-10-21).
       const requiredQuery = queryParams.filter((p) => p.required);
       const optionalQuery = queryParams.filter((p) => !p.required);
+      const requiredHeaders = headerParams.filter((p) => p.required);
+      const optionalHeaders = headerParams.filter((p) => !p.required);
       const args = [
         ...pathParams.map((p) => argDecl(p, false)),
         ...requiredQuery.map((p) => argDecl(p, false)),
         ...(bodyArg ? [bodyArg] : []),
+        ...requiredHeaders.map((p) => argDecl(p, false)),
         ...optionalQuery.map((p) => argDecl(p, true)),
-        ...headerParams.map((p) => argDecl(p, !p.required)),
+        ...optionalHeaders.map((p) => argDecl(p, true)),
         "headers: Header* = []"
       ];
       const url = `\`${pathExpr(op.path, argNames)}${queryParams.length ? `{restQueryString(${paramsExpr(queryParams, argNames, deref)})}` : ""}\``;
@@ -238,8 +243,9 @@
           ...pathParams.map(paramLine),
           ...requiredQuery.map(paramLine),
           bodyLine(),
+          ...requiredHeaders.map(paramLine),
           ...optionalQuery.map(paramLine),
-          ...headerParams.map(paramLine),
+          ...optionalHeaders.map(paramLine),
           "@param headers extra HTTP headers, merged over the generated ones",
           `@returns ${returnsWhat}${ok.length ? ` — ${ok.map(respText).join("; ")}` : ""}`,
           ...errors.map((r) => `@error ${respText(r)}`),

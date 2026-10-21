@@ -210,6 +210,25 @@ test("a module without Queryables leaves out the Queryable runtime", () => {
   assert.match(withSets, /private function restShape\(/);
 });
 
+test("required headers come before optional query params (Flow: optional arguments must be placed last)", () => {
+  // Flow Security API's GET /globalAdmin/user/search, live 2026-10-21
+  const model = buildModel({
+    openapi: "3.0.0", info: { title: "Security API", version: "v3" },
+    paths: { "/user/search": { get: {
+      operationId: "searchUsers",
+      parameters: [
+        { name: "EmailLike", in: "query", schema: { type: "string" } },
+        { name: "X-Origin", in: "header", required: true, schema: { type: "string" } },
+        { name: "X-Trace", in: "header", schema: { type: "string" } }
+      ],
+      responses: { 200: { description: "", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserDto" } } } } } }
+    } } },
+    components: { schemas: { UserDto: { type: "object", properties: { id: { type: "integer" } } } } }
+  });
+  const { code } = generateModule(model, opts);
+  assert.match(code, /function searchUsers\(X_Origin: text, EmailLike: text\? = null, X_Trace: text\? = null, headers: Header\* = \[\]\): UserDto\* \{/);
+});
+
 test("queryableIds marks list GETs of records that have query params only", () => {
   assert.deepEqual(queryableIds(buildModel(load("swagger-petstore-oas3.yaml"))), ["findPetsByStatus", "findPetsByTags"]);
   assert.deepEqual(queryableIds(buildModel(load("oas3-petstore.yaml"))), ["listPets"]);
