@@ -49,13 +49,19 @@ const qrHistory = QrHistory.createQrHistory(chrome.storage.local);
 const qrService = QrService.createQrService({ instanceStore, settings: githubSettings, history: qrHistory, cacheStorage: chrome.storage.local });
 const clService = ClService.createClService({ instanceStore, settings: githubSettings, history: qrHistory });
 
-// Update notice: checked only when the browser starts (user decision) — no timer, no check on
-// panel open. The stored result carries `currentVersion`, so it is ignored once the user has
-// installed the update (no lingering banner).
+// Update notice: checked when the browser starts, when the extension is installed/reloaded/updated,
+// and when the side panel opens if the last attempt is older than UPDATE_CHECK_MAX_AGE_MS (most
+// people never restart the browser, so a startup-only check left the banner silent for days). No
+// timer. The stored result carries `currentVersion`, so it is ignored once the user has installed
+// the update (no lingering banner).
 const UPDATE_INFO_KEY = "updateInfo";
 const UPDATE_DISMISSED_KEY = "updateDismissed";
+const UPDATE_CHECKED_AT_KEY = "updateCheckedAt";
+const UPDATE_CHECK_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 async function runUpdateCheck() {
+  // Every attempt counts towards the throttle, failed ones too, so an offline panel doesn't hammer GitHub.
+  await chrome.storage.local.set({ [UPDATE_CHECKED_AT_KEY]: Date.now() });
   const info = await UpdateCheck.checkForUpdate(chrome.runtime.getManifest().version);
   if (info.reason) {
     // Network/HTTP failure: keep whatever we already know (e.g. an available update) instead of overwriting it.
@@ -65,12 +71,20 @@ async function runUpdateCheck() {
   await chrome.storage.local.set({ [UPDATE_INFO_KEY]: { ...info, checkedAt: Date.now() } });
 }
 
+async function runUpdateCheckIfDue() {
+  const { [UPDATE_CHECKED_AT_KEY]: lastCheckedAt } = await chrome.storage.local.get(UPDATE_CHECKED_AT_KEY);
+  if (UpdateCheck.isCheckDue(lastCheckedAt, Date.now(), UPDATE_CHECK_MAX_AGE_MS)) await runUpdateCheck();
+}
+
 async function readUpdateInfo() {
   const { [UPDATE_INFO_KEY]: info } = await chrome.storage.local.get(UPDATE_INFO_KEY);
   return info && info.currentVersion === chrome.runtime.getManifest().version ? info : null;
 }
 
 chrome.runtime.onStartup.addListener(() => {
+  runUpdateCheck().catch((e) => logError("Update check failed:", e.message));
+});
+chrome.runtime.onInstalled.addListener(() => {
   runUpdateCheck().catch((e) => logError("Update check failed:", e.message));
 });
 const flowToken = FlowToken.createTokenCache(45 * 60 * 1000);
@@ -589,6 +603,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, result: await handleActivateModule(saved) });
         }
         case "GET_UPDATE_INFO": {
+          // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
+          runUpdateCheckIfDue().catch((e) => logError("Update check failed:", e.message));
           const info = await readUpdateInfo();
           const { [UPDATE_DISMISSED_KEY]: dismissedVersion } = await chrome.storage.local.get(UPDATE_DISMISSED_KEY);
           return sendResponse({ ok: true, info, dismissed: !!info && !!info.available && info.version === dismissedVersion });
