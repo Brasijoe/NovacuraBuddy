@@ -495,7 +495,11 @@ input.rename-input { width: 100%; }
 .ft-icon-package { background: #fd6e15; }
 .ft-icon-library { background: #6b7a90; }
 .ft-env-status { font-size: 11.5px; color: var(--ink-muted); padding: 2px 0 2px 26px; }
-#ftEnvTree { max-height: 420px; overflow-y: auto; padding-right: 2px; }
+#ftEnvTree, #ftEnvFiltered { max-height: 420px; overflow-y: auto; padding-right: 2px; }
+#ftEnvTree[hidden], #ftEnvFiltered[hidden] { display: none; }
+input.ft-filter { width: 100%; box-sizing: border-box; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); padding: 6px 12px; }
+input.ft-filter:focus-visible { border-color: var(--accent); outline: none; }
+.ft-icon-automation { background: #a23ad6; }
 .ft-layout { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: 10px; }
 .ft-layout[hidden], #ftPackagesBox[hidden], #ftPackageField[hidden] { display: none; }
 #ftPackagesBox { display: flex; flex-direction: column; gap: var(--space-2); }
