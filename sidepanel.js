@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "api-modules", "flows", "linked-flows", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "api-modules", "flows", "linked-flows", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -15,6 +15,7 @@ function showTab(name) {
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
+  if (name === "flow-deps") fdOnShow();
   if (name === "linked-flows") lfOnShow();
 }
 

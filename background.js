@@ -25,6 +25,7 @@ importScripts(
   "lib/qr-service.js",
   "lib/cl-service.js",
   "lib/update-check.js",
+  "lib/flow-deps.js",
   "apimodule/api-module-service.js"
 );
 
@@ -57,6 +58,7 @@ const clService = ClService.createClService({ instanceStore, settings: githubSet
 // timer. The stored result carries `currentVersion`, so it is ignored once the user has installed
 // the update (no lingering banner).
 const UPDATE_INFO_KEY = "updateInfo";
+const FLOW_DEPS_PREFIX = "flowDeps:"; // + baseUrl, chrome.storage.local: the last dependency scan
 const UPDATE_DISMISSED_KEY = "updateDismissed";
 const UPDATE_CHECKED_AT_KEY = "updateCheckedAt";
 const UPDATE_CHECK_MAX_AGE_MS = 6 * 60 * 60 * 1000;
@@ -741,6 +743,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             await refreshIfOpen(message.orgId, [message.assetId]);
             return sendResponse({ ok: true });
           } finally { linkScanDone(message.orgId); }
+        case "FD_SCAN": { // Flow dependency scanner: read-only, the scan only gets GET methods
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const ifs = { get: client.get, getText: client.getText };
+          const onProgress = (step, current, total) =>
+            chrome.runtime.sendMessage({ type: "FD_SCAN_PROGRESS", scanId: message.scanId, step, current, total }).catch(() => {});
+          const result = { baseUrl: IfsInstances.normalizeBaseUrl(message.baseUrl), ...(await FlowDeps.runScan({ ifs, patterns: message.patterns, onProgress })) };
+          await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
+          return sendResponse({ ok: true, result });
+        }
+        case "FD_LAST_RESULT": {
+          const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
+          const { [key]: result = null } = await chrome.storage.local.get(key);
+          return sendResponse({ ok: true, result });
+        }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
           runUpdateCheckIfDue().catch((e) => logError("Update check failed:", e.message));

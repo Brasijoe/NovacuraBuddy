@@ -36,6 +36,7 @@
           <div class="tab-menu-row"><button id="tab-recorder" class="tab-item" role="tab">Traffic Recorder</button><span class="info-tip" data-tip="Records the IFS projection calls your browser tabs make, with requests and responses. Open a session in the viewer to filter the calls, drop redundant ones and create a Flow asset from them."></span></div>
           <div class="tab-menu-row"><button id="tab-quick-reports" class="tab-item" role="tab">Quick Reports</button><span class="info-tip" data-tip="SQL Quick Reports kept in your GitHub repo. Deploy one to an IFS instance with permission sets, then create its Flow module for the open flow."></span></div>
           <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
+          <div class="tab-menu-row"><button id="tab-flow-deps" class="tab-item" role="tab">Flow Dependencies</button><span class="info-tip" data-tip="Scans an IFS installation for everything that calls Novacura Flow (run.novacura.com or app.novacura.com): events, event actions, workflows, routing addresses and page commands. Results open in a new browser tab. Read-only: the scan never changes anything in IFS."></span></div>
         </div>
       </div>
       <div class="tab-group">
@@ -127,6 +128,21 @@
       <select id="clInstanceSelect"></select>
       <div id="clEnvHint" class="empty-state" hidden></div>
       <ul id="clEnvList" class="qr-list"></ul>
+    </section>
+
+    <section id="panel-flow-deps" role="tabpanel" hidden>
+      <div class="section-head"><h2>Select Flow installation</h2><span class="info-tip" data-tip="Choose the IFS installation (from Basic Data) and hit Scan. The scan reads routing addresses, active workflows (their BPMN diagrams), event actions and published page commands and finds every call to the addresses under Search for. The results open in a new tab, grouped per Flow endpoint. Large installations take a minute, since every active workflow diagram is downloaded. Read-only."></span></div>
+      <select id="fdInstanceSelect"></select>
+      <div class="section-head"><h2>Search for</h2><span class="info-tip" data-tip="The addresses the scan looks for. Each entry matches anywhere inside a URL or text, so a part of an address works too (e.g. novacura.com or 10.49.101). Add as many as you need; untick the Novacura hosts to search only your own."></span></div>
+      <label class="fd-default"><input type="checkbox" id="fdUseDefaults" checked /> run.novacura.com, app.novacura.com</label>
+      <ul id="fdAddressList" class="fd-address-list"></ul>
+      <div class="search-row">
+        <input id="fdAddressInput" placeholder="Add an address or part of one…" />
+        <button id="fdAddressAddBtn">Add</button>
+      </div>
+      <button id="fdScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
+      <div id="fdHint" class="empty-state" hidden></div>
+      <p id="fdLast" class="list-count" hidden></p>
     </section>
 
     <section id="panel-api-modules" role="tabpanel" hidden>
@@ -316,6 +332,7 @@
     <script src="panels/cl-deploy-form.js"></script>
     <script src="panels/quick-reports.js"></script>
     <script src="panels/custom-lus.js"></script>
+    <script src="panels/flow-deps.js"></script>
     <script src="panels/update-banner.js"></script>
     <script src="lib/vendor/js-yaml.min.js"></script>
     <script src="apimodule/spec-load.js"></script>

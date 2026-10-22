@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Flow dependencies</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+    <link rel="stylesheet" href="qr-editor.css" />
+    <link rel="stylesheet" href="flow-deps.css" />
+  </head>
+  <body class="qr-editor-page">
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+
+    <header class="topbar fd-topbar">
+      <div>
+        <h1 id="fdTitle">Flow dependencies</h1>
+        <p id="fdSubtitle" class="list-count"></p>
+      </div>
+      <button id="fdRescanBtn" class="btn-primary">Rescan</button>
+    </header>
+
+    <div id="fdProgress" class="fd-progress" hidden>
+      <div class="fd-progress-bar"><div id="fdProgressFill" class="fd-progress-fill"></div></div>
+      <span id="fdProgressLabel" class="list-count"></span>
+    </div>
+
+    <p id="fdSummary" class="list-count"></p>
+    <div id="fdEmpty" class="empty-state" hidden></div>
+
+    <div id="fdResults" class="fd-grid" hidden>
+      <aside class="fd-side">
+        <div class="section-head"><h2>Endpoints</h2><span class="info-tip" data-tip="Every URL with one of the searched addresses that IFS calls, with the number of chains that reach it. A chain whose endpoint URL can't be read is listed under 'No endpoint URL'."></span></div>
+        <input id="fdFilter" type="search" placeholder="Filter endpoints or objects…" />
+        <ul id="fdGroupList" class="fd-group-list"></ul>
+      </aside>
+      <section class="fd-main">
+        <div class="section-head"><h2 id="fdGroupTitle">Chains</h2><span class="info-tip" data-tip="Each row is one path from the IFS trigger to Flow: Event → Event Action → Workflow → Routing Address → Flow endpoint, or shorter where IFS calls Flow more directly. Click a box to see the object's details."></span></div>
+        <div id="fdChains"></div>
+      </section>
+    </div>
+
+    <details id="fdErrors" class="fd-errors" hidden>
+      <summary id="fdErrorsSummary"></summary>
+      <ul id="fdErrorList"></ul>
+    </details>
+
+    <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
+    <script src="flow-deps.js"></script>
+  </body>
+</html>
