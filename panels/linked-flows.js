@@ -163,7 +163,7 @@ function lfRenderOpen() {
   if (!lf.itemId) { box.appendChild(lfH("span", { className: "api-hint", textContent: "Open a flow in the Flow Designer to see its link state here." })); return; }
   if (!lf.scan) { box.appendChild(lfH("span", { className: "api-hint", textContent: "Loading…" })); return; }
   if (!asset) { box.appendChild(lfH("span", { className: "api-hint", textContent: "The open flow is not in this organisation, or was created after the last scan. Pick its organisation or Rescan." })); return; }
-  const head = lfH("div", { className: "lf-strip-title" }, lfH("span", { className: "ft-icon ft-icon-flow", textContent: "F" }), lfH("span", { className: "ft-name", textContent: asset.name }));
+  const head = lfH("div", { className: "lf-strip-title" }, ftKindIcon(asset.type), lfH("span", { className: "ft-name", textContent: asset.name }));
   box.appendChild(head);
   if (!asset.tag) {
     head.appendChild(ftChip("Not linked", "muted"));
@@ -252,7 +252,7 @@ function lfRenderFlowList() {
       box.addEventListener("change", () => { if (box.checked) lf.sel.add(a.id); else lf.sel.delete(a.id); lfRenderFlowList(); });
       ul.appendChild(lfH("li", {}, lfH("label", { className: "ft-env-row lf-flow-row" },
         box,
-        lfH("span", { className: "ft-icon ft-icon-flow", textContent: "F" }),
+        ftKindIcon(a.type),
         lfH("span", { className: "ft-name", textContent: a.name, title: a.name }),
         a.tag ? ftChip(`⛓ ${a.tag.id}`, "muted", "Already linked: ticking it adds the other ticked flows to its group") : null,
         a.id === lf.itemId ? ftChip("open", "info", "Open in the Designer") : null)));
