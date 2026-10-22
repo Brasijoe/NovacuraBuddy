@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linked flows · Novacura Buddy</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body class="lf-page">
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+
+    <section id="panel-linked-flows" class="lf-page-main">
+      <header class="lf-page-head">
+        <div class="lf-page-title">
+          <h1>Linked flows</h1>
+          <span class="list-count" id="lfGroupCount"></span>
+          <span class="info-tip" data-tip="Every link group of the organisation in one table: a row per flow, a column per package. Click a status to see that copy and its actions. Sync pushes the group's newest version (or the one edited copy) to all copies; deploying is offered in the preview."></span>
+        </div>
+        <div class="lf-page-tools">
+          <label class="api-field lf-org">Organisation <select id="lfOrg"></select></label>
+          <input id="lfGroupFilter" type="search" class="lf-filter" placeholder="Filter flows and packages…" autocomplete="off" />
+          <label class="api-check lf-only"><input type="checkbox" id="lfOnlyAttention" /> Only needing attention</label>
+          <button id="lfRescanBtn" class="btn-ghost" title="Read all packages again">Rescan</button>
+        </div>
+        <p id="lfSessionHint" class="api-hint" hidden></p>
+      </header>
+
+      <div class="lf-page-grid">
+        <div id="lfGroups" class="lf-page-table"></div>
+        <aside id="lfWork" class="lf-work lf-page-aside"></aside>
+      </div>
+
+      <!-- The side panel's link-flows parts: the shared script expects them, the overview doesn't show them. -->
+      <div id="lfBrowse" hidden>
+        <div id="lfOpen"></div>
+        <span id="lfSelCount"></span>
+        <input id="lfFilter" type="search" />
+        <div id="lfSuggest"></div>
+        <ul id="lfFlowList"></ul>
+        <button id="lfLinkSelectedBtn"></button>
+        <button id="lfClearBtn"></button>
+      </div>
+    </section>
+
+    <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
+    <script src="lib/flow-tree.js"></script>
+    <script src="panels/flow-transfer.js"></script>
+    <script src="panels/linked-flows.js"></script>
+    <script src="panels/linked-overview.js"></script>
+  </body>
+</html>

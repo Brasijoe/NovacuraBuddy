@@ -10,6 +10,7 @@ importScripts(
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
   "lib/flow-links.js",
+  "lib/flow-environments.js",
   "lib/flow-token.js",
   "lib/ifs-client.js",
   "lib/ifs-permissions.js",
@@ -729,6 +730,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.outcome === "pushed").map((r) => r.id));
             return sendResponse({ ok: true, outcome });
           } finally { linkScanDone(message.orgId); }
+        }
+        case "LF_ENVIRONMENTS": { // the org's environments, and where the given flows are deployed
+          const flowFetch = boundFlowFetch();
+          const environments = await FlowEnvironments.listEnvironments({ flowFetch, orgId: message.orgId });
+          const deployed = {};
+          for (const f of message.flows || []) deployed[f.id] = await FlowEnvironments.deployedIn({ flowFetch, orgId: message.orgId, packageId: f.packageId, assetId: f.id, environments }).catch(() => []);
+          return sendResponse({ ok: true, environments, deployed });
+        }
+        case "LF_DEPLOY": { // the just committed head versions, read fresh after the push
+          const flowFetch = boundFlowFetch();
+          linkScanDone(message.orgId);
+          const index = new Map((await linkScan(message.orgId, true)).assets.map((a) => [a.id, a]));
+          const flows = message.assetIds.map((id) => index.get(id)).filter(Boolean).map((a) => ({ id: a.id, packageId: a.packageId, headVersionId: a.mainBranch && a.mainBranch.headVersionId }));
+          log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
+          return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }
         case "LF_UNLINK":
           try {

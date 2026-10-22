@@ -19,7 +19,7 @@ The side panel groups its tabs into three menus. Hover the ⓘ icons in the pane
 **Flow Functions**
 - **API Modules** – turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module (list GETs become Queryables) and adds it to the open flow.
 - **Import/Export** – export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package.
-- **Linked Flows** – keep copies of a master flow in other packages and push the master's logic to them *(in progress)*.
+- **Linked Flows** – link copies of one flow across packages (all copies equal), push or pull changes with a step diff, sync a whole group and deploy the new versions to your Flow environments, with a full-tab overview of every group.
 
 **Basic Data** – your IFS instances, credentials and the GitHub repository used for Quick Reports and Custom LUs.
 
