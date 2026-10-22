@@ -1,4 +1,4 @@
-/* Flows tab: export the flow open in the Designer (with its modules, sub-flows and other assets)
+/* Import/Export tab: export the flow open in the Designer (with its modules, sub-flows and other assets)
  * to a .json file, import such a file, or copy the flow straight into another organisation or
  * package. The background (lib/flow-transfer.js) reads and writes Flow Connect; this panel picks
  * the target, shows what exists there, and lets the user choose per asset: use the existing one
