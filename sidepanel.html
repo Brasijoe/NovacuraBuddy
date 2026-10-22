@@ -45,6 +45,7 @@
         <div class="tab-menu">
           <button id="tab-api-modules" class="tab-item" role="tab">API Modules</button>
           <button id="tab-flows" class="tab-item" role="tab">Import/Export</button>
+          <button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button>
         </div>
       </div>
       <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
@@ -228,6 +229,44 @@
       <div id="ftResult" class="ft-result" hidden></div>
     </section>
 
+    <section id="panel-linked-flows" role="tabpanel" hidden>
+      <div class="lf-head">
+        <label class="api-field lf-org">Organisation <select id="lfOrg"></select></label>
+        <button id="lfRescanBtn" class="btn-ghost" title="Read all packages again">Rescan</button>
+        <span class="info-tip" data-tip="Linked flows are copies of one flow in different packages of this organisation. All copies are equal: change any of them and push that version to the others. Each copy keeps its own name, menus and package modules. The link is a short tag at the end of each flow's description."></span>
+      </div>
+      <p id="lfSessionHint" class="api-hint" hidden></p>
+
+      <div id="lfBrowse" class="lf-browse">
+        <div class="lf-section-title"><h2>Open flow</h2><span class="info-tip" data-tip="The flow open in the Flow Designer. When it is linked you see how it compares to its copies, and you can push it or pull the latest version from here."></span></div>
+        <div id="lfOpen" class="lf-strip lf-strip-quiet"><span class="api-hint">Open a flow in the Flow Designer.</span></div>
+
+        <hr class="section-divider" />
+        <details id="lfLinkSection" class="tracker-section">
+          <summary><h2>Link flows</h2><span class="list-count" id="lfSelCount"></span><span class="info-tip" data-tip="Tick flows in different packages to link them. Linking only adds a tag to each flow's description; no steps change yet. You pick one version to start from: copies with the same steps are in sync right away, copies with other steps are marked 'Steps differ' until you push or pull. In the next step you can also create new linked copies in packages that don't have the flow yet (copy and link in one go)."></span></summary>
+          <input id="lfFilter" type="search" class="lf-filter" placeholder="Filter flows and packages…" autocomplete="off" />
+          <div id="lfSuggest" class="lf-suggest" hidden></div>
+          <ul id="lfFlowList" class="lf-pkg-list"></ul>
+          <div class="deploy-actions">
+            <button id="lfLinkSelectedBtn" class="btn-primary" disabled>Link selected…</button>
+            <button id="lfClearBtn" class="btn-ghost">Clear</button>
+          </div>
+        </details>
+
+        <hr class="section-divider" />
+        <details id="lfGroupsSection" class="tracker-section" open>
+          <summary><h2>Linked groups</h2><span class="list-count" id="lfGroupCount"></span><span class="info-tip" data-tip="Every link group in this organisation, one row per package. The pill shows how that copy compares to the group: In sync, Changed, not pushed (edited there), Behind (another copy pushed a newer version), Conflict (both), or Steps differ (linked with other steps and not pushed or pulled since). 'latest' marks where the newest version came from."></span></summary>
+          <div class="lf-group-tools">
+            <input id="lfGroupFilter" type="search" class="lf-filter" placeholder="Filter groups…" autocomplete="off" />
+            <label class="api-check lf-only"><input type="checkbox" id="lfOnlyAttention" /> Only needing attention</label>
+          </div>
+          <ul id="lfGroups" class="ft-tree lf-groups"></ul>
+        </details>
+      </div>
+
+      <div id="lfWork" class="lf-work" hidden></div>
+    </section>
+
     <section id="panel-basic-data" role="tabpanel" hidden>
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
@@ -278,6 +317,7 @@
     <script src="panels/api-modules.js"></script>
     <script src="lib/flow-tree.js"></script>
     <script src="panels/flow-transfer.js"></script>
+    <script src="panels/linked-flows.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

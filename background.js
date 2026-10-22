@@ -9,6 +9,7 @@ importScripts(
   "lib/flow-designer-tab.js",
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
+  "lib/flow-links.js",
   "lib/flow-token.js",
   "lib/ifs-client.js",
   "lib/ifs-permissions.js",
@@ -430,6 +431,19 @@ async function refreshIfOpen(orgId, itemIds) {
   }
 }
 
+/** Linked Flows tab: one scan of an organisation's assets (with link tags) is kept for a minute,
+ *  so the open-flow strip, the Link flows list and the overview share it. Writes drop it. */
+const linkScans = new Map(); // orgId -> { at, promise }
+function linkScan(orgId, force) {
+  const hit = linkScans.get(orgId);
+  if (!force && hit && Date.now() - hit.at < 60000) return hit.promise;
+  const promise = FlowLinks.scan({ flowFetch: boundFlowFetch(), orgId });
+  linkScans.set(orgId, { at: Date.now(), promise });
+  promise.catch(() => linkScans.delete(orgId));
+  return promise;
+}
+const linkScanDone = (orgId) => linkScans.delete(orgId);
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
@@ -682,6 +696,51 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.choice === "update").map((r) => r.targetId));
           return sendResponse({ ok: true, outcome });
         }
+        case "LF_CONTEXT": { // the open flow and the organisation the tab starts on
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          return sendResponse({ ok: true, orgId: designerTabState ? designerTabState.orgId : lastOrgId || null, itemId: designerTabState ? designerTabState.itemId : null, hasFlowToken: !!flowToken.get() });
+        }
+        case "LF_SCAN": {
+          const result = await linkScan(message.orgId, message.force);
+          const assets = result.assets.map(({ id, name, type, packageId, packageName, tag }) => ({ id, name, type, packageId, packageName, tag }));
+          return sendResponse({ ok: true, scan: { orgId: result.orgId, packages: result.packages, assets, scannedAt: result.scannedAt } });
+        }
+        case "LF_STATUSES":
+          return sendResponse({ ok: true, statuses: await FlowLinks.statuses({ flowFetch: boundFlowFetch(), orgId: message.orgId, scanResult: await linkScan(message.orgId), linkIds: message.linkIds }) });
+        case "LF_PLAN_LINK":
+          return sendResponse({ ok: true, plan: await FlowLinks.planLink({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, adoptIds: message.adoptIds, newPackageIds: message.newPackageIds, scanResult: await linkScan(message.orgId, message.force) }) });
+        case "LF_LINK": {
+          log("LF_LINK start:", message.sourceId, "adopt", message.adoptIds, "new in", message.newPackageIds);
+          try {
+            const outcome = await FlowLinks.runLink({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, adoptIds: message.adoptIds, newPackageIds: message.newPackageIds, log });
+            return sendResponse({ ok: true, outcome });
+          } finally { linkScanDone(message.orgId); }
+        }
+        case "LF_PLAN_PUSH":
+          return sendResponse({ ok: true, plan: await FlowLinks.planPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, targetIds: message.targetIds, scanResult: await linkScan(message.orgId, true) }) });
+        case "LF_LATEST": {
+          const latest = await FlowLinks.latestOf({ flowFetch: boundFlowFetch(), orgId: message.orgId, scanResult: await linkScan(message.orgId, true), linkId: message.linkId, exceptId: message.exceptId });
+          return sendResponse({ ok: true, latest: latest ? { id: latest.id, name: latest.name, packageName: latest.packageName } : null });
+        }
+        case "LF_PUSH": {
+          log("LF_PUSH start:", message.sourceId, "->", message.targets.map((t) => t.id));
+          try {
+            const outcome = await FlowLinks.runPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, targets: message.targets, expectedMaxRev: message.expectedMaxRev, expectedSourceFp: message.expectedSourceFp, log });
+            await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.outcome === "pushed").map((r) => r.id));
+            return sendResponse({ ok: true, outcome });
+          } finally { linkScanDone(message.orgId); }
+        }
+        case "LF_UNLINK":
+          try {
+            await FlowLinks.unlink({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId });
+            return sendResponse({ ok: true });
+          } finally { linkScanDone(message.orgId); }
+        case "LF_UNDO":
+          try {
+            await FlowLinks.undoPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId, undo: message.undo });
+            await refreshIfOpen(message.orgId, [message.assetId]);
+            return sendResponse({ ok: true });
+          } finally { linkScanDone(message.orgId); }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
           runUpdateCheckIfDue().catch((e) => logError("Update check failed:", e.message));
