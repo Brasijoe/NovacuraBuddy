@@ -15,8 +15,9 @@ let ftBusy = false;
 let ftDesigner = { open: false, hasFlowToken: false };
 let ftPlanSeq = 0;
 // Where an import puts things when the file carries its packages: recreate them ("packages") or
-// all into the picked package ("single"); per exported package "use" | "create"; fallback target.
-let ftLayout = { mode: "packages", packageChoices: {}, fallback: undefined };
+// all into the picked package ("single"); per exported package "use" | "create". App Library
+// assets always go back to the App Library (a flow can only use its own package and that).
+let ftLayout = { mode: "packages", packageChoices: {} };
 // Environment tree selection, one organisation at a time: whole packages (key "" = App Library)
 // and single assets.
 let ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
@@ -502,7 +503,7 @@ async function ftOpen(pkg, mode) {
   ftEl("ftIfsBox").hidden = true;
   ftEl("ftIfs").innerHTML = "";
   const hasPackages = !!(pkg.packages && pkg.packages.length);
-  ftLayout = { mode: hasPackages ? "packages" : "single", packageChoices: {}, fallback: undefined };
+  ftLayout = { mode: hasPackages ? "packages" : "single", packageChoices: {} };
   ftEl("ftLayoutBox").hidden = !hasPackages;
   for (const radio of document.querySelectorAll('input[name="ftLayout"]')) radio.checked = radio.value === ftLayout.mode;
   ftApplyLayout();
@@ -559,7 +560,7 @@ function ftTargetPackageName(target) {
   return t ? t.name : target;
 }
 
-/** The exported packages with their choice, and where other dependencies go. */
+/** The exported packages with their choice. */
 function ftRenderPackages() {
   ftApplyLayout();
   const list = ftEl("ftPackages");
@@ -588,14 +589,6 @@ function ftRenderPackages() {
     li.append(head, select);
     list.appendChild(li);
   }
-  const fallback = ftEl("ftFallback");
-  fallback.innerHTML = "";
-  for (const p of ftPlan.packages) ftOption(fallback, `new:${p.source.id}`, `${p.choice === "use" ? p.existing.name : p.newName} (exported)`);
-  ftOption(fallback, "", "App Library");
-  for (const t of ftPlan.targetPackages || []) if (!ftPlan.packages.some((p) => p.existing && p.existing.id === t.id)) ftOption(fallback, t.id, t.name);
-  fallback.value = ftPlan.fallback && ftPlan.fallback.startsWith("new:") ? ftPlan.fallback
-    : ftPlan.packages.find((p) => p.target === ftPlan.fallback) ? `new:${ftPlan.packages.find((p) => p.target === ftPlan.fallback).source.id}`
-    : ftPlan.fallback || "";
 }
 
 /** The plan as the dependency tree: each asset's status chips and choice sit on its first card. */
@@ -606,7 +599,7 @@ function ftRenderPlan() {
     if (!row) return;
     const code = row.sameCode === true ? ftChip("Same code", "ok") : row.sameCode === false ? ftChip("Code differs", "warn") : null;
     const ifs = row.ifsProjection ? ftChip(`IFS ${row.ifsProjection}`, "muted", "Generated from this IFS projection") : null;
-    const where = ftPlan.layout === "packages" ? ftChip(`→ ${ftTargetPackageName(row.targetPackage)}`, "muted", "Target package") : null;
+    const where = ftPlan.layout === "packages" || !row.targetPackage ? ftChip(`→ ${ftTargetPackageName(row.targetPackage)}`, "muted", "Where it goes in the target") : null;
     card.appendChild(row.existing
       ? ftChipRow(ftChip(FT_LOCATION_CHIPS[row.existing.location] || row.existing.location, "info", `Matched by name: ${row.existing.name}`), code, ifs, where)
       : ftChipRow(ftChip("New in target", "ok", "Not in the target yet, will be created"), ifs, where));
@@ -794,10 +787,6 @@ function initFlowTransferPanel() {
       ftLoadPlan();
     });
   }
-  ftEl("ftFallback").addEventListener("change", () => {
-    ftLayout.fallback = ftEl("ftFallback").value;
-    ftLoadPlan();
-  });
   ftEl("ftRunBtn").addEventListener("click", () => ftRun(ftEl("ftRunBtn"), ftMode === "copy" ? "Copying…" : "Importing…", ftRunImport));
   ftEl("ftCancelBtn").addEventListener("click", ftCancel);
   refreshFlowTransferState();
