@@ -725,7 +725,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "LF_PUSH": {
           log("LF_PUSH start:", message.sourceId, "->", message.targets.map((t) => t.id));
           try {
-            const outcome = await FlowLinks.runPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, targets: message.targets, expectedMaxRev: message.expectedMaxRev, expectedSourceFp: message.expectedSourceFp, log });
+            const outcome = await FlowLinks.runPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, targets: message.targets, expectedMaxRev: message.expectedMaxRev, expectedSourceFp: message.expectedSourceFp, expectedSourceETag: message.expectedSourceETag, log });
             await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.outcome === "pushed").map((r) => r.id));
             return sendResponse({ ok: true, outcome });
           } finally { linkScanDone(message.orgId); }

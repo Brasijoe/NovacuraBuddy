@@ -651,7 +651,7 @@ async function lfRunPush() {
   const w = lf.work;
   const { plan } = w;
   const targets = plan.targets.filter((x) => w.include[x.asset.id] && !x.blocked).map((x) => ({ id: x.asset.id, overwrite: !!w.overwrite[x.asset.id] }));
-  const response = await sendOrShowError({ type: "LF_PUSH", orgId: lf.orgId, sourceId: plan.sourceId, targets, expectedMaxRev: plan.maxRev, expectedSourceFp: plan.sourceFp }, true);
+  const response = await sendOrShowError({ type: "LF_PUSH", orgId: lf.orgId, sourceId: plan.sourceId, targets, expectedMaxRev: plan.maxRev, expectedSourceFp: plan.sourceFp, expectedSourceETag: plan.sourceETag }, true);
   if (!response) return;
   const o = response.outcome;
   const pushed = o.results.filter((r) => r.outcome === "pushed").length;
