@@ -241,7 +241,7 @@ function lfMemberActions(asset, status, primary) {
   if (status === "behind" || status === "conflict" || status === "differs") ctas.appendChild(pull);
   if (status === "conflict") ctas.appendChild(push);
   if (!primary) row.appendChild(lfH("button", { className: "btn-ghost", textContent: "Open", onclick: () => lfOpenInDesigner(asset.id) }));
-  if (primary) row.appendChild(lfH("button", { className: "btn-ghost", textContent: "Copy to more packages…", title: "Create more linked copies of this flow in other packages", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }));
+  if (primary) ctas.appendChild(lfCta({ icon: "link", tone: "blue", label: "Copy to more packages", title: "Create more linked copies of this flow in other packages", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }));
   row.appendChild(lfUnlinkButton(asset));
   return primary ? lfH("div", { className: "lf-browse" }, ctas.childNodes.length ? ctas : null, row) : row;
 }
@@ -364,7 +364,7 @@ function lfSyncButton(members, compact) {
   const sync = lfSyncPlan(members);
   if (!sync) return null;
   return lfCta({
-    icon: "sync", label: compact ? "Sync" : "Sync group", badge: compact ? null : sync.badge, compact,
+    icon: "sync", tone: "blue", label: compact ? "Sync" : "Sync group", badge: compact ? null : sync.badge, compact,
     title: `Push the version in ${sync.source.packageName} to the other copies. You see the difference per copy and can deploy afterwards.`,
     onclick: () => lfStartPush(sync.source.id, null, null, { sync: true })
   });
@@ -407,11 +407,12 @@ function lfRenderGroups() {
       lfH("div", { className: "ft-node-head" },
         lfH("span", { className: "ft-icon lf-icon-link", textContent: "⛓" }),
         lfH("span", { className: "ft-name", textContent: members[0].name }),
-        ftChip(linkId, "muted", "Link id"),
-        lfH("button", { className: "btn-ghost lf-add-pkg", textContent: "+ Packages", title: "Copy this flow into more packages, linked to the group", onclick: () => lfStartLink([(members.find((m) => lfStatusOf(m.id) === "in_sync") || members[0]).id], { suggestSame: true }) })),
+        ftChip(linkId, "muted", "Link id")),
       lfH("span", { className: "ft-kind", textContent: `${members.length} package${members.length === 1 ? "" : "s"} · rev ${maxRev}${latest ? ` from ${latest.packageName}` : ""}${lf.statusesLoading ? " · checking…" : ""}` }));
     const sync = lfSyncButton(members, false);
     if (sync) card.appendChild(sync);
+    card.appendChild(lfCta({ icon: "link", tone: "blue", label: "Copy to more packages", title: "Copy this flow into more packages, linked to the group",
+      onclick: () => lfStartLink([(members.find((m) => lfStatusOf(m.id) === "in_sync") || members[0]).id], { suggestSame: true }) }));
     const rows = lfH("ul", {});
     for (const m of members) {
       const status = lfStatusOf(m.id);
@@ -422,7 +423,6 @@ function lfRenderGroups() {
           m === latest ? lfH("span", { className: "ft-kind", textContent: "latest", title: "The newest version came from this copy" }) : null,
           m.id === lf.itemId ? ftChip("open", "info") : null,
           lfStatusChip(status)));
-      if (status !== "checking") node.appendChild(lfMemberActions(m, status, false));
       rows.appendChild(lfH("li", {}, node));
     }
     ul.appendChild(lfH("li", {}, card, rows));
@@ -718,7 +718,8 @@ async function lfStartPush(sourceId, targetIds, pullInto, opts) {
 async function lfLoadEnvironments(w) {
   const flows = [lfAsset(w.plan.sourceId), ...w.plan.targets.map((t) => t.asset)].filter(Boolean).map((a) => ({ id: a.id, packageId: a.packageId }));
   const response = await send({ type: "LF_ENVIRONMENTS", orgId: lf.orgId, flows });
-  w.envs = response.ok ? { list: response.environments, deployed: response.deployed || {} } : { list: [], deployed: {}, error: response.error };
+  // Development is where flows are built; Flow deploys only to the other environments.
+  w.envs = response.ok ? { list: response.environments.filter((e) => e.type !== "dev"), deployed: response.deployed || {} } : { list: [], deployed: {}, error: response.error };
   if (lf.work === w) lfRenderPush();
 }
 
@@ -731,7 +732,7 @@ function lfRenderDeploy(w) {
     infoTip("Optional. Tick the environments that should get the new versions right after the push. Each synced copy is deployed from its own package. Nothing is remembered: every sync starts with none ticked.")));
   if (!w.envs) { box.appendChild(lfH("span", { className: "api-hint", textContent: "Reading environments…" })); return box; }
   if (w.envs.error) { box.appendChild(lfH("span", { className: "api-hint", textContent: `Environments could not be read: ${w.envs.error}` })); return box; }
-  if (!w.envs.list.length) { box.appendChild(lfH("span", { className: "api-hint", textContent: "This organisation has no environments." })); return box; }
+  if (!w.envs.list.length) { box.appendChild(lfH("span", { className: "api-hint", textContent: "This organisation has no environments to deploy to." })); return box; }
   const ids = lfSyncedIds(w);
   const chips = lfH("div", { className: "lf-env-chips" });
   for (const env of w.envs.list) {
@@ -899,7 +900,7 @@ async function lfRunPush() {
       const bad = res.results.filter((x) => !x.ok);
       rows.push({
         outcome: bad.length && !good.length ? "failed" : "deployed",
-        packageName: `Deployed to ${env.name}${env.isProduction ? " (PROD)" : ""}`,
+        packageName: `${!good.length ? "Not deployed to" : bad.length ? `Partly deployed to` : "Deployed to"} ${env.name}${env.isProduction ? " (PROD)" : ""}`,
         note: [good.length ? `${good.map((x) => name(x.id)).join(", ")}` : null, ...bad.map((x) => `${name(x.id)}: ${x.error}`)].filter(Boolean).join(" · ")
       });
     }

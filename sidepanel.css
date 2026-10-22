@@ -492,7 +492,7 @@ input.rename-input { width: 100%; }
 .ft-env-row.ft-env-ref .ft-name { font-weight: 400; color: var(--ink-muted); }
 .ft-env-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
 .ft-icon-org { background: #3a4a8c; }
-.ft-icon-package { background: #fd6e15; }
+.ft-icon-package { background: #5b8fd0; }
 .ft-icon-library { background: #6b7a90; }
 .ft-env-status { font-size: 11.5px; color: var(--ink-muted); padding: 2px 0 2px 26px; }
 #ftEnvTree, #ftEnvFiltered { max-height: 420px; overflow-y: auto; padding-right: 2px; }
@@ -613,7 +613,6 @@ input.ft-filter:focus-visible { border-color: var(--accent); outline: none; }
 .search-row .info-tip, .deploy-actions .info-tip, .api-source-actions .info-tip { align-self: center; }
 input.lf-filter { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); padding: 6px 12px; }
 input.lf-filter:focus-visible { border-color: var(--accent); outline: none; }
-.lf-add-pkg { font-size: 12px; padding: 2px 8px; }
 
 /* --- Linked Flows: one-line action buttons (icon, badge, label, arrow end) --- */
 .lf-cta {
@@ -645,6 +644,7 @@ input.lf-filter:focus-visible { border-color: var(--accent); outline: none; }
 .lf-cta-pull { --cta-bg: #ffe5d1; --cta-ink: #7d3406; --cta-strong: #e3600f; }
 .lf-cta-deploy { --cta-bg: #ebe2ff; --cta-ink: #45248f; --cta-strong: #7448dc; }
 .lf-cta-link { --cta-bg: #e4e8ef; --cta-ink: #1c2433; --cta-strong: #465466; }
+.lf-cta-blue { --cta-bg: #e5f0ff; --cta-ink: #17489a; --cta-strong: #4a86e8; }
 @media (prefers-color-scheme: dark) {
   .lf-cta { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
   .lf-cta-icon { background: rgba(255, 255, 255, 0.1); }
@@ -654,11 +654,13 @@ input.lf-filter:focus-visible { border-color: var(--accent); outline: none; }
   .lf-cta-pull { --cta-bg: rgba(253, 110, 21, 0.2); --cta-ink: #ffd5b8; --cta-strong: #ff8a3d; }
   .lf-cta-deploy { --cta-bg: rgba(116, 72, 220, 0.26); --cta-ink: #e0d4ff; --cta-strong: #a283ff; }
   .lf-cta-link { --cta-bg: rgba(255, 255, 255, 0.08); --cta-ink: #e4e8ef; --cta-strong: #9ea7b4; }
+  .lf-cta-blue { --cta-bg: rgba(74, 134, 232, 0.2); --cta-ink: #d3e3ff; --cta-strong: #7aa9f5; }
 }
 .lf-cta-row { display: flex; align-items: center; gap: 6px; }
 .lf-cta-row > .lf-cta { flex: 1; }
 .lf-cta-stack { display: flex; flex-direction: column; gap: 6px; }
 .lf-groups .ft-node > .lf-cta { margin-top: 6px; }
+.lf-groups .ft-node > .lf-cta + .lf-cta { margin-top: 4px; }
 
 /* --- deploy after sync --- */
 .lf-deploy { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--surface-raised); border-radius: 12px; }
