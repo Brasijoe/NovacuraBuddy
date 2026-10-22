@@ -1,0 +1,56 @@
+# Publishes the GitHub Release (tag vX.Y.Z + NovacuraBuddy-vX.Y.Z.zip, the asset the update banner
+# downloads) for the version in manifest.json. Runs when manifest.json changes on master, or by hand.
+# Does nothing if that version's tag already exists, so `npm run release` from a PC with gh still works.
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths: [manifest.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read version
+        id: version
+        run: |
+          v=$(node -p "require('./manifest.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "Tag v$v already exists, nothing to release."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Test
+        if: steps.version.outputs.exists != 'true'
+        run: npm test
+      - name: Build zip
+        if: steps.version.outputs.exists != 'true'
+        run: |
+          stage=$(mktemp -d)
+          node -e '
+            const fs = require("node:fs"), path = require("node:path");
+            const { collectReleaseFiles } = require("./scripts/release-files.js");
+            for (const f of collectReleaseFiles(".")) {
+              const dest = path.join(process.argv[1], f);
+              fs.mkdirSync(path.dirname(dest), { recursive: true });
+              fs.copyFileSync(f, dest);
+            }' "$stage"
+          (cd "$stage" && zip -qr -9 "$GITHUB_WORKSPACE/NovacuraBuddy-v${{ steps.version.outputs.version }}.zip" .)
+      - name: Publish release
+        if: steps.version.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${{ steps.version.outputs.version }}
+          gh release create "v$v" "NovacuraBuddy-v$v.zip" --target "$GITHUB_SHA" --title "v$v" --generate-notes
