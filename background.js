@@ -748,7 +748,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const ifs = { get: client.get, getText: client.getText };
           const onProgress = (step, current, total) =>
             chrome.runtime.sendMessage({ type: "FD_SCAN_PROGRESS", scanId: message.scanId, step, current, total }).catch(() => {});
-          const result = { baseUrl: IfsInstances.normalizeBaseUrl(message.baseUrl), ...(await FlowDeps.runScan({ ifs, onProgress })) };
+          const result = { baseUrl: IfsInstances.normalizeBaseUrl(message.baseUrl), ...(await FlowDeps.runScan({ ifs, patterns: message.patterns, onProgress })) };
           await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
           return sendResponse({ ok: true, result });
         }

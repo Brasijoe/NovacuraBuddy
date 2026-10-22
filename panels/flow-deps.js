@@ -6,6 +6,57 @@ function fdHint(text) {
   el.hidden = !text;
 }
 
+// Which addresses the scan searches: the two Novacura hosts (unless unticked) plus the user's own.
+// Kept in chrome.storage.local so the results page's Rescan uses the same list.
+const FD_ADDRESSES_KEY = "flowDepsAddresses"; // { useDefaults, custom: [] }
+let fdAddresses = { useDefaults: true, custom: [] };
+
+async function fdLoadAddresses() {
+  const { [FD_ADDRESSES_KEY]: stored } = await chrome.storage.local.get(FD_ADDRESSES_KEY);
+  fdAddresses = { useDefaults: true, custom: [], ...(stored || {}) };
+  fdRenderAddresses();
+}
+
+function fdSaveAddresses() {
+  chrome.storage.local.set({ [FD_ADDRESSES_KEY]: fdAddresses });
+  fdRenderAddresses();
+}
+
+function fdRenderAddresses() {
+  document.getElementById("fdUseDefaults").checked = fdAddresses.useDefaults;
+  const list = document.getElementById("fdAddressList");
+  list.innerHTML = "";
+  for (const address of fdAddresses.custom) {
+    const li = document.createElement("li");
+    li.append(address);
+    const remove = document.createElement("button");
+    remove.textContent = "✕";
+    remove.title = `Remove ${address}`;
+    remove.onclick = () => { fdAddresses.custom = fdAddresses.custom.filter((a) => a !== address); fdSaveAddresses(); };
+    li.appendChild(remove);
+    list.appendChild(li);
+  }
+  fdUpdateScanBtn();
+}
+
+function fdAddAddress() {
+  const input = document.getElementById("fdAddressInput");
+  const address = input.value.trim();
+  if (!address) return;
+  if (!fdAddresses.custom.some((a) => a.toLowerCase() === address.toLowerCase())) fdAddresses.custom.push(address);
+  input.value = "";
+  fdSaveAddresses();
+}
+
+function fdUpdateScanBtn() {
+  const hasAddress = fdAddresses.useDefaults || fdAddresses.custom.length > 0;
+  document.getElementById("fdScanBtn").disabled = !document.getElementById("fdInstanceSelect").value || !hasAddress;
+}
+
+document.getElementById("fdUseDefaults").addEventListener("change", (e) => { fdAddresses.useDefaults = e.target.checked; fdSaveAddresses(); });
+document.getElementById("fdAddressAddBtn").addEventListener("click", fdAddAddress);
+document.getElementById("fdAddressInput").addEventListener("keydown", (e) => { if (e.key === "Enter") fdAddAddress(); });
+
 function openFlowDeps(baseUrl, scan) {
   chrome.tabs.create({ url: chrome.runtime.getURL(`flow-deps.html?baseUrl=${encodeURIComponent(baseUrl)}${scan ? "&scan=1" : ""}`) });
 }
@@ -13,7 +64,7 @@ function openFlowDeps(baseUrl, scan) {
 async function fdShowLast() {
   const select = document.getElementById("fdInstanceSelect");
   const last = document.getElementById("fdLast");
-  document.getElementById("fdScanBtn").disabled = !select.value;
+  fdUpdateScanBtn();
   last.hidden = true;
   if (!select.value) return;
   const baseUrl = select.value;
@@ -29,6 +80,7 @@ async function fdShowLast() {
 }
 
 async function fdOnShow() {
+  fdLoadAddresses();
   const select = document.getElementById("fdInstanceSelect");
   const previous = select.value;
   const response = await send({ type: "LIST_INSTANCES" });

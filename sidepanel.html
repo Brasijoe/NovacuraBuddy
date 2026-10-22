@@ -131,8 +131,15 @@
     </section>
 
     <section id="panel-flow-deps" role="tabpanel" hidden>
-      <div class="section-head"><h2>Select Flow installation</h2><span class="info-tip" data-tip="Choose the IFS installation (from Basic Data) and hit Scan. The scan reads routing addresses, active workflows (their BPMN diagrams), event actions and published page commands and finds every call to run.novacura.com or app.novacura.com. The results open in a new tab, grouped per Flow endpoint. Large installations take a minute, since every active workflow diagram is downloaded. Read-only."></span></div>
+      <div class="section-head"><h2>Select Flow installation</h2><span class="info-tip" data-tip="Choose the IFS installation (from Basic Data) and hit Scan. The scan reads routing addresses, active workflows (their BPMN diagrams), event actions and published page commands and finds every call to the addresses under Search for. The results open in a new tab, grouped per Flow endpoint. Large installations take a minute, since every active workflow diagram is downloaded. Read-only."></span></div>
       <select id="fdInstanceSelect"></select>
+      <div class="section-head"><h2>Search for</h2><span class="info-tip" data-tip="The addresses the scan looks for. Each entry matches anywhere inside a URL or text, so a part of an address works too (e.g. novacura.com or 10.49.101). Add as many as you need; untick the Novacura hosts to search only your own."></span></div>
+      <label class="fd-default"><input type="checkbox" id="fdUseDefaults" checked /> run.novacura.com, app.novacura.com</label>
+      <ul id="fdAddressList" class="fd-address-list"></ul>
+      <div class="search-row">
+        <input id="fdAddressInput" placeholder="Add an address or part of one…" />
+        <button id="fdAddressAddBtn">Add</button>
+      </div>
       <button id="fdScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
       <div id="fdHint" class="empty-state" hidden></div>
       <p id="fdLast" class="list-count" hidden></p>

@@ -12,7 +12,7 @@ const TYPE_LABELS = {
   workflow: "Workflow",
   routingAddress: "Routing Address",
   pageCommand: "Page Command",
-  endpoint: "Flow Endpoint"
+  endpoint: "Endpoint"
 };
 
 let result = null;
@@ -26,7 +26,7 @@ function nodeLabel(node) {
     case "workflow": return d.processKey;
     case "routingAddress": return d.addressName;
     case "pageCommand": return d.name || d.dataId;
-    case "endpoint": return d.url || (d.matchedHosts || []).join(", ") || "Flow";
+    case "endpoint": return d.url || (d.matchedPatterns || []).join(", ") || "Endpoint";
     default: return node.type;
   }
 }
@@ -192,9 +192,9 @@ function showResult(r) {
   }
   const c = r.counts;
   document.getElementById("fdSummary").textContent =
-    `Scanned ${new Date(r.scannedAt).toLocaleString()} · ${r.chains.length} chain(s) to ${Object.keys(r.grouped.groups).length} Flow endpoint(s) · ` +
+    `Scanned ${new Date(r.scannedAt).toLocaleString()} for ${(r.patterns || []).join(", ")} · ${r.chains.length} chain(s) to ${Object.keys(r.grouped.groups).length} endpoint(s) · ` +
     `${c.routingAddresses} routing address(es), ${c.workflows} workflow match(es) in ${c.workflowsScanned} active workflow(s), ${c.eventActions} event action(s), ${c.pageCommands} page command(s)`;
-  empty.textContent = r.chains.length ? "" : "Nothing in this installation calls run.novacura.com or app.novacura.com.";
+  empty.textContent = r.chains.length ? "" : `Nothing in this installation calls ${(r.patterns || []).join(", ")}.`;
   empty.hidden = !!r.chains.length;
   document.getElementById("fdResults").hidden = !r.chains.length;
   if (r.chains.length) render();
@@ -219,6 +219,13 @@ chrome.runtime.onMessage.addListener((message) => {
   document.getElementById("fdProgressLabel").textContent = `${message.step}: ${message.current}/${message.total}`;
 });
 
+// The side panel's Search for list (panels/flow-deps.js), read fresh for every scan.
+async function searchPatterns() {
+  const { flowDepsAddresses: a } = await chrome.storage.local.get("flowDepsAddresses");
+  const settings = { useDefaults: true, custom: [], ...(a || {}) };
+  return [...(settings.useDefaults ? ["run.novacura.com", "app.novacura.com"] : []), ...settings.custom];
+}
+
 async function scan() {
   const btn = document.getElementById("fdRescanBtn");
   btn.disabled = true;
@@ -227,7 +234,7 @@ async function scan() {
   document.getElementById("fdProgressFill").style.width = "0%";
   document.getElementById("fdProgressLabel").textContent = "Starting…";
   if (!result) document.getElementById("fdEmpty").hidden = true;
-  const response = await send({ type: "FD_SCAN", baseUrl, scanId: currentScanId, masterPassword: "" });
+  const response = await send({ type: "FD_SCAN", baseUrl, scanId: currentScanId, patterns: await searchPatterns(), masterPassword: "" });
   document.getElementById("fdProgress").hidden = true;
   btn.disabled = false;
   // A failed scan leaves the previous result on screen.

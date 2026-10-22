@@ -615,3 +615,7 @@ input.lf-filter { font: inherit; color: var(--ink); background: var(--surface); 
 input.lf-filter:focus-visible { border-color: var(--accent); outline: none; }
 .lf-add-pkg { font-size: 12px; padding: 2px 8px; }
 .fd-scan-btn { align-self: flex-start; }
+.fd-default { display: flex; align-items: center; gap: 6px; }
+.fd-address-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.fd-address-list li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: var(--radius-full); background: var(--surface-raised); font-family: var(--font-mono); font-size: 12px; }
+.fd-address-list button { padding: 0 6px; border: none; background: none; line-height: 1.4; }
