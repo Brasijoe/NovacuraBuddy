@@ -165,15 +165,13 @@
       <p id="ftSourceHint" class="api-hint" hidden></p>
       <hr class="section-divider" />
       <details id="ftBrowse" class="tracker-section">
-        <summary><h2>Export from a package</h2><span class="list-count" id="ftBrowseCount"></span></summary>
-        <p class="api-hint">Pick flows or a whole package. No Designer tab needed, only a Flow session.</p>
-        <label class="api-field">Organisation <select id="ftBrowseOrg"></select></label>
-        <label class="api-field">Package <select id="ftBrowsePackage"></select></label>
+        <summary><h2>Export or copy from Flow</h2></summary>
+        <p class="api-hint">Your organisations, their packages and App Library, and what each flow uses. Tick whole packages or single flows and modules (one organisation at a time). Levels load when you open them.</p>
         <div class="list-toolbar">
-          <label class="api-check"><input type="checkbox" id="ftBrowseAll" /> Whole package</label>
           <span class="ft-chip ft-chip-info" id="ftBrowseSelected"></span>
+          <button id="ftBrowseClear" class="btn-ghost">Clear</button>
         </div>
-        <div id="ftBrowseList" class="ft-folders"></div>
+        <ul id="ftEnvTree" class="ft-env"></ul>
         <div class="deploy-actions">
           <button id="ftBrowseExportBtn">Export selected</button>
           <button id="ftBrowseCopyBtn" class="btn-primary">Copy selected to…</button>

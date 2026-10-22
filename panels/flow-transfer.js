@@ -14,8 +14,10 @@ let ftConnectorChoices = {}; // source connector id -> target connector id ("" =
 let ftBusy = false;
 let ftDesigner = { open: false, hasFlowToken: false };
 let ftPlanSeq = 0;
-let ftBrowseAssets = []; // [{ id, name, type }] of the browsed package
-let ftBrowseSelected = new Set();
+// Environment tree selection, one organisation at a time: whole packages (key "" = App Library)
+// and single assets.
+let ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
+let ftEnvLoaded = false;
 
 const ftEl = (id) => document.getElementById(id);
 
@@ -105,8 +107,9 @@ function ftApplyState() {
   }
   const noSession = !ftDesigner.hasFlowToken;
   ftEl("ftImportBtn").disabled = ftBusy || noSession;
-  ftEl("ftBrowseExportBtn").disabled = ftBusy || noSession || !ftBrowseSelected.size;
-  ftEl("ftBrowseCopyBtn").disabled = ftBusy || noSession || !ftBrowseSelected.size;
+  const nothing = !ftSel.packages.size && !ftSel.assets.size;
+  ftEl("ftBrowseExportBtn").disabled = ftBusy || noSession || nothing;
+  ftEl("ftBrowseCopyBtn").disabled = ftBusy || noSession || nothing;
   ftEl("ftRunBtn").disabled = ftBusy || !ftPlan;
   const hint = ftEl("ftSourceHint");
   hint.textContent = noSession ? "No Flow session yet: open build.novacura.com and click in it once." : reason;
@@ -119,7 +122,7 @@ async function refreshFlowTransferState() {
   const hadSession = ftDesigner.hasFlowToken;
   ftDesigner = { open: response.open, hasFlowToken: response.hasFlowToken };
   ftApplyState();
-  if (!hadSession && ftDesigner.hasFlowToken && ftEl("ftBrowse").open && !ftEl("ftBrowseOrg").options.length) ftBrowseInit();
+  if (!hadSession && ftDesigner.hasFlowToken && ftEl("ftBrowse").open && !ftEnvLoaded) ftEnvInit();
 }
 
 async function ftRun(btn, busyLabel, action) {
@@ -235,100 +238,187 @@ async function ftFillPackages(select, orgId, packageId) {
   if (packageId && response.packages.some((p) => p.id === packageId)) select.value = packageId;
 }
 
-/* --- package browser --- */
+/* --- environment tree --- */
 
-async function ftBrowseInit() {
-  const t = await ftFillOrgs(ftEl("ftBrowseOrg"), null);
-  if (!ftEl("ftBrowseOrg").options.length) return;
-  await ftFillPackages(ftEl("ftBrowsePackage"), ftEl("ftBrowseOrg").value, t && t.orgId === ftEl("ftBrowseOrg").value ? t.packageId : null);
-  await ftBrowseLoad();
-}
-
-async function ftBrowseLoad() {
-  const list = ftEl("ftBrowseList");
-  list.innerHTML = '<p class="ft-note">Loading…</p>';
-  ftBrowseSelected = new Set();
-  const response = await actionOrShowError({ type: "FT_LIST_ASSETS", orgId: ftEl("ftBrowseOrg").value, packageId: ftEl("ftBrowsePackage").value || null });
-  ftBrowseAssets = response ? response.assets : [];
-  ftBrowseRender();
-}
-
-function ftBrowseRender() {
-  const list = ftEl("ftBrowseList");
-  list.innerHTML = "";
-  if (!ftBrowseAssets.length) list.innerHTML = '<p class="ft-note">Nothing in this package.</p>';
-  const groups = new Map();
-  for (const a of ftBrowseAssets) {
-    const label = ftKind(a.type).label;
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label).push(a);
-  }
-  const sorted = [...groups.entries()].sort(([a], [b]) => (a === "Flow" ? -1 : b === "Flow" ? 1 : a.localeCompare(b)));
-  for (const [label, assets] of sorted) {
-    const folder = document.createElement("details");
-    folder.className = "ft-folder";
-    folder.open = label === "Flow";
-    const summary = document.createElement("summary");
+/** One expandable row. `load()` returns the child specs the first time it is opened. */
+function ftEnvRow(spec) {
+  const li = document.createElement("li");
+  const row = document.createElement("div");
+  row.className = `ft-env-row ft-env-${spec.kind}`;
+  const twisty = document.createElement("button");
+  twisty.className = "ft-twisty";
+  twisty.textContent = "▸";
+  twisty.setAttribute("aria-expanded", "false");
+  twisty.disabled = !spec.load;
+  row.appendChild(twisty);
+  if (spec.selectKey) {
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.addEventListener("click", (e) => e.stopPropagation());
-    box.addEventListener("change", () => {
-      for (const a of assets) box.checked ? ftBrowseSelected.add(a.id) : ftBrowseSelected.delete(a.id);
-      ftBrowseSync();
-    });
-    const icon = document.createElement("span");
-    icon.className = `ft-icon ft-icon-${ftKind(assets[0].type).cls}`;
-    icon.textContent = ftKind(assets[0].type).icon;
-    const name = document.createElement("span");
-    name.className = "ft-name";
-    name.textContent = `${label}s`;
-    summary.append(box, icon, name, ftChip("", "info"));
-    const ul = document.createElement("ul");
-    for (const a of assets) {
-      const li = document.createElement("li");
-      const row = document.createElement("label");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.dataset.assetId = a.id;
-      cb.addEventListener("change", () => {
-        cb.checked ? ftBrowseSelected.add(a.id) : ftBrowseSelected.delete(a.id);
-        ftBrowseSync();
-      });
-      const text = document.createElement("span");
-      text.textContent = a.name;
-      row.append(cb, text);
-      li.appendChild(row);
-      ul.appendChild(li);
-    }
-    folder.dataset.ids = assets.map((a) => a.id).join(",");
-    folder.append(summary, ul);
-    list.appendChild(folder);
+    box.dataset.selectKey = spec.selectKey;
+    box.addEventListener("change", () => ftEnvToggle(spec, box.checked));
+    row.appendChild(box);
   }
-  ftBrowseSync();
+  const kind = spec.kind === "org" ? { icon: "O", cls: "org", label: "Organisation" }
+    : spec.kind === "package" ? (spec.packageId ? { icon: "P", cls: "package", label: "Package" } : { icon: "L", cls: "library", label: "App Library" })
+    : ftKind(spec.type);
+  const icon = document.createElement("span");
+  icon.className = `ft-icon ft-icon-${kind.cls}`;
+  icon.textContent = kind.icon;
+  icon.title = kind.label;
+  const name = document.createElement("span");
+  name.className = "ft-name";
+  name.textContent = spec.name;
+  name.title = spec.name;
+  row.append(icon, name);
+  if (spec.chip) row.appendChild(spec.chip);
+  li.appendChild(row);
+
+  let children = null;
+  const open = async () => {
+    const expanded = twisty.getAttribute("aria-expanded") === "true";
+    twisty.setAttribute("aria-expanded", String(!expanded));
+    if (children) {
+      children.hidden = expanded;
+      return;
+    }
+    children = document.createElement("ul");
+    children.innerHTML = '<li class="ft-env-status">Loading…</li>';
+    li.appendChild(children);
+    const specs = await spec.load();
+    children.innerHTML = "";
+    if (!specs) {
+      children.innerHTML = '<li class="ft-env-status">Could not load.</li>';
+      children.remove();
+      children = null;
+      twisty.setAttribute("aria-expanded", "false");
+      return;
+    }
+    if (!specs.length) children.innerHTML = `<li class="ft-env-status">${spec.emptyText || "Empty."}</li>`;
+    for (const child of specs) children.appendChild(ftEnvRow(child));
+    ftEnvSync();
+  };
+  twisty.addEventListener("click", open);
+  name.addEventListener("click", () => { if (spec.load) open(); });
+  li.open = open;
+  return li;
 }
 
-function ftBrowseSync() {
-  for (const cb of ftEl("ftBrowseList").querySelectorAll("input[data-asset-id]")) cb.checked = ftBrowseSelected.has(cb.dataset.assetId);
-  for (const folder of ftEl("ftBrowseList").querySelectorAll(".ft-folder")) {
-    const ids = folder.dataset.ids.split(",");
-    const on = ids.filter((id) => ftBrowseSelected.has(id)).length;
-    const box = folder.querySelector("summary input");
-    box.checked = on === ids.length;
-    box.indeterminate = on > 0 && on < ids.length;
-    folder.querySelector("summary .ft-chip").textContent = `${on}/${ids.length}`;
+function ftCountChip(n, what) {
+  return ftChip(`${n} ${what}${n === 1 ? "" : "s"}`, "muted");
+}
+
+/** An asset row; flows open to what they reference (loaded on demand, at any depth). */
+function ftEnvAsset(org, asset, packageKey, selectable) {
+  const isModule = asset.type === "module";
+  return {
+    kind: selectable ? "asset" : "ref",
+    name: asset.name,
+    type: asset.type,
+    selectKey: selectable ? `asset:${org.id}:${asset.id}` : null,
+    org, asset, packageKey,
+    emptyText: "Uses no modules or other flows.",
+    load: isModule || asset.type === "unknown" ? null : async () => {
+      const response = await actionOrShowError({ type: "FT_ASSET_REFS", orgId: org.id, itemId: asset.id });
+      return response && response.assets.map((ref) => ftEnvAsset(org, ref, null, false));
+    }
+  };
+}
+
+function ftEnvPackage(org, packageId, name) {
+  const key = packageId || "";
+  return {
+    kind: "package", name, packageId, org,
+    selectKey: `package:${org.id}:${key}`,
+    emptyText: "No flows or modules.",
+    load: async () => {
+      const response = await actionOrShowError({ type: "FT_LIST_ASSETS", orgId: org.id, packageId: packageId || null });
+      if (!response) return null;
+      const assets = response.assets.slice().sort((a, b) => (a.type === "module") - (b.type === "module") || a.name.localeCompare(b.name));
+      return assets.map((asset) => ftEnvAsset(org, asset, key, true));
+    }
+  };
+}
+
+function ftEnvOrg(org) {
+  return {
+    kind: "org", name: org.name, org,
+    emptyText: "No packages.",
+    load: async () => {
+      const response = await actionOrShowError({ type: "FT_PACKAGES", orgId: org.id });
+      if (!response) return null;
+      return [ftEnvPackage(org, null, "App Library"), ...response.packages.map((p) => ftEnvPackage(org, p.id, p.name))];
+    }
+  };
+}
+
+/** Loads the organisations and opens the one of the active Designer tab (or the only one). */
+async function ftEnvInit() {
+  ftEnvLoaded = true;
+  const tree = ftEl("ftEnvTree");
+  tree.innerHTML = '<li class="ft-env-status">Loading…</li>';
+  const [orgs, target] = await Promise.all([actionOrShowError({ type: "FT_ORGS" }), send({ type: "FT_DEFAULT_TARGET", excludeItemId: null })]);
+  tree.innerHTML = "";
+  if (!orgs) {
+    ftEnvLoaded = false;
+    return;
   }
-  const all = ftEl("ftBrowseAll");
-  all.checked = ftBrowseAssets.length > 0 && ftBrowseSelected.size === ftBrowseAssets.length;
-  all.indeterminate = ftBrowseSelected.size > 0 && ftBrowseSelected.size < ftBrowseAssets.length;
-  ftEl("ftBrowseSelected").textContent = `${ftBrowseSelected.size} of ${ftBrowseAssets.length} selected`;
-  ftEl("ftBrowseCount").textContent = ftBrowseAssets.length ? `${ftBrowseAssets.length}` : "";
+  const t = target && target.ok ? target.target : null;
+  for (const org of orgs.orgs) {
+    const li = ftEnvRow(ftEnvOrg(org));
+    tree.appendChild(li);
+    if (orgs.orgs.length === 1 || (t && t.orgId === org.id)) li.open();
+  }
+  ftEnvSync();
+}
+
+function ftEnvToggle(spec, checked) {
+  if (checked && ftSel.orgId && ftSel.orgId !== spec.org.id) {
+    showNotice(`Selection in ${ftSel.orgName} cleared: an export comes from one organisation.`);
+    ftSel.packages.clear();
+    ftSel.assets.clear();
+  }
+  if (checked) {
+    ftSel.orgId = spec.org.id;
+    ftSel.orgName = spec.org.name;
+  }
+  if (spec.kind === "package") {
+    checked ? ftSel.packages.set(spec.packageId || "", spec.name) : ftSel.packages.delete(spec.packageId || "");
+  } else {
+    checked ? ftSel.assets.set(spec.asset.id, spec.asset.name) : ftSel.assets.delete(spec.asset.id);
+  }
+  if (!ftSel.packages.size && !ftSel.assets.size) ftSel.orgId = null;
+  ftEnvSync();
+}
+
+/** Syncs the checkboxes with the selection; an asset in a ticked package shows as included. */
+function ftEnvSync() {
+  for (const box of ftEl("ftEnvTree").querySelectorAll("input[data-select-key]")) {
+    const [kind, orgId, id] = box.dataset.selectKey.split(":");
+    const inOrg = orgId === ftSel.orgId;
+    if (kind === "package") {
+      box.checked = inOrg && ftSel.packages.has(id);
+      continue;
+    }
+    const packageBox = box.closest("ul").closest("li").querySelector(":scope > .ft-env-row input[data-select-key]");
+    const viaPackage = !!packageBox && packageBox.checked;
+    box.checked = viaPackage || (inOrg && ftSel.assets.has(id));
+    box.disabled = viaPackage;
+    box.title = viaPackage ? "Included with its package" : "";
+  }
+  const parts = [];
+  if (ftSel.packages.size) parts.push(`${ftSel.packages.size} package${ftSel.packages.size === 1 ? "" : "s"}`);
+  if (ftSel.assets.size) parts.push(`${ftSel.assets.size} asset${ftSel.assets.size === 1 ? "" : "s"}`);
+  ftEl("ftBrowseSelected").textContent = parts.length ? `${parts.join(" + ")} in ${ftSel.orgName}` : "Nothing selected";
   ftApplyState();
 }
 
 function ftBrowseMessage() {
-  // Flows first, so a one-flow pick is named after that flow.
-  const rootIds = ftBrowseAssets.filter((a) => ftBrowseSelected.has(a.id)).sort((a, b) => (a.type === "module") - (b.type === "module")).map((a) => a.id);
-  return { type: "FT_EXPORT", orgId: ftEl("ftBrowseOrg").value, packageId: ftEl("ftBrowsePackage").value || null, rootIds };
+  return {
+    type: "FT_EXPORT",
+    orgId: ftSel.orgId,
+    packageIds: [...ftSel.packages.keys()].map((k) => k || null),
+    assetIds: [...ftSel.assets.keys()]
+  };
 }
 
 /* --- import / copy target and plan --- */
@@ -550,16 +640,11 @@ function initFlowTransferPanel() {
   });
 
   ftEl("ftBrowse").addEventListener("toggle", () => {
-    if (ftEl("ftBrowse").open && !ftEl("ftBrowseOrg").options.length && ftDesigner.hasFlowToken) ftBrowseInit();
+    if (ftEl("ftBrowse").open && !ftEnvLoaded && ftDesigner.hasFlowToken) ftEnvInit();
   });
-  ftEl("ftBrowseOrg").addEventListener("change", async () => {
-    await ftFillPackages(ftEl("ftBrowsePackage"), ftEl("ftBrowseOrg").value, null);
-    await ftBrowseLoad();
-  });
-  ftEl("ftBrowsePackage").addEventListener("change", ftBrowseLoad);
-  ftEl("ftBrowseAll").addEventListener("change", () => {
-    ftBrowseSelected = ftEl("ftBrowseAll").checked ? new Set(ftBrowseAssets.map((a) => a.id)) : new Set();
-    ftBrowseSync();
+  ftEl("ftBrowseClear").addEventListener("click", () => {
+    ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
+    ftEnvSync();
   });
   ftEl("ftBrowseExportBtn").addEventListener("click", () => ftRun(ftEl("ftBrowseExportBtn"), "Exporting…", () => ftExport(ftBrowseMessage())));
   ftEl("ftBrowseCopyBtn").addEventListener("click", () => ftRun(ftEl("ftBrowseCopyBtn"), "Reading…", () => ftCopy(ftBrowseMessage())));

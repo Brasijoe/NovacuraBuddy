@@ -632,10 +632,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "FT_EXPORT": {
           const generator = `NovacuraBuddy ${chrome.runtime.getManifest().version}`;
-          if (message.rootIds) { // picked in the package browser: no Designer tab needed
-            log("FT_EXPORT start:", message.rootIds.length, "asset(s) from org", message.orgId, "package", message.packageId || "(App Library)");
-            const pkg = await FlowTransfer.exportAssets({
-              flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null, rootIds: message.rootIds, generator, log
+          if (message.orgId) { // ticked in the environment tree: no Designer tab needed
+            log("FT_EXPORT start: org", message.orgId, "packages", message.packageIds, "assets", message.assetIds);
+            const pkg = await FlowTransfer.exportSelection({
+              flowFetch: boundFlowFetch(), orgId: message.orgId, packageIds: message.packageIds, assetIds: message.assetIds, generator, log
             });
             return sendResponse({ ok: true, pkg });
           }
@@ -647,6 +647,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "FT_LIST_ASSETS":
           return sendResponse({ ok: true, assets: await FlowTransfer.listPackageAssets({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null }) });
+        case "FT_ASSET_REFS":
+          return sendResponse({ ok: true, assets: await FlowTransfer.listAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId }) });
         case "FT_ORGS":
           return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
         case "FT_PACKAGES":
