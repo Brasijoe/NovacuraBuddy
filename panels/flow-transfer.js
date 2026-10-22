@@ -116,7 +116,7 @@ function ftApplyState() {
   ftEl("ftBrowseCopyBtn").disabled = ftBusy || noSession || nothing;
   ftEl("ftRunBtn").disabled = ftBusy || !ftPlan;
   const hint = ftEl("ftSourceHint");
-  hint.textContent = noSession ? "No Flow session yet: open build.novacura.com and click in it once." : reason;
+  hint.textContent = noSession ? "No Flow session yet: open Flow in a tab (or refresh the open Flow tab) and click in it once." : reason;
   hint.hidden = !hint.textContent;
 }
 
@@ -292,11 +292,16 @@ function ftEnvRow(spec) {
     li.appendChild(children);
     const specs = await spec.load();
     children.innerHTML = "";
-    if (!specs) {
-      children.innerHTML = '<li class="ft-env-status">Could not load.</li>';
-      children.remove();
+    if (!specs) { // the error banner has the details; say what to do right here
+      children.innerHTML = "";
+      const hint = document.createElement("li");
+      hint.className = "ft-env-status ft-env-error";
+      hint.textContent = "Could not load. Refresh the Flow tab and click in it once, then open this again.";
+      children.appendChild(hint);
+      const failed = children;
       children = null;
       twisty.setAttribute("aria-expanded", "false");
+      setTimeout(() => failed.remove(), 8000);
       return;
     }
     if (!specs.length) { // nothing below: no arrow, no empty level
@@ -371,15 +376,48 @@ function ftEnvOrg(org) {
   };
 }
 
+const FT_NO_SESSION = "No Flow session yet. Open Flow in a tab (or refresh the open Flow tab) and click in it once. The list then loads by itself.";
+const FT_SESSION_LOST = "Flow didn't answer. Refresh the Flow tab and click in it once, then Retry.";
+
+/** Says why the environment tree is empty, with Open Flow and Retry, instead of a blank list. */
+function ftEnvMessage(text, detail) {
+  const tree = ftEl("ftEnvTree");
+  tree.innerHTML = "";
+  const li = document.createElement("li");
+  li.className = "ft-env-hint banner banner-warning";
+  const msg = document.createElement("span");
+  msg.textContent = text;
+  if (detail) msg.title = detail;
+  const open = document.createElement("button");
+  open.className = "btn-primary";
+  open.textContent = "Open Flow";
+  open.addEventListener("click", () => chrome.tabs.create({ url: "https://build.novacura.com/" }));
+  const retry = document.createElement("button");
+  retry.className = "btn-ghost";
+  retry.textContent = "Retry";
+  retry.addEventListener("click", () => { ftEnvLoaded = false; ftEnvInit(); });
+  li.append(msg, open, retry);
+  tree.appendChild(li);
+}
+
 /** Loads the organisations and opens the one of the active Designer tab (or the only one). */
 async function ftEnvInit() {
+  if (!ftDesigner.hasFlowToken) {
+    ftEnvMessage(FT_NO_SESSION);
+    return;
+  }
   ftEnvLoaded = true;
   const tree = ftEl("ftEnvTree");
   tree.innerHTML = '<li class="ft-env-status">Loading…</li>';
-  const [orgs, target] = await Promise.all([actionOrShowError({ type: "FT_ORGS" }), send({ type: "FT_DEFAULT_TARGET", excludeItemId: null })]);
+  const [orgs, target] = await Promise.all([send({ type: "FT_ORGS" }), send({ type: "FT_DEFAULT_TARGET", excludeItemId: null })]);
   tree.innerHTML = "";
-  if (!orgs) {
+  if (!orgs.ok) {
     ftEnvLoaded = false;
+    ftEnvMessage(FT_SESSION_LOST, orgs.error);
+    return;
+  }
+  if (!orgs.orgs.length) {
+    tree.innerHTML = '<li class="ft-env-status">Your Flow account has no organisations.</li>';
     return;
   }
   const t = target && target.ok ? target.target : null;
@@ -471,8 +509,11 @@ async function ftOpen(pkg, mode) {
 
   const roots = FlowTree.rootIdsOf(pkg);
   const t = await ftFillOrgs(ftEl("ftOrg"), mode === "copy" && roots.length === 1 ? roots[0] : null);
-  if (!ftEl("ftOrg").options.length) return;
   ftEl("ftTargetHint").innerHTML = "";
+  if (!ftEl("ftOrg").options.length) {
+    ftEl("ftTargetHint").appendChild(ftChip(ftDesigner.hasFlowToken ? FT_SESSION_LOST : FT_NO_SESSION, "warn"));
+    return;
+  }
   if (t && t.fromOtherTab) ftEl("ftTargetHint").appendChild(ftChip(`From open tab: ${t.tabTitle}`, "info", "Preselected from another open Designer tab"));
   await ftFillPackages(ftEl("ftPackage"), ftEl("ftOrg").value, t && t.orgId === ftEl("ftOrg").value ? t.packageId : null);
   await ftLoadPlan();
@@ -732,7 +773,7 @@ function initFlowTransferPanel() {
   });
 
   ftEl("ftBrowse").addEventListener("toggle", () => {
-    if (ftEl("ftBrowse").open && !ftEnvLoaded && ftDesigner.hasFlowToken) ftEnvInit();
+    if (ftEl("ftBrowse").open && !ftEnvLoaded) ftEnvInit();
   });
   ftEl("ftBrowseClear").addEventListener("click", () => {
     ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
