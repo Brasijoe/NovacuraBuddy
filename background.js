@@ -658,7 +658,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FT_DEFAULT_TARGET":
           return sendResponse({ ok: true, target: await handleFlowDefaultTarget(message) });
         case "FT_PLAN":
-          return sendResponse({ ok: true, plan: await FlowTransfer.planImport({ flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null }) });
+          return sendResponse({ ok: true, plan: await FlowTransfer.planImport({ flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null, layout: message.layout }) });
         case "FT_IMPORT": {
           log("FT_IMPORT start: into org", message.orgId, "package", message.packageId || "(App Library)");
           const flowFetch = boundFlowFetch();
@@ -676,7 +676,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             };
           }
           const outcome = await FlowTransfer.runImport({
-            flowFetch, pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null,
+            flowFetch, pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null, layout: message.layout,
             choices: message.choices, connectorMap: message.connectorMap, names: message.names, generateCode, log
           });
           await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.choice === "update").map((r) => r.targetId));

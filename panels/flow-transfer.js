@@ -14,6 +14,9 @@ let ftConnectorChoices = {}; // source connector id -> target connector id ("" =
 let ftBusy = false;
 let ftDesigner = { open: false, hasFlowToken: false };
 let ftPlanSeq = 0;
+// Where an import puts things when the file carries its packages: recreate them ("packages") or
+// all into the picked package ("single"); per exported package "use" | "create"; fallback target.
+let ftLayout = { mode: "packages", packageChoices: {}, fallback: undefined };
 // Environment tree selection, one organisation at a time: whole packages (key "" = App Library)
 // and single assets.
 let ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
@@ -460,6 +463,11 @@ async function ftOpen(pkg, mode) {
   ftEl("ftConnectorsBox").hidden = true;
   ftEl("ftIfsBox").hidden = true;
   ftEl("ftIfs").innerHTML = "";
+  const hasPackages = !!(pkg.packages && pkg.packages.length);
+  ftLayout = { mode: hasPackages ? "packages" : "single", packageChoices: {}, fallback: undefined };
+  ftEl("ftLayoutBox").hidden = !hasPackages;
+  for (const radio of document.querySelectorAll('input[name="ftLayout"]')) radio.checked = radio.value === ftLayout.mode;
+  ftApplyLayout();
 
   const roots = FlowTree.rootIdsOf(pkg);
   const t = await ftFillOrgs(ftEl("ftOrg"), mode === "copy" && roots.length === 1 ? roots[0] : null);
@@ -474,20 +482,79 @@ async function ftLoadPlan() {
   const seq = ++ftPlanSeq;
   ftPlan = null;
   ftApplyState();
-  const response = await actionOrShowError({ type: "FT_PLAN", pkg: ftPkg, orgId: ftEl("ftOrg").value, packageId: ftEl("ftPackage").value || null });
+  const response = await actionOrShowError({ type: "FT_PLAN", pkg: ftPkg, orgId: ftEl("ftOrg").value, packageId: ftEl("ftPackage").value || null, layout: ftLayout });
   if (seq !== ftPlanSeq) return; // the target changed meanwhile
   if (!response) return;
   ftPlan = response.plan;
+  // Keep the user's choices across a re-plan where the new target still allows them.
+  const previous = ftChoices;
   ftChoices = {};
   ftNames = {};
   for (const row of ftPlan.assets) {
-    ftChoices[row.id] = row.choice;
+    ftChoices[row.id] = row.options.includes(previous[row.id]) ? previous[row.id] : row.choice;
     if (row.isRoot) ftNames[row.id] = row.newName;
   }
+  ftRenderPackages();
   ftConnectorChoices = {};
   for (const row of ftPlan.connectors) ftConnectorChoices[row.source.id] = row.targetId || "";
   ftRenderPlan();
   ftApplyState();
+}
+
+function ftApplyLayout() {
+  const byPackages = ftLayout.mode === "packages";
+  ftEl("ftPackageField").hidden = byPackages;
+  ftEl("ftPackagesBox").hidden = !byPackages;
+}
+
+/** Name of a plan row's target package: an id, null (App Library) or "new:<exported id>". */
+function ftTargetPackageName(target) {
+  if (!target) return "App Library";
+  if (target.startsWith("new:")) {
+    const p = ftPlan.packages.find((x) => `new:${x.source.id}` === target);
+    return p ? p.newName : "new package";
+  }
+  const t = (ftPlan.targetPackages || []).find((x) => x.id === target);
+  return t ? t.name : target;
+}
+
+/** The exported packages with their choice, and where other dependencies go. */
+function ftRenderPackages() {
+  ftApplyLayout();
+  const list = ftEl("ftPackages");
+  list.innerHTML = "";
+  if (!ftPlan || ftPlan.layout !== "packages") return;
+  for (const p of ftPlan.packages) {
+    const li = document.createElement("li");
+    li.className = "ft-node";
+    const head = document.createElement("div");
+    head.className = "ft-node-head";
+    const icon = document.createElement("span");
+    icon.className = "ft-icon ft-icon-package";
+    icon.textContent = "P";
+    const name = document.createElement("span");
+    name.className = "ft-name";
+    name.textContent = p.source.name;
+    head.append(icon, name, p.existing ? ftChip("Exists in target", "info") : ftChip("New in target", "ok"));
+    const select = document.createElement("select");
+    for (const option of p.options) ftOption(select, option, option === "use" ? "Use existing package" : `Create new package "${p.newName}"`);
+    select.value = p.choice;
+    select.disabled = p.options.length === 1;
+    select.addEventListener("change", () => {
+      ftLayout.packageChoices[p.source.id] = select.value;
+      ftLoadPlan();
+    });
+    li.append(head, select);
+    list.appendChild(li);
+  }
+  const fallback = ftEl("ftFallback");
+  fallback.innerHTML = "";
+  for (const p of ftPlan.packages) ftOption(fallback, `new:${p.source.id}`, `${p.choice === "use" ? p.existing.name : p.newName} (exported)`);
+  ftOption(fallback, "", "App Library");
+  for (const t of ftPlan.targetPackages || []) if (!ftPlan.packages.some((p) => p.existing && p.existing.id === t.id)) ftOption(fallback, t.id, t.name);
+  fallback.value = ftPlan.fallback && ftPlan.fallback.startsWith("new:") ? ftPlan.fallback
+    : ftPlan.packages.find((p) => p.target === ftPlan.fallback) ? `new:${ftPlan.packages.find((p) => p.target === ftPlan.fallback).source.id}`
+    : ftPlan.fallback || "";
 }
 
 /** The plan as the dependency tree: each asset's status chips and choice sit on its first card. */
@@ -498,9 +565,10 @@ function ftRenderPlan() {
     if (!row) return;
     const code = row.sameCode === true ? ftChip("Same code", "ok") : row.sameCode === false ? ftChip("Code differs", "warn") : null;
     const ifs = row.ifsProjection ? ftChip(`IFS ${row.ifsProjection}`, "muted", "Generated from this IFS projection") : null;
+    const where = ftPlan.layout === "packages" ? ftChip(`→ ${ftTargetPackageName(row.targetPackage)}`, "muted", "Target package") : null;
     card.appendChild(row.existing
-      ? ftChipRow(ftChip(FT_LOCATION_CHIPS[row.existing.location] || row.existing.location, "info", `Matched by name: ${row.existing.name}`), code, ifs)
-      : ftChipRow(ftChip("New in target", "ok", "Not in the target yet, will be created"), ifs));
+      ? ftChipRow(ftChip(FT_LOCATION_CHIPS[row.existing.location] || row.existing.location, "info", `Matched by name: ${row.existing.name}`), code, ifs, where)
+      : ftChipRow(ftChip("New in target", "ok", "Not in the target yet, will be created"), ifs, where));
     const select = document.createElement("select");
     for (const option of row.options) {
       const label = row.isRoot && option === "create" ? "Create new flow"
@@ -591,7 +659,7 @@ async function ftRunImport() {
   const connectorMap = {};
   for (const [id, target] of Object.entries(ftConnectorChoices)) connectorMap[id] = target || null;
   const response = await actionOrShowError({
-    type: "FT_IMPORT", pkg: ftPkg, orgId: ftEl("ftOrg").value, packageId: ftEl("ftPackage").value || null,
+    type: "FT_IMPORT", pkg: ftPkg, orgId: ftEl("ftOrg").value, packageId: ftEl("ftPackage").value || null, layout: ftLayout,
     choices: ftChoices, connectorMap, names, baseUrl, masterPassword: baseUrl ? masterPasswordOf() : undefined
   });
   if (!response) return;
@@ -608,7 +676,9 @@ function ftShowResult(outcome) {
   title.textContent = `${ftMode === "copy" ? "Copied" : "Imported"} ${ftRootLabel(pkg)}`;
   const target = ftChipRow(
     ftChip(ftEl("ftOrg").selectedOptions[0].textContent, "info", "Target organisation"),
-    ftChip(ftEl("ftPackage").selectedOptions[0].textContent, "info", "Target package")
+    ...(outcome.packages && outcome.packages.length
+      ? outcome.packages.map((p) => ftChip(`${p.name}: ${p.choice === "create" ? "package created" : "existing package"}`, p.choice === "create" ? "ok" : "info"))
+      : [ftChip(ftEl("ftPackage").selectedOptions[0].textContent, "info", "Target package")])
   );
   const tree = document.createElement("ul");
   ftRenderTree(tree, pkg, (node, card) => {
@@ -676,6 +746,17 @@ function initFlowTransferPanel() {
     await ftLoadPlan();
   });
   ftEl("ftPackage").addEventListener("change", ftLoadPlan);
+  for (const radio of document.querySelectorAll('input[name="ftLayout"]')) {
+    radio.addEventListener("change", () => {
+      ftLayout.mode = radio.value;
+      ftApplyLayout();
+      ftLoadPlan();
+    });
+  }
+  ftEl("ftFallback").addEventListener("change", () => {
+    ftLayout.fallback = ftEl("ftFallback").value;
+    ftLoadPlan();
+  });
   ftEl("ftRunBtn").addEventListener("click", () => ftRun(ftEl("ftRunBtn"), ftMode === "copy" ? "Copying…" : "Importing…", ftRunImport));
   ftEl("ftCancelBtn").addEventListener("click", ftCancel);
   refreshFlowTransferState();

@@ -183,8 +183,17 @@
       <div id="ftTarget" class="api-loaded" hidden>
         <div class="api-summary"><strong id="ftTitle"></strong><span class="list-count" id="ftMeta"></span></div>
         <label class="api-field">Target organisation <select id="ftOrg"></select></label>
-        <label class="api-field">Target package <select id="ftPackage"></select></label>
         <span class="list-count" id="ftTargetHint"></span>
+        <div id="ftLayoutBox" class="ft-layout" hidden>
+          <label class="api-check"><input type="radio" name="ftLayout" value="packages" checked /> Recreate the exported packages with their content</label>
+          <label class="api-check"><input type="radio" name="ftLayout" value="single" /> Put everything into one package</label>
+        </div>
+        <label class="api-field" id="ftPackageField">Target package <select id="ftPackage"></select></label>
+        <div id="ftPackagesBox" hidden>
+          <h2>Packages</h2>
+          <ul id="ftPackages" class="ft-list"></ul>
+          <label class="api-field">Other dependencies (from packages not exported) go to <select id="ftFallback"></select></label>
+        </div>
         <h2>What happens in the target</h2>
         <ul id="ftAssets" class="ft-tree"></ul>
         <div id="ftIfsBox" class="ft-ifs" hidden>
