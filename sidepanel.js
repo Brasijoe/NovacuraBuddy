@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "api-modules", "flows", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "api-modules", "flows", "linked-flows", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -15,6 +15,7 @@ function showTab(name) {
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
+  if (name === "linked-flows") lfOnShow();
 }
 
 for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => { showTab(tab); closeTabMenus(); });
@@ -103,6 +104,7 @@ initQuickReportsPanel();
 initCustomLusPanel();
 initApiModulesPanel();
 initFlowTransferPanel();
+initLinkedFlowsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); }, 5000);
