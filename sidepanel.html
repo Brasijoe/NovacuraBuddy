@@ -32,10 +32,10 @@
           IFS Functions<span class="tab-caret" aria-hidden="true"></span>
         </button>
         <div class="tab-menu">
-          <button id="tab-tracker" class="tab-item" role="tab">Projection Tracker</button>
-          <button id="tab-recorder" class="tab-item" role="tab">Traffic Recorder</button>
-          <button id="tab-quick-reports" class="tab-item" role="tab">Quick Reports</button>
-          <button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button>
+          <div class="tab-menu-row"><button id="tab-tracker" class="tab-item" role="tab">Projection Tracker</button><span class="info-tip" data-tip="Lists the IFS projections your IFS pages call on the selected instance. Switch one on to create its Flow module (if needed) and add it to the flow open in the Designer tab."></span></div>
+          <div class="tab-menu-row"><button id="tab-recorder" class="tab-item" role="tab">Traffic Recorder</button><span class="info-tip" data-tip="Records the IFS projection calls your browser tabs make, with requests and responses. Open a session in the viewer to filter the calls, drop redundant ones and create a Flow asset from them."></span></div>
+          <div class="tab-menu-row"><button id="tab-quick-reports" class="tab-item" role="tab">Quick Reports</button><span class="info-tip" data-tip="SQL Quick Reports kept in your GitHub repo. Deploy one to an IFS instance with permission sets, then create its Flow module for the open flow."></span></div>
+          <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
         </div>
       </div>
       <div class="tab-group">
@@ -43,36 +43,40 @@
           Flow Functions<span class="tab-caret" aria-hidden="true"></span>
         </button>
         <div class="tab-menu">
-          <button id="tab-api-modules" class="tab-item" role="tab">API Modules</button>
+          <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
         </div>
       </div>
       <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
     </nav>
 
     <section id="panel-tracker" role="tabpanel" hidden>
+      <div class="section-head">
       <label class="toggle" title="Pause or resume tracking">
         <input type="checkbox" id="trackingToggle" />
         <span class="toggle-track"><span class="toggle-thumb"></span></span>
         <span class="toggle-label">Tracking</span>
       </label>
+      <span class="info-tip" data-tip="While on, every IFS projection a browser tab calls on a saved instance is added to Tracked projections, with a hit count. Off pauses this; the list is kept until the browser closes or you Clear it."></span>
+      </div>
 
       <div class="search-row">
         <input id="searchTerm" placeholder="Search a projection…" />
         <button id="searchBtn">Search</button>
+        <span class="info-tip" data-tip="Finds projections on the selected instance by name, also ones you haven't opened yet, and adds them to Tracked projections so you can switch their module on."></span>
       </div>
 
       <hr class="section-divider" />
 
       <main>
         <details id="trackedSection" class="tracker-section" open>
-          <summary><h2>Tracked projections</h2><span class="list-count" id="listCount"></span></summary>
+          <summary><h2>Tracked projections</h2><span class="info-tip" data-tip="Projections the selected instance's pages called, newest first. The switch adds the projection's Flow module to the open flow, creating the module first if it doesn't exist yet. Switching off removes it from the flow; the module itself stays."></span><span class="list-count" id="listCount"></span></summary>
           <div class="list-toolbar">
             <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
           </div>
           <ul id="projectionList" class="projection-list"></ul>
         </details>
         <details id="packageModuleSection" class="tracker-section" open>
-          <summary><h2>Modules in this flow's package</h2><span class="list-count" id="packageModuleCount"></span></summary>
+          <summary><h2>Modules in this flow's package</h2><span class="info-tip" data-tip="All Flow modules in the package of the flow open in the Designer tab. A flow can only use modules of its own package (or the global App Library), so these are the ones you can switch on here."></span><span class="list-count" id="packageModuleCount"></span></summary>
           <p id="packageModuleHint" class="empty-state" hidden></p>
           <ul id="packageModuleList" class="projection-list"></ul>
         </details>
@@ -87,7 +91,7 @@
       </div>
       <div id="recStatusBar" class="status-bar"><span class="status-indicator"></span><span id="recStatusText">Ready to record</span></div>
       <hr class="section-divider" />
-      <h2>Recorded Sessions</h2>
+      <div class="section-head"><h2>Recorded Sessions</h2><span class="info-tip" data-tip="Start attaches Chrome's debugger to your open tabs (Chrome shows a 'started debugging' bar) and captures every IFS projection call until Stop. Each recording is saved here; click one, or Open viewer, to inspect it and build a Flow asset from it."></span></div>
       <div id="sessionList" class="session-list"></div>
     </section>
 
@@ -97,7 +101,7 @@
         <button id="qrRefreshBtn">Refresh</button>
       </div>
       <div class="list-toolbar">
-        <span class="list-count" id="qrCount"></span>
+        <span class="section-head"><span class="list-count" id="qrCount"></span><span class="info-tip" data-tip="Each report is a SQL file in your own folder of the GitHub repo set in Basic Data. Deploy creates or updates the Quick Report on an IFS instance and grants the permission sets you tick. Module, shown once a report is deployed, creates the Flow module for it and activates it in the open flow."></span></span>
         <button id="qrNewBtn" class="btn-primary">New report</button>
       </div>
       <span class="list-count" id="qrRefreshed"></span>
@@ -112,12 +116,12 @@
         <button id="clImportBtn">Import Properties</button>
         <button id="clRefreshBtn">Refresh</button>
       </div>
-      <h2>My library</h2>
+      <div class="section-head"><h2>My library</h2><span class="info-tip" data-tip="LU designs saved in your own folder of the GitHub repo. Deploy creates the LU and any new attributes on an IFS instance, approves and publishes them and grants the permission sets you tick. Import Properties turns Flow table properties from a file into LUs to deploy, without saving them here."></span></div>
       <input id="clLibrarySearch" type="search" placeholder="Filter my LUs…" />
       <div id="clLibraryHint" class="empty-state" hidden></div>
       <ul id="clLibraryList" class="qr-list"></ul>
       <hr class="section-divider" />
-      <h2>On an IFS instance</h2>
+      <div class="section-head"><h2>On an IFS instance</h2><span class="info-tip" data-tip="Custom LUs that already exist on the chosen instance. Add attributes opens the editor for that LU; Module creates the Flow module for the LU's projection and activates it in the open flow."></span></div>
       <select id="clInstanceSelect"></select>
       <div id="clEnvHint" class="empty-state" hidden></div>
       <ul id="clEnvList" class="qr-list"></ul>
@@ -132,6 +136,7 @@
         <button id="apiCurrentTabBtn" class="btn-ghost" title="Load the API description (or docs page) open in the current browser tab">Use current tab</button>
         <button id="apiUploadBtn" class="btn-ghost">Upload file…</button>
         <button id="apiPasteBtn" class="btn-ghost">Paste…</button>
+        <span class="info-tip" data-tip="Load the description from a URL, the page open in the current tab (a spec, Swagger UI or Redoc page), a file or pasted text. OpenAPI 3.x and Swagger 2.0, JSON or YAML."></span>
         <input id="apiFile" type="file" accept=".json,.yaml,.yml,application/json,application/yaml,text/yaml" hidden />
       </div>
       <div id="apiPasteBox" class="api-paste" hidden>
@@ -142,8 +147,8 @@
       <p id="apiEmpty" class="empty-state">Load an OpenAPI 3.x or Swagger 2.0 description to pick the operations for a Flow module. Base URL and authentication stay in the Flow connector.</p>
       <div id="apiLoaded" class="api-loaded" hidden>
         <div class="api-summary"><strong id="apiTitle"></strong><span class="list-count" id="apiMeta"></span></div>
-        <label class="api-field">Module name <input id="apiModuleName" spellcheck="false" /></label>
-        <label class="api-field">Comments
+        <label class="api-field"><span class="section-head">Module name<span class="info-tip" data-tip="The name of the Flow module. If the package already has a module with this name, you're asked before its code is replaced."></span></span><input id="apiModuleName" spellcheck="false" /></label>
+        <label class="api-field"><span class="section-head">Comments<span class="info-tip" data-tip="Full adds the spec's descriptions, formats, allowed values, examples and errors to every type, field, function and data source, so people and AI can read the module. Short adds one line per function. Off adds none."></span></span>
           <select id="apiComments" title="Full: descriptions, formats, allowed values, examples and errors from the spec on every type, field, function and data source, so people and AI can read the module. Short: one line per function. Off: none.">
             <option value="full">Full (types, fields, functions)</option>
             <option value="short">Short (one line per function)</option>
@@ -152,13 +157,14 @@
         </label>
         <div class="list-toolbar">
           <label class="api-check"><input type="checkbox" id="apiSelectAll" /> Select all</label>
-          <span class="list-count" id="apiSelectedCount"></span>
+          <span class="section-head"><span class="list-count" id="apiSelectedCount"></span><span class="info-tip" data-tip="Each ticked operation becomes a function in the module. GET operations that return a list are marked Queryable and also become a data source you can query with select … from … where."></span></span>
         </div>
         <div id="apiOperations" class="api-operations"></div>
         <details id="apiWarnings" class="api-warnings" hidden><summary></summary><ul></ul></details>
         <div class="deploy-actions">
           <button id="apiPreviewBtn">Preview code</button>
           <button id="apiCreateBtn" class="btn-primary">Create module</button>
+          <span class="info-tip" data-tip="Saves the module in the package of the flow open in the Designer tab and activates it in that flow. Base URL and authentication stay in the Flow connector, not in the module."></span>
         </div>
         <p id="apiCreateHint" class="api-hint" hidden></p>
         <div id="apiPreview" class="api-preview" hidden>
@@ -169,6 +175,7 @@
     </section>
 
     <section id="panel-basic-data" role="tabpanel" hidden>
+      <div class="section-head"><h2>IFS instances</h2><span class="info-tip" data-tip="The IFS environments Novacura Buddy works with. Click one to select it for the Projection Tracker; Test asks IFS for a fresh token. Client secrets are encrypted with your master password and stay in this browser."></span></div>
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
         <input id="instanceName" placeholder="Name" required />
@@ -176,11 +183,11 @@
         <input id="instanceTokenEndpoint" placeholder="Token endpoint" required />
         <input id="instanceClientId" placeholder="Client ID" required />
         <input id="instanceClientSecret" placeholder="Client secret" type="password" required />
-        <input id="masterPassword" placeholder="Master password" type="password" required />
+        <div class="search-row"><input id="masterPassword" placeholder="Master password" type="password" required /><span class="info-tip" data-tip="Encrypts the saved IFS and GitHub secrets in this browser. You enter it once per browser session (Unlock at the top) to use them; it is never stored."></span></div>
         <button type="submit" class="btn-primary">Add instance</button>
       </form>
       <hr class="section-divider" />
-      <h2>GitHub (Quick Reports)</h2>
+      <div class="section-head"><h2>GitHub (Quick Reports)</h2><span class="info-tip" data-tip="Quick Reports and Custom LUs are saved as files in this repo, each user in their own folder. The token needs read and write access to the repo's contents and is encrypted with your master password."></span></div>
       <p id="githubStatus" class="list-count"></p>
       <form id="githubForm" class="instance-form">
         <input id="githubRepo" placeholder="owner/repo" required />
@@ -197,6 +204,7 @@
     <script src="lib/ifs-permissions.js"></script>
     <script src="lib/qr-deploy.js"></script>
     <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
     <script src="panels/tracker.js"></script>
     <script src="panels/basic-data.js"></script>
     <script src="panels/recorder.js"></script>
