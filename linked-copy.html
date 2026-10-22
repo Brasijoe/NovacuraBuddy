@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Copy &amp; link flows · Novacura Buddy</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body class="lf-page lf-copy-page">
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+
+    <section id="panel-linked-flows" class="lf-page-main">
+      <header class="lf-page-head">
+        <div class="lf-page-title">
+          <h1>Copy &amp; link flows</h1>
+          <span class="info-tip" data-tip="Pick the flow on the left and the packages on the right. A package without the flow gets a new linked copy (same name and steps, committed). A package that already has a flow with that name can link it instead: it keeps its own steps until someone pushes or pulls. Nothing is written until you click the button at the bottom."></span>
+        </div>
+        <div class="lf-page-tools">
+          <label class="api-field lf-org">Organisation <select id="lfOrg"></select></label>
+          <button id="lfRescanBtn" class="btn-ghost" title="Read all packages again">Rescan</button>
+        </div>
+        <p id="lfSessionHint" class="api-hint" hidden></p>
+      </header>
+
+      <div class="lc-panes">
+        <div class="lc-pane">
+          <div class="lc-pane-head"><span class="lc-step">1</span><h2>Source flow</h2><span class="info-tip" data-tip="The flow to copy. New copies get its steps. If it is already linked, the new copies join its group."></span></div>
+          <div id="lcSource" class="lc-pane-body"></div>
+        </div>
+        <div class="lc-arrow" aria-hidden="true"><span></span></div>
+        <div class="lc-pane">
+          <div class="lc-pane-head"><span class="lc-step">2</span><h2>Target packages</h2><span class="info-tip" data-tip="Copy: a new linked flow in that package. Link: the package's flow with the same name joins the group as it is. Packages already in the group are shown as linked."></span></div>
+          <div id="lcTargets" class="lc-pane-body"></div>
+        </div>
+      </div>
+
+      <div class="lc-pane lc-plan">
+        <div class="lc-pane-head"><span class="lc-step">3</span><h2>What happens</h2></div>
+        <div id="lfWork" class="lf-work"></div>
+      </div>
+    </section>
+
+    <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
+    <script src="lib/flow-tree.js"></script>
+    <script src="panels/flow-transfer.js"></script>
+    <script src="panels/linked-flows.js"></script>
+    <script src="panels/linked-copy.js"></script>
+  </body>
+</html>

@@ -251,16 +251,8 @@
         <div id="lfOpen" class="lf-strip lf-strip-quiet"><span class="api-hint">Open a flow in the Flow Designer.</span></div>
 
         <hr class="section-divider" />
-        <details id="lfLinkSection" class="tracker-section">
-          <summary><h2>Copy &amp; link flows</h2><span class="list-count" id="lfSelCount"></span><span class="info-tip" data-tip="Tick ONE flow to copy it into other packages as linked copies (you pick the packages next), or tick flows in different packages to link copies that already exist. Linking only adds a tag to each flow's description; no steps change yet. You pick one version to start from: copies with the same steps are in sync right away, copies with other steps are marked 'Steps differ' until you push or pull. In the next step you can also create new linked copies in packages that don't have the flow yet (copy and link in one go)."></span></summary>
-          <input id="lfFilter" type="search" class="lf-filter" placeholder="Filter flows and packages…" autocomplete="off" />
-          <div id="lfSuggest" class="lf-suggest" hidden></div>
-          <ul id="lfFlowList" class="lf-pkg-list"></ul>
-          <div class="deploy-actions">
-            <button id="lfLinkSelectedBtn" class="btn-primary" disabled>Copy &amp; link selected…</button>
-            <button id="lfClearBtn" class="btn-ghost">Clear</button>
-          </div>
-        </details>
+        <div class="lf-section-title"><h2>Copy &amp; link</h2></div>
+        <div id="lfCopySlot" class="lf-cta-row"></div>
 
         <hr class="section-divider" />
         <details id="lfGroupsSection" class="tracker-section" open>

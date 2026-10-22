@@ -13,7 +13,6 @@ const lf = {
   scan: null,
   statuses: {},
   statusesLoading: false,
-  sel: new Set(), // asset ids ticked in Link flows
   work: null, // the open link / push / result view
   busy: false,
   loadSeq: 0,
@@ -102,6 +101,14 @@ function lfGroups() {
 
 const lfMaxRev = (members) => members.reduce((m, a) => Math.max(m, a.tag.rev), 0);
 
+/** The Copy & link tab (linked-copy.html), with `flowId` as the source when given. */
+function lfOpenCopy(flowId) {
+  const q = new URLSearchParams();
+  if (lf.orgId) q.set("org", lf.orgId);
+  if (flowId) q.set("flow", flowId);
+  chrome.tabs.create({ url: chrome.runtime.getURL(`linked-copy.html?${q}`) });
+}
+
 function lfOpenInDesigner(id) {
   chrome.tabs.create({ url: `https://build.novacura.com/admin/design/designer/organizations/${lf.orgId}/items/${id}` });
 }
@@ -118,16 +125,19 @@ function lfMatches(filter, ...texts) {
 function initLinkedFlowsPanel() {
   if (lf.inited) return;
   lf.inited = true;
-  lfEl("lfOrg").addEventListener("change", () => { lf.orgId = lfEl("lfOrg").value; lf.sel.clear(); lfCloseWork(); lfLoad(false); });
-  lfEl("lfRescanBtn").addEventListener("click", () => lfLoad(true));
-  lfEl("lfFilter").addEventListener("input", lfRenderFlowList);
-  lfEl("lfGroupFilter").addEventListener("input", lfRenderGroups);
-  lfEl("lfOnlyAttention").addEventListener("change", lfRenderGroups);
-  lfEl("lfClearBtn").addEventListener("click", () => { lf.sel.clear(); lfRenderFlowList(); });
-  lfEl("lfLinkSelectedBtn").addEventListener("click", () => lfStartLink([...lf.sel]));
+  const on = (id, ev, fn) => { const el = lfEl(id); if (el) el.addEventListener(ev, fn); };
+  on("lfOrg", "change", () => { lf.orgId = lfEl("lfOrg").value; lfCloseWork(); lfLoad(false); });
+  on("lfRescanBtn", "click", () => lfLoad(true));
+  on("lfGroupFilter", "input", lfRenderGroups);
+  on("lfOnlyAttention", "change", lfRenderGroups);
+  const copySlot = lfEl("lfCopySlot");
+  if (copySlot) {
+    copySlot.append(lfCta({ icon: "link", tone: "blue", label: "Copy & link flows", title: "Pick a flow and the packages to copy or link it to, in a browser tab", onclick: () => lfOpenCopy(lf.itemId) }),
+      infoTip("Opens a browser tab: pick the source flow on the left and the target packages on the right. Packages that don't have the flow get a new linked copy; packages that already have one can link it instead. You see the plan before anything is written."));
+  }
   const slot = lfEl("lfOverviewSlot");
   if (slot) {
-    slot.append(lfCta({ icon: "expand", tone: "link", label: "Open overview in a tab", title: "All groups in one table, with Sync and deploy, in a browser tab",
+    slot.append(lfCta({ icon: "expand", tone: "blue", label: "Open overview in a tab", title: "All groups in one table, with Sync and deploy, in a browser tab",
       onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL(`linked-flows.html${lf.orgId ? `?org=${encodeURIComponent(lf.orgId)}` : ""}`) }) }),
       infoTip("Opens a bigger, calmer view of all linked groups in a browser tab: a row per flow, a column per package, Sync per group and the deploy step."));
   }
@@ -176,16 +186,19 @@ async function lfFillOrgs(preferred) {
 async function lfLoad(force) {
   if (!lf.orgId) return;
   const seq = ++lf.loadSeq;
-  lfEl("lfGroups").innerHTML = "";
-  lfEl("lfGroups").appendChild(lfH("li", { className: "ft-env-status", textContent: "Reading packages…" }));
+  const groupsEl = lfEl("lfGroups");
+  if (groupsEl) {
+    groupsEl.innerHTML = "";
+    groupsEl.appendChild(lfH("li", { className: "ft-env-status", textContent: "Reading packages…" }));
+  }
+  if (typeof lcOnLoading === "function") lcOnLoading();
   const response = await sendOrShowError({ type: "LF_SCAN", orgId: lf.orgId, force }, true);
   if (seq !== lf.loadSeq) return;
-  if (!response) { lfEl("lfGroups").innerHTML = ""; return; }
+  if (!response) { if (groupsEl) groupsEl.innerHTML = ""; return; }
   lf.scan = response.scan;
-  for (const id of [...lf.sel]) if (!lfAsset(id)) lf.sel.delete(id);
   lfRenderOpen();
-  lfRenderFlowList();
   lfRenderGroups();
+  if (typeof lcOnScan === "function") lcOnScan();
   lf.statusesLoading = true;
   const st = await send({ type: "LF_STATUSES", orgId: lf.orgId, linkIds: [] });
   if (seq !== lf.loadSeq) return;
@@ -193,12 +206,14 @@ async function lfLoad(force) {
   lf.statuses = st.ok ? st.statuses : {};
   lfRenderOpen();
   lfRenderGroups();
+  if (typeof lcOnScan === "function") lcOnScan();
 }
 
 /* --- open flow --- */
 
 function lfRenderOpen() {
   const box = lfEl("lfOpen");
+  if (!box) return;
   box.innerHTML = "";
   box.className = "lf-strip lf-strip-quiet";
   const asset = lf.itemId ? lfAsset(lf.itemId) : null;
@@ -212,7 +227,7 @@ function lfRenderOpen() {
     const same = lfFlows().filter((a) => a.id !== asset.id && a.packageId !== asset.packageId && a.name.toUpperCase() === asset.name.toUpperCase());
     box.appendChild(lfH("span", { className: "api-hint", textContent: `${asset.packageName}${same.length ? ` · a flow with this name is also in ${same.map((a) => a.packageName).join(", ")}` : ""}` }));
     box.appendChild(lfH("div", { className: "lf-cta-row" },
-      lfCta({ icon: "link", label: "Copy & link to packages", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }),
+      lfCta({ icon: "link", tone: "blue", label: "Copy & link to packages", onclick: () => lfOpenCopy(asset.id) }),
       infoTip("Copy this flow into other packages as linked copies, and/or link flows that already exist there. You pick the packages and see the plan before anything is written.")));
     return;
   }
@@ -241,7 +256,7 @@ function lfMemberActions(asset, status, primary) {
   if (status === "behind" || status === "conflict" || status === "differs") ctas.appendChild(pull);
   if (status === "conflict") ctas.appendChild(push);
   if (!primary) row.appendChild(lfH("button", { className: "btn-ghost", textContent: "Open", onclick: () => lfOpenInDesigner(asset.id) }));
-  if (primary) ctas.appendChild(lfCta({ icon: "link", tone: "blue", label: "Copy to more packages", title: "Create more linked copies of this flow in other packages", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }));
+  if (primary) ctas.appendChild(lfCta({ icon: "link", tone: "blue", label: "Copy to more packages", title: "Create more linked copies of this flow in other packages", onclick: () => lfOpenCopy(asset.id) }));
   row.appendChild(lfUnlinkButton(asset));
   return primary ? lfH("div", { className: "lf-browse" }, ctas.childNodes.length ? ctas : null, row) : row;
 }
@@ -261,82 +276,6 @@ function lfUnlinkButton(asset) {
     lfLoad(true);
   });
   return btn;
-}
-
-/* --- link flows list --- */
-
-function lfRenderFlowList() {
-  const list = lfEl("lfFlowList");
-  list.innerHTML = "";
-  const filter = lfEl("lfFilter").value;
-  const flows = lfFlows();
-  const count = lf.sel.size;
-  lfEl("lfSelCount").textContent = count ? `${count} selected` : "";
-  const groups = new Set([...lf.sel].map((id) => lfAsset(id)).filter((a) => a && a.tag).map((a) => a.tag.id));
-  lfEl("lfLinkSelectedBtn").disabled = lf.busy || count < 1 || groups.size > 1;
-  lfEl("lfLinkSelectedBtn").title = groups.size > 1 ? "The selection holds flows of two different link groups. Unlink one first." : count < 1 ? "Tick at least one flow." : "";
-  lfRenderSuggest(flows, filter);
-  if (!lf.scan) return;
-  const byPkg = new Map();
-  for (const a of flows) {
-    if (!lfMatches(filter, a.name, a.packageName)) continue;
-    const key = a.packageId || "";
-    if (!byPkg.has(key)) byPkg.set(key, { name: a.packageName, packageId: a.packageId, flows: [] });
-    byPkg.get(key).flows.push(a);
-  }
-  const pkgs = [...byPkg.values()].sort((a, b) => (a.packageId === null) - (b.packageId === null) || a.name.localeCompare(b.name));
-  if (!pkgs.length) { list.appendChild(lfH("li", { className: "ft-env-status", textContent: filter ? "No flow matches the filter." : "No flows in this organisation." })); return; }
-  for (const p of pkgs) {
-    p.flows.sort((a, b) => a.name.localeCompare(b.name));
-    const ticked = p.flows.filter((a) => lf.sel.has(a.id)).length;
-    const details = lfH("details", { className: "lf-pkg" });
-    details.open = !!filter || ticked > 0 || pkgs.length === 1;
-    details.appendChild(lfH("summary", {},
-      lfH("span", { className: `ft-icon ft-icon-${p.packageId ? "package" : "library"}`, textContent: p.packageId ? "P" : "L" }),
-      lfH("span", { className: "ft-name", textContent: p.name }),
-      ftChip(String(p.flows.length), ticked ? "info" : "muted", `${p.flows.length} flow${p.flows.length === 1 ? "" : "s"}${ticked ? `, ${ticked} ticked` : ""}`)));
-    const ul = lfH("ul", {});
-    for (const a of p.flows) {
-      const box = lfH("input", { type: "checkbox", checked: lf.sel.has(a.id) });
-      box.addEventListener("change", () => { if (box.checked) lf.sel.add(a.id); else lf.sel.delete(a.id); lfRenderFlowList(); });
-      ul.appendChild(lfH("li", {}, lfH("label", { className: "ft-env-row lf-flow-row" },
-        box,
-        ftKindIcon(a.type),
-        lfH("span", { className: "ft-name", textContent: a.name, title: a.name }),
-        a.tag ? ftChip(`⛓ ${a.tag.id}`, "muted", "Already linked: ticking it adds the other ticked flows to its group") : null,
-        a.id === lf.itemId ? ftChip("open", "info", "Open in the Designer") : null)));
-    }
-    details.appendChild(ul);
-    list.appendChild(lfH("li", {}, details));
-  }
-}
-
-/** Flows of the same name in more than one package that aren't all in one group yet: usually
- *  today's hand-made duplicates. */
-function lfRenderSuggest(flows, filter) {
-  const box = lfEl("lfSuggest");
-  box.innerHTML = "";
-  const byName = new Map();
-  for (const a of flows) {
-    const key = a.name.toUpperCase();
-    if (!byName.has(key)) byName.set(key, []);
-    byName.get(key).push(a);
-  }
-  const sets = [...byName.values()].filter((list) => {
-    if (new Set(list.map((a) => a.packageId)).size < 2) return false;
-    const ids = new Set(list.map((a) => (a.tag ? a.tag.id : `x${a.id}`)));
-    return ids.size > 1 && lfMatches(filter, list[0].name, ...list.map((a) => a.packageName));
-  }).slice(0, 6);
-  box.hidden = !sets.length;
-  if (!sets.length) return;
-  box.appendChild(lfH("div", { className: "lf-suggest-title" }, lfH("span", { textContent: "Suggested" }), infoTip("Flows with the same name in more than one package that aren't linked together yet. Ticking a suggestion ticks all of them.")));
-  for (const list of sets) {
-    const all = list.every((a) => lf.sel.has(a.id));
-    const box2 = lfH("input", { type: "checkbox", checked: all });
-    box2.addEventListener("change", () => { for (const a of list) { if (box2.checked) lf.sel.add(a.id); else lf.sel.delete(a.id); } lfRenderFlowList(); });
-    box.appendChild(lfH("label", { className: "ft-env-row lf-flow-row" }, box2,
-      lfH("span", { className: "lf-suggest-text" }, lfH("strong", { textContent: list[0].name }), lfH("span", { className: "api-hint", textContent: list.map((a) => a.packageName).join(", ") }))));
-  }
 }
 
 /* --- groups overview --- */
@@ -372,11 +311,11 @@ function lfSyncButton(members, compact) {
 
 function lfShownGroups() {
   const groups = [...lfGroups().entries()];
-  const filter = lfEl("lfGroupFilter").value;
-  const only = lfEl("lfOnlyAttention").checked;
+  const filter = lfEl("lfGroupFilter") ? lfEl("lfGroupFilter").value : "";
+  const only = lfEl("lfOnlyAttention") ? lfEl("lfOnlyAttention").checked : false;
   const needs = (members) => members.some((m) => lfStatusOf(m.id) !== "in_sync" && lfStatusOf(m.id) !== "checking");
   const attention = groups.filter(([, m]) => needs(m)).length;
-  lfEl("lfGroupCount").textContent = groups.length ? `${groups.length}${attention ? ` · ${attention} need attention` : ""}` : "";
+  if (lfEl("lfGroupCount")) lfEl("lfGroupCount").textContent = groups.length ? `${groups.length}${attention ? ` · ${attention} need attention` : ""}` : "";
   const shown = groups
     .filter(([, m]) => lfMatches(filter, m[0].name, ...m.map((a) => a.packageName)))
     .filter(([, m]) => !only || needs(m))
@@ -391,13 +330,14 @@ const lfLatestOf = (members) => {
 };
 
 function lfRenderGroups() {
+  if (!lfEl("lfGroups")) return;
   if (LF_PAGE) return lfRenderMatrix();
   const ul = lfEl("lfGroups");
   ul.innerHTML = "";
   if (!lf.scan) return;
   const { groups, shown } = lfShownGroups();
   if (!shown.length) {
-    ul.appendChild(lfH("li", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Open a flow and use Copy & link to packages, or tick flows under Copy & link flows." }));
+    ul.appendChild(lfH("li", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Use Copy & link flows to start a group." }));
     return;
   }
   for (const [linkId, members] of shown) {
@@ -412,7 +352,7 @@ function lfRenderGroups() {
     const sync = lfSyncButton(members, false);
     if (sync) card.appendChild(sync);
     card.appendChild(lfCta({ icon: "link", tone: "blue", label: "Copy to more packages", title: "Copy this flow into more packages, linked to the group",
-      onclick: () => lfStartLink([(members.find((m) => lfStatusOf(m.id) === "in_sync") || members[0]).id], { suggestSame: true }) }));
+      onclick: () => lfOpenCopy((members.find((m) => lfStatusOf(m.id) === "in_sync") || members[0]).id) }));
     const rows = lfH("ul", {});
     for (const m of members) {
       const status = lfStatusOf(m.id);
@@ -496,16 +436,17 @@ function lfShowWork(node, keepWork) {
   work.appendChild(node);
   work.hidden = false;
   if (LF_PAGE) return; // the overview keeps the table next to the work view
-  lfEl("lfBrowse").hidden = true;
+  if (lfEl("lfBrowse")) lfEl("lfBrowse").hidden = true;
   work.scrollIntoView({ block: "start" });
 }
 
 function lfCloseWork() {
   lf.work = null;
+  if (typeof lcReset === "function") return lcReset();
   if (LF_PAGE) { lf.page.selMember = null; lfPagePlaceholder(); if (lf.scan) lfRenderMatrix(); return; }
   lfEl("lfWork").hidden = true;
   lfEl("lfWork").innerHTML = "";
-  lfEl("lfBrowse").hidden = false;
+  if (lfEl("lfBrowse")) lfEl("lfBrowse").hidden = false;
 }
 
 function lfPagePlaceholder() {
@@ -545,151 +486,6 @@ function lfRefList(refs) {
 }
 
 /** Link plan: start version, existing flows to link, packages to get a new linked copy. */
-function lfStartLink(ids, opts) {
-  const assets = ids.map(lfAsset).filter(Boolean);
-  if (!assets.length) return;
-  const tagged = assets.find((a) => a.tag);
-  const open = assets.find((a) => a.id === lf.itemId);
-  const w = {
-    kind: "link",
-    sourceId: (tagged || open || assets[0]).id,
-    adopt: new Set(assets.map((a) => a.id)),
-    fresh: new Set(),
-    candidates: assets.map((a) => a.id),
-    plan: null,
-    seq: 0
-  };
-  const source = lfAsset(w.sourceId);
-  if (opts && opts.suggestSame) {
-    for (const a of lfFlows()) if (a.id !== source.id && a.packageId !== source.packageId && a.name.toUpperCase() === source.name.toUpperCase() && !a.tag) w.candidates.push(a.id);
-  }
-  // A group's members are already linked; offer the rest of the group as context only.
-  lf.work = w;
-  lfRenderLink();
-}
-
-function lfRenderLink() {
-  const w = lf.work;
-  const source = lfAsset(w.sourceId);
-  w.adopt.delete(w.sourceId);
-  const group = source.tag ? lfGroups().get(source.tag.id) || [] : [];
-  const taken = new Set([source.packageId, ...group.map((m) => m.packageId)]);
-  const root = lfH("div", { className: "api-loaded" });
-  root.appendChild(lfH("div", { className: "api-summary" }, lfH("strong", { textContent: `Link ${source.name}` }),
-    lfH("span", { className: "list-count", textContent: source.tag ? `adds to group ${source.tag.id} (${group.length} package${group.length === 1 ? "" : "s"})` : "starts a new link group" })));
-
-  // Start version
-  const starters = w.candidates.map(lfAsset).filter((a) => a && (!a.tag || (source.tag && a.tag.id === source.tag.id)));
-  if (!source.tag && starters.length > 1) {
-    const select = lfH("select", { id: "lfStartFrom" });
-    for (const a of starters) select.appendChild(lfH("option", { value: a.id, textContent: `${a.packageName}${a.id === lf.itemId ? " (open)" : ""}`, selected: a.id === w.sourceId ? "selected" : null }));
-    select.value = w.sourceId;
-    select.addEventListener("change", () => { w.adopt.add(w.sourceId); w.sourceId = select.value; lfRenderLink(); });
-    root.appendChild(lfH("label", { className: "api-field" },
-      lfH("span", { className: "lf-label" }, "Start from the version in", infoTip("New copies get this version's steps. Existing flows you link keep their own steps for now: the same steps are in sync right away, other steps show 'Steps differ' until someone pushes or pulls.")), select));
-  } else {
-    root.appendChild(lfH("span", { className: "api-hint", textContent: `Version from ${source.packageName}${source.tag ? ", the group's copy" : ""}.` }));
-  }
-
-  // New copies
-  const adoptPkgs = new Set([...w.adopt].map((id) => lfAsset(id)).filter(Boolean).map((a) => a.packageId));
-  const pkgs = lf.scan.packages.filter((p) => !taken.has(p.id) && !adoptPkgs.has(p.id));
-  for (const id of [...w.fresh]) if (taken.has(id) || adoptPkgs.has(id)) w.fresh.delete(id);
-  root.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Copy into these packages, linked" }), infoTip("Copy and link in one go: each ticked package gets a new flow with the same name and steps, linked to the others and committed. Package modules it uses are taken from that package (same name), or copied there when missing. App Library modules are shared.")));
-  const filter = lfH("input", { type: "search", className: "lf-filter", placeholder: "Filter packages…", autocomplete: "off", value: w.pkgFilter || "" });
-  root.appendChild(filter);
-  const pkgBox = lfH("div", { className: "ft-node lf-checks lf-pkg-checks" });
-  const renderPkgs = () => {
-    pkgBox.innerHTML = "";
-    const shown = pkgs.filter((p) => lfMatches(filter.value, p.name));
-    if (!shown.length) pkgBox.appendChild(lfH("span", { className: "api-hint", textContent: pkgs.length ? "No package matches." : "Every package already has a copy." }));
-    for (const p of shown) {
-      const same = lfFlows().find((a) => a.packageId === p.id && a.name.toUpperCase() === source.name.toUpperCase());
-      const cb = lfH("input", { type: "checkbox", checked: w.fresh.has(p.id) });
-      cb.addEventListener("change", () => { if (cb.checked) w.fresh.add(p.id); else w.fresh.delete(p.id); lfPlanLink(); });
-      pkgBox.appendChild(lfH("label", { className: "api-check" }, cb, lfH("span", { textContent: p.name }),
-        same ? ftChip(`has "${same.name}"`, "warn", "This package already has a flow with this name. Link that one instead (tick it in Link flows), or create a second one.") : null));
-    }
-  };
-  filter.addEventListener("input", () => { w.pkgFilter = filter.value; renderPkgs(); });
-  renderPkgs();
-  root.appendChild(pkgBox);
-
-  // Existing flows to link
-  const others = w.candidates.filter((id) => id !== w.sourceId).map(lfAsset).filter(Boolean);
-  if (others.length) {
-    const box = lfH("div", { className: "ft-node lf-checks" });
-    for (const a of others) {
-      const cb = lfH("input", { type: "checkbox", checked: w.adopt.has(a.id) });
-      cb.addEventListener("change", () => { if (cb.checked) w.adopt.add(a.id); else w.adopt.delete(a.id); lfRenderLink(); });
-      box.appendChild(lfH("label", { className: "api-check" }, cb, lfH("span", { textContent: `${a.name} in ${a.packageName}` })));
-    }
-    root.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Also link existing flows" }), infoTip("These flows stay as they are and get the link tag. Their steps change only when someone pushes or pulls.")));
-    root.appendChild(box);
-  }
-
-
-  root.appendChild(lfH("h2", { textContent: "What happens" }));
-  root.appendChild(lfH("ul", { id: "lfLinkPlan", className: "ft-tree" }));
-  const run = lfH("button", { id: "lfLinkRun", className: "btn-primary", textContent: "Link", disabled: true });
-  run.addEventListener("click", () => lfBusy(run, "Linking…", lfRunLink));
-  root.appendChild(lfH("div", { className: "deploy-actions" }, run, lfH("button", { className: "btn-ghost", textContent: "Cancel", onclick: lfCloseWork })));
-  lfShowWork(root);
-  lfPlanLink();
-}
-
-let lfPlanTimer = null;
-function lfPlanLink() {
-  clearTimeout(lfPlanTimer);
-  lfPlanTimer = setTimeout(lfPlanLinkNow, 250);
-}
-
-async function lfPlanLinkNow() {
-  const w = lf.work;
-  if (!w || w.kind !== "link") return;
-  const seq = ++w.seq;
-  const list = lfEl("lfLinkPlan");
-  const run = lfEl("lfLinkRun");
-  if (!list) return;
-  list.innerHTML = "";
-  list.appendChild(lfH("li", { className: "ft-env-status", textContent: "Checking…" }));
-  run.disabled = true;
-  const response = await sendOrShowError({ type: "LF_PLAN_LINK", orgId: lf.orgId, sourceId: w.sourceId, adoptIds: [...w.adopt], newPackageIds: [...w.fresh] }, true);
-  if (!lf.work || lf.work !== w || seq !== w.seq) return;
-  list.innerHTML = "";
-  if (!response) return;
-  const plan = response.plan;
-  w.plan = plan;
-  const node = (title, chips, extra) => lfH("li", {}, lfH("div", { className: "ft-node" }, lfH("div", { className: "ft-node-head" }, lfH("span", { className: "ft-icon ft-icon-package", textContent: "P" }), lfH("span", { className: "ft-name", textContent: title })), ftChipRow(...chips), extra || null));
-  if (!plan.linkId) list.appendChild(node(plan.sourcePackage, [ftChip("Gets the link tag", "info"), ftChip("steps unchanged", "muted")]));
-  for (const a of plan.adopt) {
-    list.appendChild(node(a.packageName, a.blocked ? [ftChip("Not possible", "warn")] : [ftChip("Gets the link tag", "info"), a.sameSteps ? ftChip("Same steps: in sync", "ok") : ftChip("Steps differ", "warn", "Linked with its own steps. Push or pull afterwards to make them equal.")],
-      a.blocked ? lfH("span", { className: "ft-note ft-differs", textContent: a.blocked }) : null));
-  }
-  for (const f of plan.fresh) {
-    list.appendChild(node(f.packageName, f.blocked ? [ftChip("Not possible", "warn")] : [ftChip("New linked copy", "ok"), ftChip("committed", "muted"), f.existingId ? ftChip("second flow with this name", "warn") : null],
-      f.blocked ? lfH("span", { className: "ft-note ft-differs", textContent: f.blocked }) : lfRefList(f.refs)));
-  }
-  if (plan.blocked) list.appendChild(lfH("li", { className: "ft-note ft-differs", textContent: plan.blocked }));
-  const doing = (plan.linkId ? 0 : 1) + plan.adopt.filter((a) => !a.blocked).length + plan.fresh.filter((f) => !f.blocked).length;
-  const total = doing + (plan.linkId ? 1 : 0);
-  run.textContent = plan.fresh.some((f) => !f.blocked) ? `Copy and link (${total} flows)` : `Link ${total} flows`;
-  run.disabled = !!plan.blocked || doing === 0 || (!plan.linkId && doing < 2);
-  run.title = !plan.linkId && doing < 2 ? "Pick at least one other flow or package." : "";
-}
-
-async function lfRunLink() {
-  const w = lf.work;
-  const response = await sendOrShowError({ type: "LF_LINK", orgId: lf.orgId, sourceId: w.sourceId, adoptIds: [...w.adopt], newPackageIds: [...w.fresh] }, true);
-  if (!response) return;
-  lf.sel.clear();
-  lfShowResults(`Linked group ${response.outcome.linkId}`, response.outcome.results.map((r) => ({
-    ...r,
-    outcome: r.outcome === "failed" ? "failed" : "pushed",
-    note: r.outcome === "created" ? `new linked copy, committed${r.copiedIn && r.copiedIn.length ? ` · copied in ${r.copiedIn.join(", ")}` : ""}` : r.outcome === "linked" ? (r.differs ? "linked · steps differ, push or pull to align" : "linked") : r.reason
-  })));
-}
-
 /* --- push / pull --- */
 
 async function lfStartPull(asset) {
