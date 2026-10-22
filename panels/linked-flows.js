@@ -311,7 +311,8 @@ function lfRenderGroups() {
   }
   for (const [linkId, members] of shown) {
     const maxRev = lfMaxRev(members);
-    const latest = members.find((m) => m.tag.rev === maxRev && lfStatusOf(m.id) === "in_sync") || members.find((m) => m.tag.rev === maxRev);
+    const top = members.find((m) => m.tag.rev === maxRev);
+    const latest = members.find((m) => top && m.id === top.tag.src) || null;
     const card = lfH("div", { className: "ft-node" },
       lfH("div", { className: "ft-node-head" },
         lfH("span", { className: "ft-icon lf-icon-link", textContent: "⛓" }),

@@ -606,3 +606,5 @@ input.rename-input { width: 100%; }
 .tab-menu-row .tab-item { flex: 1; }
 .tab-menu-row .info-tip { margin: 0 6px; }
 .search-row .info-tip, .deploy-actions .info-tip, .api-source-actions .info-tip { align-self: center; }
+input.lf-filter { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); padding: 6px 12px; }
+input.lf-filter:focus-visible { border-color: var(--accent); outline: none; }
