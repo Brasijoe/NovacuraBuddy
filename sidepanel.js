@@ -6,12 +6,58 @@ function showTab(name) {
     document.getElementById(`tab-${tab}`).classList.toggle("is-active", tab === name);
     document.getElementById(`panel-${tab}`).hidden = tab !== name;
   }
+  for (const group of document.querySelectorAll(".tab-group")) {
+    const active = group.querySelector(".tab-item.is-active");
+    const btn = group.querySelector(".tab-group-btn");
+    btn.classList.toggle("is-active", !!active);
+    btn.title = active ? active.textContent : "";
+  }
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
 }
 
-for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => showTab(tab));
+for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => { showTab(tab); closeTabMenus(); });
+
+// Tab group menus: hover opens them through CSS; click, Enter/Space and the arrow keys open them
+// here for touch and keyboard. After a pick the menu stays shut until the pointer leaves it.
+function closeTabMenus(except) {
+  for (const group of document.querySelectorAll(".tab-group")) {
+    if (group === except) continue;
+    group.classList.remove("is-open");
+    group.querySelector(".tab-group-btn").setAttribute("aria-expanded", "false");
+  }
+}
+function openTabMenu(group, focusItem) {
+  closeTabMenus(group);
+  group.classList.add("is-open");
+  group.classList.remove("is-suppressed");
+  group.querySelector(".tab-group-btn").setAttribute("aria-expanded", "true");
+  if (focusItem) (group.querySelector(".tab-item.is-active") || group.querySelector(".tab-item")).focus();
+}
+for (const group of document.querySelectorAll(".tab-group")) {
+  const btn = group.querySelector(".tab-group-btn");
+  const items = () => [...group.querySelectorAll(".tab-item")];
+  btn.addEventListener("click", () => {
+    if (group.classList.contains("is-open")) { closeTabMenus(); group.classList.add("is-suppressed"); }
+    else openTabMenu(group, false);
+  });
+  btn.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") { e.preventDefault(); openTabMenu(group, true); }
+  });
+  group.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeTabMenus(); group.classList.add("is-suppressed"); btn.focus(); return; }
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    if (i < 0) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length].focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+  });
+  for (const item of items()) item.addEventListener("click", () => { group.classList.add("is-suppressed"); item.blur(); });
+  group.addEventListener("mouseleave", () => { group.classList.remove("is-suppressed"); closeTabMenus(); });
+  group.addEventListener("focusout", (e) => { if (!group.contains(e.relatedTarget)) group.classList.remove("is-open"); });
+}
+document.addEventListener("click", (e) => { if (!e.target.closest(".tab-group")) closeTabMenus(); });
 
 let initialTab = "tracker";
 try { initialTab = TABS.includes(localStorage.getItem(TAB_KEY)) ? localStorage.getItem(TAB_KEY) : "tracker"; } catch { /* default */ }

@@ -24,13 +24,29 @@
       <button id="unlockBtn">Unlock</button>
     </div>
 
+    <!-- Tabs are grouped into menus that open on hover, click or keyboard focus. To add a tab,
+         put its button into a group's .tab-menu (or straight into the nav) and its id into TABS. -->
     <nav class="tabs" role="tablist">
-      <button id="tab-tracker" class="tab" role="tab">Projection Tracker</button>
-      <button id="tab-recorder" class="tab" role="tab">Traffic Recorder</button>
-      <button id="tab-quick-reports" class="tab" role="tab">Quick Reports</button>
-      <button id="tab-custom-lus" class="tab" role="tab">Custom LUs</button>
-      <button id="tab-api-modules" class="tab" role="tab">API Modules</button>
-      <button id="tab-flows" class="tab" role="tab">Import/Export</button>
+      <div class="tab-group">
+        <button class="tab tab-group-btn" aria-haspopup="true" aria-expanded="false">
+          IFS Functions<span class="tab-caret" aria-hidden="true"></span>
+        </button>
+        <div class="tab-menu">
+          <button id="tab-tracker" class="tab-item" role="tab">Projection Tracker</button>
+          <button id="tab-recorder" class="tab-item" role="tab">Traffic Recorder</button>
+          <button id="tab-quick-reports" class="tab-item" role="tab">Quick Reports</button>
+          <button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button>
+        </div>
+      </div>
+      <div class="tab-group">
+        <button class="tab tab-group-btn" aria-haspopup="true" aria-expanded="false">
+          Flow Functions<span class="tab-caret" aria-hidden="true"></span>
+        </button>
+        <div class="tab-menu">
+          <button id="tab-api-modules" class="tab-item" role="tab">API Modules</button>
+          <button id="tab-flows" class="tab-item" role="tab">Import/Export</button>
+        </div>
+      </div>
       <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
     </nav>
 
