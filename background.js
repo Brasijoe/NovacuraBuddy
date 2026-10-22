@@ -742,7 +742,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const flowFetch = boundFlowFetch();
           linkScanDone(message.orgId);
           const index = new Map((await linkScan(message.orgId, true)).assets.map((a) => [a.id, a]));
-          const flows = message.assetIds.map((id) => index.get(id)).filter(Boolean).map((a) => ({ id: a.id, packageId: a.packageId, headVersionId: a.mainBranch && a.mainBranch.headVersionId }));
+          const flows = message.assetIds.map((id) => index.get(id)).filter(Boolean).map((a) => ({ id: a.id, type: a.type, packageId: a.packageId, headVersionId: a.mainBranch && a.mainBranch.headVersionId }));
           log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
           return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }

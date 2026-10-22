@@ -716,6 +716,7 @@ async function lfStartPush(sourceId, targetIds, pullInto, opts) {
 
 /** Environments for the deploy chips, and where the group's flows are deployed now. */
 async function lfLoadEnvironments(w) {
+  if (!lfDeployable(lfAsset(w.plan.sourceId))) return;
   const flows = [lfAsset(w.plan.sourceId), ...w.plan.targets.map((t) => t.asset)].filter(Boolean).map((a) => ({ id: a.id, packageId: a.packageId }));
   const response = await send({ type: "LF_ENVIRONMENTS", orgId: lf.orgId, flows });
   // Development is where flows are built; Flow deploys only to the other environments.
@@ -730,6 +731,11 @@ function lfRenderDeploy(w) {
   const box = lfH("div", { className: "lf-deploy" });
   box.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Deploy after sync" }),
     infoTip("Optional. Tick the environments that should get the new versions right after the push. Each synced copy is deployed from its own package. Nothing is remembered: every sync starts with none ticked.")));
+  const src = lfAsset(w.plan.sourceId);
+  if (!lfDeployable(src)) {
+    box.appendChild(lfH("span", { className: "api-hint", textContent: `Only flows and automations can be deployed. ${src ? src.name : "This"} is a ${ftKind(src && src.type).label.toLowerCase()} (${src ? src.type : "unknown"}), which reaches an environment with the flows that use it.` }));
+    return box;
+  }
   if (!w.envs) { box.appendChild(lfH("span", { className: "api-hint", textContent: "Reading environments…" })); return box; }
   if (w.envs.error) { box.appendChild(lfH("span", { className: "api-hint", textContent: `Environments could not be read: ${w.envs.error}` })); return box; }
   if (!w.envs.list.length) { box.appendChild(lfH("span", { className: "api-hint", textContent: "This organisation has no environments to deploy to." })); return box; }
@@ -763,6 +769,9 @@ function lfRenderDeploy(w) {
   }
   return box;
 }
+
+// Flow deploys products only: flows (applications) and automations, never sub-flows (components) or modules.
+const lfDeployable = (asset) => !!asset && /^(application|automation|workflow|page)$/i.test(String(asset.type || ""));
 
 const lfDeployProd = (w) => (w.envs ? w.envs.list.filter((e) => e.isProduction && w.deploy.has(e.id)) : []);
 
@@ -889,7 +898,7 @@ async function lfRunPush() {
     note: r.outcome === "pushed" ? [r.unchanged ? "same steps, tag updated" : "steps now match, committed", r.overwrote ? "overwrote its own changes" : null, r.copiedIn && r.copiedIn.length ? `copied in ${r.copiedIn.join(", ")}` : null].filter(Boolean).join(" · ") : r.reason
   }));
   // Deploy only what this sync committed: the pushed copies and the source.
-  const envs = w.envs ? w.envs.list.filter((e) => w.deploy.has(e.id)) : [];
+  const envs = w.envs && lfDeployable(lfAsset(plan.sourceId)) ? w.envs.list.filter((e) => w.deploy.has(e.id)) : [];
   if (envs.length && pushed.length) {
     const ids = [...(w.pullInto ? [] : [plan.sourceId]), ...pushed.map((r) => r.id)];
     const name = (id) => { const a = lfAsset(id); return a ? a.packageName : id; };
