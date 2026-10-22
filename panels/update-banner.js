@@ -14,7 +14,23 @@ async function refreshUpdateBanner() {
   const howTo = document.createElement("p");
   howTo.className = "update-howto";
   howTo.hidden = true;
-  howTo.textContent = "Unzip it over your NovacuraBuddy folder (replace the files — same folder keeps your saved instances and settings), then open chrome://extensions and click Reload on NovacuraBuddy.";
+  // chrome:// pages can't be opened with a plain <a href>, only via chrome.tabs.create. An extension
+  // can't read its own folder path, but its details page shows it under "Source" (unpacked installs),
+  // and clicking that opens the folder in the file manager.
+  const chromeLink = (label, url) => {
+    const a = document.createElement("a");
+    a.href = "#";
+    a.textContent = label;
+    a.onclick = (e) => { e.preventDefault(); chrome.tabs.create({ url }); };
+    return a;
+  };
+  howTo.append(
+    "Unzip it over your NovacuraBuddy folder (replace the files — same folder keeps your saved instances and settings; find the folder under \"Source\" on ",
+    chromeLink("this extension's details page", `chrome://extensions/?id=${chrome.runtime.id}`),
+    "), then open ",
+    chromeLink("chrome://extensions", "chrome://extensions"),
+    " and click Reload on NovacuraBuddy."
+  );
 
   const download = document.createElement("button");
   download.className = "btn-primary";
