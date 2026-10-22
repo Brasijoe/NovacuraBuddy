@@ -502,3 +502,30 @@ input.rename-input { width: 100%; }
 .ft-env-hint { list-style: none; flex-wrap: wrap; font-size: 12.5px; margin: 4px 0; }
 .ft-env-hint span { flex-basis: 100%; }
 .ft-env-error { color: var(--accent-orange); }
+
+/* ---------- info icons ---------- */
+/* A small ⓘ next to anything that needs a word of explanation; panels/info-tip.js shows its
+   data-tip text in one shared bubble on hover, focus or click. */
+.info-tip {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid currentColor;
+  color: var(--neutral); cursor: help; vertical-align: middle;
+  font: italic 700 10px/1 Georgia, "Times New Roman", serif; text-transform: none; letter-spacing: 0;
+}
+.info-tip::before { content: "i"; }
+.info-tip:hover, .info-tip.is-open { color: var(--accent); }
+.info-tip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.info-tip-bubble {
+  position: fixed; z-index: 100; max-width: min(280px, calc(100vw - 12px));
+  padding: 8px 10px; border-radius: 10px; font-size: 12px; line-height: 1.45;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--surface-raised);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); pointer-events: none;
+}
+/* A heading (or control row) with its ⓘ beside it. */
+.section-head { display: flex; align-items: center; gap: 6px; }
+.section-head:has(> h2) { margin-bottom: var(--space-2); }
+.section-head h2 { margin: 0; }
+.tab-menu-row { display: flex; align-items: center; gap: 2px; }
+.tab-menu-row .tab-item { flex: 1; }
+.tab-menu-row .info-tip { margin: 0 6px; }
+.search-row .info-tip, .deploy-actions .info-tip, .api-source-actions .info-tip { align-self: center; }
