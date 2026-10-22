@@ -403,7 +403,7 @@ async function refreshDesignerTab(tab) {
   }
 }
 
-/** Flows tab: the target an import/copy starts on — the package of another open Designer tab
+/** Import/Export tab: the target an import/copy starts on — the package of another open Designer tab
  *  (most recently used first; the user's own login and package, nothing to ask), else the active
  *  Designer tab's own. */
 async function handleFlowDefaultTarget({ excludeItemId }) {
@@ -415,7 +415,10 @@ async function handleFlowDefaultTarget({ excludeItemId }) {
     .sort((a, b) => (b.tab.lastAccessed || 0) - (a.tab.lastAccessed || 0));
   const other = candidates.find((c) => c.parsed.itemId !== excludeItemId);
   const pick = other || candidates[0];
-  if (!pick) return null;
+  if (!pick) {
+    const { [LAST_FLOW_ORG_KEY]: orgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+    return orgId ? { orgId, packageId: null, fromOtherTab: false, tabTitle: "" } : null;
+  }
   const packageId = await FlowDesignerTab.resolvePackageId({ flowFetch, orgId: pick.parsed.orgId, itemId: pick.parsed.itemId });
   return { orgId: pick.parsed.orgId, packageId, fromOtherTab: !!other, tabTitle: pick.tab.title || "" };
 }
@@ -628,15 +631,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, result: await handleActivateModule(saved) });
         }
         case "FT_EXPORT": {
+          const generator = `NovacuraBuddy ${chrome.runtime.getManifest().version}`;
+          if (message.rootIds) { // picked in the package browser: no Designer tab needed
+            log("FT_EXPORT start:", message.rootIds.length, "asset(s) from org", message.orgId, "package", message.packageId || "(App Library)");
+            const pkg = await FlowTransfer.exportAssets({
+              flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null, rootIds: message.rootIds, generator, log
+            });
+            return sendResponse({ ok: true, pkg });
+          }
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
           log("FT_EXPORT start: flow", tab.itemId, "package", packageId);
-          const pkg = await FlowTransfer.exportFlow({
-            flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId,
-            generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log
-          });
+          const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator, log });
           return sendResponse({ ok: true, pkg });
         }
+        case "FT_LIST_ASSETS":
+          return sendResponse({ ok: true, assets: await FlowTransfer.listPackageAssets({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null }) });
         case "FT_ORGS":
           return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
         case "FT_PACKAGES":

@@ -154,7 +154,8 @@
     </section>
 
     <section id="panel-flows" role="tabpanel" hidden>
-      <p class="api-hint">Export the flow open in the Designer with its modules, sub-flows and other assets to a file, import such a file, or copy the flow straight to another organisation or package.</p>
+      <h2>Open flow</h2>
+      <p class="api-hint">The flow open in the Designer, with every module, sub-flow and asset it uses, at any depth.</p>
       <div class="deploy-actions">
         <button id="ftExportBtn" title="Download the open flow and everything it uses as one .json file">Export to file</button>
         <button id="ftCopyBtn" class="btn-primary" title="Copy the open flow and everything it uses to another organisation or package">Copy to…</button>
@@ -163,24 +164,39 @@
       </div>
       <p id="ftSourceHint" class="api-hint" hidden></p>
       <hr class="section-divider" />
-      <p id="ftEmpty" class="empty-state">Export, import or copy a flow to see what will be created in the target.</p>
+      <details id="ftBrowse" class="tracker-section">
+        <summary><h2>Export from a package</h2><span class="list-count" id="ftBrowseCount"></span></summary>
+        <p class="api-hint">Pick flows or a whole package. No Designer tab needed, only a Flow session.</p>
+        <label class="api-field">Organisation <select id="ftBrowseOrg"></select></label>
+        <label class="api-field">Package <select id="ftBrowsePackage"></select></label>
+        <div class="list-toolbar">
+          <label class="api-check"><input type="checkbox" id="ftBrowseAll" /> Whole package</label>
+          <span class="ft-chip ft-chip-info" id="ftBrowseSelected"></span>
+        </div>
+        <div id="ftBrowseList" class="ft-folders"></div>
+        <div class="deploy-actions">
+          <button id="ftBrowseExportBtn">Export selected</button>
+          <button id="ftBrowseCopyBtn" class="btn-primary">Copy selected to…</button>
+        </div>
+      </details>
+      <hr class="section-divider" />
+      <p id="ftEmpty" class="empty-state">Export, import or copy to see the dependency tree and what will happen in the target.</p>
+      <div id="ftSummary" class="ft-result" hidden></div>
       <div id="ftTarget" class="api-loaded" hidden>
         <div class="api-summary"><strong id="ftTitle"></strong><span class="list-count" id="ftMeta"></span></div>
         <label class="api-field">Target organisation <select id="ftOrg"></select></label>
         <label class="api-field">Target package <select id="ftPackage"></select></label>
         <span class="list-count" id="ftTargetHint"></span>
-        <h2>Assets</h2>
-        <ul id="ftAssets" class="ft-list"></ul>
+        <h2>What happens in the target</h2>
+        <ul id="ftAssets" class="ft-tree"></ul>
         <div id="ftConnectorsBox" hidden>
           <h2>Connectors</h2>
           <ul id="ftConnectors" class="ft-list"></ul>
         </div>
-        <label class="api-field" id="ftRootNameField">Name of the new flow <input id="ftRootName" spellcheck="false" /></label>
         <div class="deploy-actions">
           <button id="ftRunBtn" class="btn-primary">Import</button>
           <button id="ftCancelBtn" class="btn-ghost">Cancel</button>
         </div>
-        <p id="ftRunHint" class="api-hint" hidden></p>
       </div>
       <div id="ftResult" class="ft-result" hidden></div>
     </section>
@@ -233,6 +249,7 @@
     <script src="apimodule/flow-runtime.js"></script>
     <script src="apimodule/flow-emit.js"></script>
     <script src="panels/api-modules.js"></script>
+    <script src="lib/flow-tree.js"></script>
     <script src="panels/flow-transfer.js"></script>
     <script src="sidepanel.js"></script>
   </body>
