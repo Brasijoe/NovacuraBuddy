@@ -657,9 +657,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, plan: await FlowTransfer.planImport({ flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null }) });
         case "FT_IMPORT": {
           log("FT_IMPORT start: into org", message.orgId, "package", message.packageId || "(App Library)");
+          const flowFetch = boundFlowFetch();
+          let generateCode = null;
+          if (message.baseUrl) { // "Generate from IFS": the same code generation as Create module
+            const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
+            const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
+            generateCode = async (projectionName) => {
+              log("FT_IMPORT: generating", projectionName, "from", message.baseUrl);
+              const inputs = await ProjectionSearch.fetchProjectionCodegenInputs(message.baseUrl, ifsToken, projectionName);
+              return FlowModules.generateModuleCode({
+                flowFetch, csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
+                codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
+              });
+            };
+          }
           const outcome = await FlowTransfer.runImport({
-            flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null,
-            choices: message.choices, connectorMap: message.connectorMap, rootName: message.rootName, log
+            flowFetch, pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null,
+            choices: message.choices, connectorMap: message.connectorMap, names: message.names, generateCode, log
           });
           await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.choice === "update").map((r) => r.targetId));
           return sendResponse({ ok: true, outcome });

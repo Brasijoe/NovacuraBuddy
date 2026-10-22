@@ -19,9 +19,9 @@ let ftBrowseSelected = new Set();
 
 const ftEl = (id) => document.getElementById(id);
 
-const FT_CHOICE_LABELS = { use: "Use existing as-is", update: "Update existing", create: "Create new" };
+const FT_CHOICE_LABELS = { use: "Use existing as-is", update: "Update existing", create: "Create new", regenerate: "Generate from IFS" };
 const FT_LOCATION_CHIPS = { package: "In target package", library: "In App Library" };
-const FT_RESULT_CHIPS = { use: ["Used as-is", "info"], update: ["Updated", "warn"], create: ["Created", "ok"] };
+const FT_RESULT_CHIPS = { use: ["Used as-is", "info"], update: ["Updated", "warn"], create: ["Created", "ok"], regenerate: ["Generated from IFS", "ok"] };
 
 function ftKind(type) {
   if (type === "module") return { icon: "M", cls: "module", label: "Module" };
@@ -346,6 +346,8 @@ async function ftOpen(pkg, mode) {
   ftEl("ftTarget").hidden = false;
   ftRenderTree(ftEl("ftAssets"), pkg);
   ftEl("ftConnectorsBox").hidden = true;
+  ftEl("ftIfsBox").hidden = true;
+  ftEl("ftIfs").innerHTML = "";
 
   const roots = FlowTree.rootIdsOf(pkg);
   const t = await ftFillOrgs(ftEl("ftOrg"), mode === "copy" && roots.length === 1 ? roots[0] : null);
@@ -383,11 +385,17 @@ function ftRenderPlan() {
     const row = rows.get(node.id);
     if (!row) return;
     const code = row.sameCode === true ? ftChip("Same code", "ok") : row.sameCode === false ? ftChip("Code differs", "warn") : null;
+    const ifs = row.ifsProjection ? ftChip(`IFS ${row.ifsProjection}`, "muted", "Generated from this IFS projection") : null;
     card.appendChild(row.existing
-      ? ftChipRow(ftChip(FT_LOCATION_CHIPS[row.existing.location] || row.existing.location, "info", `Matched by name: ${row.existing.name}`), code)
-      : ftChipRow(ftChip("New in target", "ok", "Not in the target yet, will be created")));
+      ? ftChipRow(ftChip(FT_LOCATION_CHIPS[row.existing.location] || row.existing.location, "info", `Matched by name: ${row.existing.name}`), code, ifs)
+      : ftChipRow(ftChip("New in target", "ok", "Not in the target yet, will be created"), ifs));
     const select = document.createElement("select");
-    for (const option of row.options) ftOption(select, option, row.isRoot && option === "create" ? "Create new flow" : FT_CHOICE_LABELS[option]);
+    for (const option of row.options) {
+      const label = row.isRoot && option === "create" ? "Create new flow"
+        : option === "regenerate" ? (row.existing ? "Update existing, generated from IFS" : "Create new, generated from IFS")
+        : option === "create" && row.ifsProjection ? "Create new, copy code" : FT_CHOICE_LABELS[option];
+      ftOption(select, option, label);
+    }
     select.value = ftChoices[row.id];
     select.disabled = row.options.length === 1;
     card.appendChild(select);
@@ -404,8 +412,12 @@ function ftRenderPlan() {
       card.appendChild(field);
       select.addEventListener("change", () => { field.hidden = select.value !== "create"; });
     }
-    select.addEventListener("change", () => { ftChoices[row.id] = select.value; });
+    select.addEventListener("change", () => {
+      ftChoices[row.id] = select.value;
+      ftApplyIfsBox();
+    });
   });
+  ftApplyIfsBox();
 
   const box = ftEl("ftConnectorsBox");
   const connectors = ftEl("ftConnectors");
@@ -433,9 +445,22 @@ function ftRenderPlan() {
   }
 }
 
+/** The IFS instance picker shows while any module is set to "Generate from IFS". */
+function ftApplyIfsBox() {
+  const needed = !!ftPlan && ftPlan.assets.some((row) => ftChoices[row.id] === "regenerate");
+  ftEl("ftIfsBox").hidden = !needed;
+  if (!needed) return;
+  const select = ftEl("ftIfs");
+  if (!select.options.length) {
+    ftOption(select, "", currentInstances.length ? "Pick an IFS instance…" : "No IFS instance saved (Basic Data)");
+    for (const i of currentInstances) ftOption(select, i.baseUrl, i.name);
+    if (currentBaseUrl && currentInstances.some((i) => i.baseUrl === currentBaseUrl)) select.value = currentBaseUrl;
+  }
+}
+
 async function ftRunImport() {
   if (!ftPlan) return;
-  const updates = ftPlan.assets.filter((row) => ftChoices[row.id] === "update").map((row) => row.existing.name);
+  const updates = ftPlan.assets.filter((row) => ftChoices[row.id] === "update" || (ftChoices[row.id] === "regenerate" && row.existing)).map((row) => row.existing.name);
   if (updates.length && !confirm(`This replaces the content of ${updates.join(", ")} in the target. Other flows using them see the change. Continue?`)) return;
   const names = {};
   for (const row of ftPlan.assets.filter((r) => r.isRoot && ftChoices[r.id] === "create")) {
@@ -445,11 +470,17 @@ async function ftRunImport() {
       return;
     }
   }
+  const regenerating = ftPlan.assets.some((row) => ftChoices[row.id] === "regenerate");
+  const baseUrl = regenerating ? ftEl("ftIfs").value : null;
+  if (regenerating && !baseUrl) {
+    showError('Pick the IFS instance to generate the "Generate from IFS" modules from.', true);
+    return;
+  }
   const connectorMap = {};
   for (const [id, target] of Object.entries(ftConnectorChoices)) connectorMap[id] = target || null;
   const response = await actionOrShowError({
     type: "FT_IMPORT", pkg: ftPkg, orgId: ftEl("ftOrg").value, packageId: ftEl("ftPackage").value || null,
-    choices: ftChoices, connectorMap, names
+    choices: ftChoices, connectorMap, names, baseUrl, masterPassword: baseUrl ? masterPasswordOf() : undefined
   });
   if (!response) return;
   ftShowResult(response.outcome);
