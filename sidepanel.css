@@ -541,7 +541,8 @@ input.rename-input { width: 100%; }
 .lf-only { font-size: 12px; }
 .lf-groups > li + li { margin-top: var(--space-2); }
 .lf-icon-link { background: var(--ink); color: var(--surface); }
-.lf-member .ft-name { font-weight: 500; }
+.lf-member .ft-name { font-weight: 500; overflow-wrap: normal; word-break: normal; }
+.lf-member .ft-node-head { flex-wrap: wrap; row-gap: 4px; }
 .lf-checks { gap: 4px; }
 .lf-pkg-checks { max-height: 220px; overflow-y: auto; }
 .lf-pills { gap: 6px; }
