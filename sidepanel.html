@@ -44,7 +44,7 @@
         </button>
         <div class="tab-menu">
           <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
-          <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows with every module and sub-flow they use to a file, import such a file, or copy flows straight into another organisation or package."></span></div>
+          <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported flows and modules are committed as a new version."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
         </div>
       </div>
@@ -177,7 +177,7 @@
     </section>
 
     <section id="panel-flows" role="tabpanel" hidden>
-      <h2>Open flow</h2>
+      <div class="section-head"><h2>Open flow</h2><span class="info-tip" data-tip="Works on the flow open in the Designer tab. Export downloads it with every module and sub-flow it uses as one .json file. Copy to… puts all of it into another organisation or package. Import file… reads such a file, or a package export, into Flow."></span></div>
       <p class="api-hint">The flow open in the Designer, with every module, sub-flow and asset it uses, at any depth.</p>
       <div class="deploy-actions">
         <button id="ftExportBtn" title="Download the open flow and everything it uses as one .json file">Export to file</button>
@@ -188,7 +188,7 @@
       <p id="ftSourceHint" class="api-hint" hidden></p>
       <hr class="section-divider" />
       <details id="ftBrowse" class="tracker-section">
-        <summary><h2>Export or copy from Flow</h2></summary>
+        <summary><h2>Export or copy from Flow</h2><span class="info-tip" data-tip="Browse every organisation you can reach without opening a flow. Tick whole packages, single flows or modules; what they use is included automatically. A selection stays within one organisation."></span></summary>
         <p class="api-hint">Your organisations, their packages and App Library, and what each flow uses. Tick whole packages or single flows and modules (one organisation at a time). Levels load when you open them.</p>
         <div class="list-toolbar">
           <span class="ft-chip ft-chip-info" id="ftBrowseSelected">Nothing selected</span>
@@ -205,26 +205,26 @@
       <div id="ftSummary" class="ft-result" hidden></div>
       <div id="ftTarget" class="api-loaded" hidden>
         <div class="api-summary"><strong id="ftTitle"></strong><span class="list-count" id="ftMeta"></span></div>
-        <label class="api-field">Target organisation <select id="ftOrg"></select></label>
+        <label class="api-field"><span class="section-head">Target organisation<span class="info-tip" data-tip="Where the import or copy goes. It starts with the organisation of another open Designer tab, or the last one you used."></span></span><select id="ftOrg"></select></label>
         <span class="list-count" id="ftTargetHint"></span>
         <div id="ftLayoutBox" class="ft-layout" hidden>
           <label class="api-check"><input type="radio" name="ftLayout" value="packages" checked /> Recreate the exported packages with their content</label>
           <label class="api-check"><input type="radio" name="ftLayout" value="single" /> Put everything into one package</label>
         </div>
-        <label class="api-field" id="ftPackageField">Target package <select id="ftPackage"></select></label>
+        <label class="api-field" id="ftPackageField"><span class="section-head">Target package<span class="info-tip" data-tip="Package flows and package modules go into. A flow can only use modules of its own package or the global App Library, so everything it needs lands here; App Library assets stay in the App Library."></span></span><select id="ftPackage"></select></label>
         <div id="ftPackagesBox" hidden>
-          <h2>Packages</h2>
+          <div class="section-head"><h2>Packages</h2><span class="info-tip" data-tip="Each exported package is created again in the target, or a package with the same name is used. Its flows and modules go into that package."></span></div>
           <ul id="ftPackages" class="ft-list"></ul>
           <p class="api-hint">App Library assets go back to the App Library.</p>
         </div>
-        <h2>What happens in the target</h2>
+        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Flows and modules that are created or updated are committed as a new version."></span></div>
         <ul id="ftAssets" class="ft-tree"></ul>
         <div id="ftIfsBox" class="ft-ifs" hidden>
           <label class="api-field">IFS instance for "Generate from IFS" <select id="ftIfs"></select></label>
           <span class="api-hint">IFS modules picked for "Generate from IFS" are generated fresh from this instance, exactly like Create module in the Projection Tracker.</span>
         </div>
         <div id="ftConnectorsBox" hidden>
-          <h2>Connectors</h2>
+          <div class="section-head"><h2>Connectors</h2><span class="info-tip" data-tip="Connectors the flows' steps use, matched to the target's connectors by name and type. Steps whose connector has no match need it set in the Designer afterwards."></span></div>
           <ul id="ftConnectors" class="ft-list"></ul>
         </div>
         <div class="deploy-actions">
