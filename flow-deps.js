@@ -1,5 +1,5 @@
 // Results page of the Flow dependency scanner (opened from the side panel's Flow Dependencies tab).
-// Same views as the HPHG Flow Mapper: groups on the left (here one per Flow endpoint), the chains of
+// Same views as the HPHG Flow Mapper: groups on the left (here per endpoint or per Flow package), the chains of
 // the chosen group as left-to-right node rows, click a node for its details.
 const params = new URLSearchParams(location.search);
 const baseUrl = params.get("baseUrl");
@@ -15,8 +15,16 @@ const TYPE_LABELS = {
   endpoint: "Endpoint"
 };
 
+const NOT_FLOW = "__notflow__";
+const NOT_FOUND = "__notfound__";
+const GROUP_MODE_KEY = "flowDepsGroupMode";
+
 let result = null;
 let selectedGroup = ALL;
+let groupMode = "endpoint"; // or "package"
+try { if (localStorage.getItem(GROUP_MODE_KEY) === "package") groupMode = "package"; } catch { /* per-viewer convenience only */ }
+let flowIndex = null; // packages + assets of the open Flow organisation, loaded on first use
+let flowIndexError = "";
 
 function nodeLabel(node) {
   const d = node.data;
@@ -38,6 +46,12 @@ function nodeSubLabel(node) {
     case "eventAction": return d.actionType || null;
     case "workflow": return [`v${d.version}`, d.matchedVia.taskName].filter(Boolean).join(" · ");
     case "routingAddress": return d.restRootEndPoint || null;
+    case "endpoint": {
+      const target = flowIndex && FlowDeps.flowTargetForUrl(d.url, flowIndex);
+      if (!target) return null;
+      if (target.ambiguous) return `${target.assetName} in ${target.packageNames.join(", ")}?`;
+      return [target.packageName, target.assetName].filter(Boolean).join(" · ");
+    }
     case "pageCommand": {
       // modelId looks like "ClientMetadata.client:Customer": the page the command sits on.
       const modelId = d.modelId || "";
@@ -141,11 +155,40 @@ function chainText(chain) {
 }
 
 function groupEntries() {
-  const groups = Object.entries(result.grouped.groups).sort(([a], [b]) => a.localeCompare(b));
   const entries = [[ALL, "All chains", result.chains]];
-  for (const [key, chains] of groups) entries.push([key, key, chains]);
+  if (groupMode === "package" && flowIndex) {
+    const byPackage = FlowDeps.groupChainsByPackage(result.chains, flowIndex);
+    for (const [key, chains] of Object.entries(byPackage.groups).sort(([a], [b]) => a.localeCompare(b))) entries.push([key, key, chains]);
+    if (byPackage.notFound.length) entries.push([NOT_FOUND, "Flow asset not found", byPackage.notFound]);
+    if (byPackage.notFlow.length) entries.push([NOT_FLOW, "Not run./app.novacura.com", byPackage.notFlow]);
+    return entries;
+  }
+  for (const [key, chains] of Object.entries(result.grouped.groups).sort(([a], [b]) => a.localeCompare(b))) entries.push([key, key, chains]);
   if (result.grouped.unknown.length) entries.push([UNKNOWN, "No endpoint URL", result.grouped.unknown]);
   return entries;
+}
+
+async function setGroupMode(mode) {
+  groupMode = mode;
+  selectedGroup = ALL;
+  try { localStorage.setItem(GROUP_MODE_KEY, mode); } catch { /* per-viewer convenience only */ }
+  for (const btn of document.querySelectorAll("[data-group-mode]")) btn.classList.toggle("is-active", btn.dataset.groupMode === mode);
+  if (mode === "package" && !flowIndex) await loadFlowIndex();
+  if (groupMode !== mode) return; // switched again while Flow was answering
+  document.getElementById("fdGroupHint").hidden = mode !== "package" || !flowIndexError;
+  document.getElementById("fdGroupHead").textContent = mode === "package" && flowIndex ? "Flow packages" : "Endpoints";
+  if (result && result.chains.length) render();
+}
+
+async function loadFlowIndex() {
+  const hint = document.getElementById("fdGroupHint");
+  hint.textContent = "Reading packages from Flow…";
+  hint.hidden = false;
+  const response = await send({ type: "FD_FLOW_INDEX" });
+  flowIndex = response.ok ? response.index : null;
+  flowIndexError = response.ok ? "" : response.error;
+  hint.textContent = flowIndexError;
+  hint.hidden = !flowIndexError;
 }
 
 function render() {
@@ -254,6 +297,8 @@ async function main() {
   });
   document.getElementById("fdRescanBtn").onclick = scan;
   document.getElementById("fdFilter").addEventListener("input", () => result && render());
+  for (const btn of document.querySelectorAll("[data-group-mode]")) btn.onclick = () => setGroupMode(btn.dataset.groupMode);
+  setGroupMode(groupMode);
   if (params.get("scan") === "1") {
     history.replaceState(null, "", `?baseUrl=${encodeURIComponent(baseUrl)}`); // a reload shows, not rescans
     const last = await send({ type: "FD_LAST_RESULT", baseUrl });

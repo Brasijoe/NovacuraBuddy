@@ -752,6 +752,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
           return sendResponse({ ok: true, result });
         }
+        case "FD_FLOW_INDEX": { // packages + assets of the open Flow organisation, for grouping per package (read-only)
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
+          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
+          const scan = await linkScan(orgId);
+          const assets = scan.assets.map(({ id, name, type, packageId, packageName }) => ({ id, name, type, packageId, packageName }));
+          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets } });
+        }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
           const { [key]: result = null } = await chrome.storage.local.get(key);

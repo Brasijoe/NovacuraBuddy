@@ -29,7 +29,14 @@
 
     <div id="fdResults" class="fd-grid" hidden>
       <aside class="fd-side">
-        <div class="section-head"><h2>Endpoints</h2><span class="info-tip" data-tip="Every URL with one of the searched addresses that IFS calls, with the number of chains that reach it. A chain whose endpoint URL can't be read is listed under 'No endpoint URL'."></span></div>
+        <div class="fd-mode" role="group" aria-label="Group by">
+          <span class="list-count">Group by</span>
+          <button data-group-mode="endpoint">Endpoint</button>
+          <button data-group-mode="package">Package</button>
+          <span class="info-tip" data-tip="Endpoint: one group per URL that IFS calls. Package: one group per Flow package of the automation or app the URL calls (only for run.novacura.com and app.novacura.com; reads the packages of the organisation open in the Flow Designer tab). Calls to other addresses, and Flow URLs whose asset can't be found, get their own group."></span>
+        </div>
+        <div class="section-head"><h2 id="fdGroupHead">Endpoints</h2></div>
+        <div id="fdGroupHint" class="empty-state" hidden></div>
         <input id="fdFilter" type="search" placeholder="Filter endpoints or objects…" />
         <ul id="fdGroupList" class="fd-group-list"></ul>
       </aside>
@@ -44,6 +51,7 @@
       <ul id="fdErrorList"></ul>
     </details>
 
+    <script src="lib/flow-deps.js"></script>
     <script src="panels/common.js"></script>
     <script src="panels/info-tip.js"></script>
     <script src="flow-deps.js"></script>
