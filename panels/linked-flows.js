@@ -487,6 +487,7 @@ async function lfLoadEnvironments(w) {
   const flows = [lfAsset(w.plan.sourceId), ...w.plan.targets.map((t) => t.asset)].filter(Boolean).map((a) => ({ id: a.id, packageId: a.packageId }));
   const response = await send({ type: "LF_ENVIRONMENTS", orgId: lf.orgId, flows });
   // Development is where flows are built; Flow deploys only to the other environments.
+  if (w.running) return; // chips can't change once the run started
   w.envs = response.ok ? { list: response.environments.filter((e) => e.type !== "dev"), deployed: response.deployed || {} } : { list: [], deployed: {}, error: response.error };
   if (lf.work === w) lfRenderPush();
 }
@@ -545,7 +546,7 @@ const lfDeployProd = (w) => (w.envs ? w.envs.list.filter((e) => e.isProduction &
 function lfRenderPush() {
   const w = lf.work;
   const { plan } = w;
-  const root = lfH("div", { className: "api-loaded" });
+  const root = lfH("div", { className: `api-loaded${w.running ? " lf-running" : ""}` });
   const title = w.pullInto ? `Pull latest into ${w.pullInto.packageName}` : w.sync ? `Sync ${plan.sourceName}` : `Push ${plan.sourceName} from ${plan.sourcePackage}`;
   root.appendChild(lfH("div", { className: "api-summary" }, lfH("strong", { textContent: title }),
     lfH("span", { className: "list-count", textContent: w.pullInto ? `from ${plan.sourcePackage} (rev ${plan.maxRev}) · committed as a new version` : `${w.sync ? `from ${plan.sourcePackage} ` : ""}to ${plan.targets.length} linked flow${plan.targets.length === 1 ? "" : "s"} · becomes rev ${plan.newRev} · committed as a new version` })));
@@ -611,10 +612,17 @@ function lfRenderPush() {
     icon: w.pullInto ? "pull" : w.sync ? "sync" : "push",
     label: envCount ? `${verb} & deploy` : verb,
     badge: envCount ? `${envCount} environment${envCount === 1 ? "" : "s"}` : null,
-    disabled: !chosen.length || blockedByProd,
+    disabled: !chosen.length || blockedByProd || !!w.running,
     title: blockedByProd ? "Confirm the production deploy first." : ""
   });
-  run.addEventListener("click", () => lfBusy(run, w.pullInto ? "Pulling…" : envCount ? "Syncing and deploying…" : "Pushing…", lfRunPush));
+  const busyLabel = w.pullInto ? "Pulling…" : envCount ? "Syncing and deploying…" : w.sync ? "Syncing…" : "Pushing…";
+  if (w.running) lfSetLabel(run, busyLabel);
+  run.addEventListener("click", () => {
+    if (w.running) return;
+    w.running = true;
+    lfRenderPush(); // every control of the preview locks while it runs
+    lfBusy(run, busyLabel, lfRunPush).finally(() => { w.running = false; if (lf.work === w) lfRenderPush(); });
+  });
   root.appendChild(lfH("div", { className: "lf-cta-row" }, run));
   root.appendChild(lfH("div", { className: "deploy-actions" }, lfH("button", { className: "btn-ghost", textContent: "Cancel", onclick: lfCloseWork })));
   lfShowWork(root);
@@ -653,6 +661,16 @@ function lfDiffList(d) {
 }
 
 async function lfRunPush() {
+  try { await lfRunPushNow(); } catch (e) {
+    // Never fail silently: the push may have gone through, so the preview must not be run again.
+    console.error("Linked Flows: showing the push result failed", e);
+    showError(`The sync ran, but its result could not be shown (${e.message}). Rescan to see the copies' state before trying again.`, true);
+    lfCloseWork();
+    lfLoad(true);
+  }
+}
+
+async function lfRunPushNow() {
   const w = lf.work;
   const { plan } = w;
   const targets = plan.targets.filter((x) => w.include[x.asset.id] && !x.blocked).map((x) => ({ id: x.asset.id, overwrite: !!w.overwrite[x.asset.id] }));
