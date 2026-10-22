@@ -737,7 +737,7 @@ function ftShowResult(outcome) {
   }
   const note = document.createElement("p");
   note.className = "ft-note";
-  note.textContent = "Modules are committed. Flows are saved but not committed: open each flow, check it, and commit it in the Designer.";
+  note.textContent = "Modules and flows are committed as a new version.";
   box.appendChild(note);
   box.hidden = false;
   ftPkg = null;
