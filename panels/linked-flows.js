@@ -662,7 +662,7 @@ async function lfRunPush() {
   const pushed = o.results.filter((r) => r.outcome === "pushed");
   const rows = o.results.map((r) => ({
     ...r,
-    note: r.outcome === "pushed" ? [r.unchanged ? "same steps, tag updated" : "steps now match, committed", r.overwrote ? "overwrote its own changes" : null, r.copiedIn && r.copiedIn.length ? `copied in ${r.copiedIn.join(", ")}` : null].filter(Boolean).join(" · ") : r.reason
+    note: r.outcome === "pushed" ? [r.unchanged ? "had the same steps already: only the link tag was updated, nothing committed" : "steps replaced with this version, saved and committed", r.overwrote ? "overwrote its own changes" : null, r.copiedIn && r.copiedIn.length ? `copied in ${r.copiedIn.join(", ")}` : null].filter(Boolean).join(" · ") : r.reason
   }));
   // Deploy only what this sync committed: the pushed copies and the source.
   const envs = w.envs && lfDeployable(lfAsset(plan.sourceId)) ? w.envs.list.filter((e) => w.deploy.has(e.id)) : [];
