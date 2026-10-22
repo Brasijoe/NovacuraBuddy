@@ -293,18 +293,35 @@ function ftEnvRow(spec) {
       twisty.setAttribute("aria-expanded", "false");
       return;
     }
-    if (!specs.length) children.innerHTML = `<li class="ft-env-status">${spec.emptyText || "Empty."}</li>`;
+    if (!specs.length) { // nothing below: no arrow, no empty level
+      children.remove();
+      twisty.disabled = true;
+      twisty.setAttribute("aria-expanded", "false");
+      name.style.cursor = "";
+      return;
+    }
     for (const child of specs) children.appendChild(ftEnvRow(child));
     ftEnvSync();
+    ftEnvProbe(children, specs);
   };
   twisty.addEventListener("click", open);
-  name.addEventListener("click", () => { if (spec.load) open(); });
+  li.noChildren = () => { twisty.disabled = true; };
+  name.addEventListener("click", () => { if (!twisty.disabled) open(); });
   li.open = open;
   return li;
 }
 
-function ftCountChip(n, what) {
-  return ftChip(`${n} ${what}${n === 1 ? "" : "s"}`, "muted");
+/** After a level opens: asks, for the flows in it, whether they reference anything, and hides the
+ *  arrow of those that don't. Only the opened level is read. */
+async function ftEnvProbe(list, specs) {
+  const flows = specs.filter((s) => s.asset && s.load);
+  if (!flows.length) return;
+  const response = await send({ type: "FT_REF_COUNTS", orgId: flows[0].org.id, itemIds: flows.map((s) => s.asset.id) });
+  if (!response.ok) return;
+  [...list.children].forEach((li, i) => {
+    const spec = specs[i];
+    if (spec && spec.asset && response.counts[spec.asset.id] === 0 && li.noChildren) li.noChildren();
+  });
 }
 
 /** An asset row; flows open to what they reference (loaded on demand, at any depth). */
@@ -316,7 +333,6 @@ function ftEnvAsset(org, asset, packageKey, selectable) {
     type: asset.type,
     selectKey: selectable ? `asset:${org.id}:${asset.id}` : null,
     org, asset, packageKey,
-    emptyText: "Uses no modules or other flows.",
     load: isModule || asset.type === "unknown" ? null : async () => {
       const response = await actionOrShowError({ type: "FT_ASSET_REFS", orgId: org.id, itemId: asset.id });
       return response && response.assets.map((ref) => ftEnvAsset(org, ref, null, false));
@@ -329,7 +345,6 @@ function ftEnvPackage(org, packageId, name) {
   return {
     kind: "package", name, packageId, org,
     selectKey: `package:${org.id}:${key}`,
-    emptyText: "No flows or modules.",
     load: async () => {
       const response = await actionOrShowError({ type: "FT_LIST_ASSETS", orgId: org.id, packageId: packageId || null });
       if (!response) return null;
@@ -342,7 +357,6 @@ function ftEnvPackage(org, packageId, name) {
 function ftEnvOrg(org) {
   return {
     kind: "org", name: org.name, org,
-    emptyText: "No packages.",
     load: async () => {
       const response = await actionOrShowError({ type: "FT_PACKAGES", orgId: org.id });
       if (!response) return null;

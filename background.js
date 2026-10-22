@@ -649,6 +649,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, assets: await FlowTransfer.listPackageAssets({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null }) });
         case "FT_ASSET_REFS":
           return sendResponse({ ok: true, assets: await FlowTransfer.listAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId }) });
+        case "FT_REF_COUNTS":
+          return sendResponse({ ok: true, counts: await FlowTransfer.countAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemIds: message.itemIds }) });
         case "FT_ORGS":
           return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
         case "FT_PACKAGES":
