@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "api-modules", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "api-modules", "flows", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -56,6 +56,7 @@ initRecorderPanel();
 initQuickReportsPanel();
 initCustomLusPanel();
 initApiModulesPanel();
+initFlowTransferPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); }, 5000);

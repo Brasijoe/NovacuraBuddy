@@ -30,6 +30,7 @@
       <button id="tab-quick-reports" class="tab" role="tab">Quick Reports</button>
       <button id="tab-custom-lus" class="tab" role="tab">Custom LUs</button>
       <button id="tab-api-modules" class="tab" role="tab">API Modules</button>
+      <button id="tab-flows" class="tab" role="tab">Flows</button>
       <button id="tab-basic-data" class="tab" role="tab">Basic Data</button>
     </nav>
 
@@ -152,6 +153,38 @@
       </div>
     </section>
 
+    <section id="panel-flows" role="tabpanel" hidden>
+      <p class="api-hint">Export the flow open in the Designer with its modules, sub-flows and other assets to a file, import such a file, or copy the flow straight to another organisation or package.</p>
+      <div class="deploy-actions">
+        <button id="ftExportBtn" title="Download the open flow and everything it uses as one .json file">Export to file</button>
+        <button id="ftCopyBtn" class="btn-primary" title="Copy the open flow and everything it uses to another organisation or package">Copy to…</button>
+        <button id="ftImportBtn" class="btn-ghost">Import file…</button>
+        <input id="ftFile" type="file" accept=".json,application/json" hidden />
+      </div>
+      <p id="ftSourceHint" class="api-hint" hidden></p>
+      <hr class="section-divider" />
+      <p id="ftEmpty" class="empty-state">Export, import or copy a flow to see what will be created in the target.</p>
+      <div id="ftTarget" class="api-loaded" hidden>
+        <div class="api-summary"><strong id="ftTitle"></strong><span class="list-count" id="ftMeta"></span></div>
+        <label class="api-field">Target organisation <select id="ftOrg"></select></label>
+        <label class="api-field">Target package <select id="ftPackage"></select></label>
+        <span class="list-count" id="ftTargetHint"></span>
+        <h2>Assets</h2>
+        <ul id="ftAssets" class="ft-list"></ul>
+        <div id="ftConnectorsBox" hidden>
+          <h2>Connectors</h2>
+          <ul id="ftConnectors" class="ft-list"></ul>
+        </div>
+        <label class="api-field" id="ftRootNameField">Name of the new flow <input id="ftRootName" spellcheck="false" /></label>
+        <div class="deploy-actions">
+          <button id="ftRunBtn" class="btn-primary">Import</button>
+          <button id="ftCancelBtn" class="btn-ghost">Cancel</button>
+        </div>
+        <p id="ftRunHint" class="api-hint" hidden></p>
+      </div>
+      <div id="ftResult" class="ft-result" hidden></div>
+    </section>
+
     <section id="panel-basic-data" role="tabpanel" hidden>
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
@@ -200,6 +233,7 @@
     <script src="apimodule/flow-runtime.js"></script>
     <script src="apimodule/flow-emit.js"></script>
     <script src="panels/api-modules.js"></script>
+    <script src="panels/flow-transfer.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

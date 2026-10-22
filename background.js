@@ -8,6 +8,7 @@ importScripts(
   "lib/tracking.js",
   "lib/flow-designer-tab.js",
   "lib/flow-modules.js",
+  "lib/flow-transfer.js",
   "lib/flow-token.js",
   "lib/ifs-client.js",
   "lib/ifs-permissions.js",
@@ -402,6 +403,30 @@ async function refreshDesignerTab(tab) {
   }
 }
 
+/** Flows tab: the target an import/copy starts on — the package of another open Designer tab
+ *  (most recently used first; the user's own login and package, nothing to ask), else the active
+ *  Designer tab's own. */
+async function handleFlowDefaultTarget({ excludeItemId }) {
+  const flowFetch = boundFlowFetch();
+  const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/admin/design/designer/*" });
+  const candidates = tabs
+    .map((t) => ({ tab: t, parsed: FlowDesignerTab.parseDesignerTabUrl(t.url) }))
+    .filter((c) => c.parsed)
+    .sort((a, b) => (b.tab.lastAccessed || 0) - (a.tab.lastAccessed || 0));
+  const other = candidates.find((c) => c.parsed.itemId !== excludeItemId);
+  const pick = other || candidates[0];
+  if (!pick) return null;
+  const packageId = await FlowDesignerTab.resolvePackageId({ flowFetch, orgId: pick.parsed.orgId, itemId: pick.parsed.itemId });
+  return { orgId: pick.parsed.orgId, packageId, fromOtherTab: !!other, tabTitle: pick.tab.title || "" };
+}
+
+/** After an import that changed the flow open in the active Designer tab, reload it there. */
+async function refreshIfOpen(orgId, itemIds) {
+  if (designerTabState && designerTabState.orgId === orgId && itemIds.includes(designerTabState.itemId)) {
+    await refreshDesignerTab({ ...designerTabState });
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
@@ -601,6 +626,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           log("API_CREATE_MODULE start:", message.moduleName, "(", (message.code || "").length, "bytes )");
           const saved = await ApiModuleService.saveModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, moduleName: message.moduleName, code: message.code, log });
           return sendResponse({ ok: true, result: await handleActivateModule(saved) });
+        }
+        case "FT_EXPORT": {
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
+          log("FT_EXPORT start: flow", tab.itemId, "package", packageId);
+          const pkg = await FlowTransfer.exportFlow({
+            flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId,
+            generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log
+          });
+          return sendResponse({ ok: true, pkg });
+        }
+        case "FT_ORGS":
+          return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
+        case "FT_PACKAGES":
+          return sendResponse({ ok: true, packages: await FlowTransfer.listPackages({ flowFetch: boundFlowFetch(), orgId: message.orgId }) });
+        case "FT_DEFAULT_TARGET":
+          return sendResponse({ ok: true, target: await handleFlowDefaultTarget(message) });
+        case "FT_PLAN":
+          return sendResponse({ ok: true, plan: await FlowTransfer.planImport({ flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null }) });
+        case "FT_IMPORT": {
+          log("FT_IMPORT start: into org", message.orgId, "package", message.packageId || "(App Library)");
+          const outcome = await FlowTransfer.runImport({
+            flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null,
+            choices: message.choices, connectorMap: message.connectorMap, rootName: message.rootName, log
+          });
+          await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.choice === "update").map((r) => r.targetId));
+          return sendResponse({ ok: true, outcome });
         }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
