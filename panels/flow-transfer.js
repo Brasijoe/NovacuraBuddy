@@ -59,9 +59,10 @@ function ftSummaryChips(pkg) {
   );
 }
 
+/** What the export is called: the names of what was selected (packages, flows, modules), cut to
+ *  60 characters plus "+N others"; stored in the file as `label`. */
 function ftRootLabel(pkg) {
-  const roots = FlowTree.rootIdsOf(pkg);
-  return roots.length === 1 ? pkg.assets[roots[0]].name : `${roots.length} assets`;
+  return pkg.label || FlowTree.exportName(FlowTree.rootIdsOf(pkg).map((id) => pkg.assets[id].name));
 }
 
 /** Renders FlowTree.dependencyTree(pkg) into `container`. `decorate(node, card)` may add to a
@@ -144,7 +145,7 @@ function ftDownload(pkg) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${String(ftRootLabel(pkg)).replace(/[\\/:*?"<>|]+/g, "_")}.flow.json`;
+  a.download = `${ftRootLabel(pkg)}.flow.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -173,17 +174,19 @@ function ftShowExportSummary(pkg) {
   box.hidden = false;
 }
 
-async function ftExport(message) {
+async function ftExport(message, names) {
   const response = await actionOrShowError(message);
   if (!response) return;
+  if (names) response.pkg.label = FlowTree.exportName(names);
   ftDownload(response.pkg);
   ftShowWarnings(response.pkg);
   ftShowExportSummary(response.pkg);
 }
 
-async function ftCopy(message) {
+async function ftCopy(message, names) {
   const response = await actionOrShowError(message);
   if (!response) return;
+  if (names) response.pkg.label = FlowTree.exportName(names);
   ftShowWarnings(response.pkg);
   await ftOpen(response.pkg, "copy");
 }
@@ -426,6 +429,11 @@ function ftEnvSync() {
   ftApplyState();
 }
 
+/** Selected package names first, then single assets, in the order they were ticked. */
+function ftSelNames() {
+  return [...ftSel.packages.values(), ...ftSel.assets.values()];
+}
+
 function ftBrowseMessage() {
   return {
     type: "FT_EXPORT",
@@ -660,8 +668,8 @@ function initFlowTransferPanel() {
     ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
     ftEnvSync();
   });
-  ftEl("ftBrowseExportBtn").addEventListener("click", () => ftRun(ftEl("ftBrowseExportBtn"), "Exporting…", () => ftExport(ftBrowseMessage())));
-  ftEl("ftBrowseCopyBtn").addEventListener("click", () => ftRun(ftEl("ftBrowseCopyBtn"), "Reading…", () => ftCopy(ftBrowseMessage())));
+  ftEl("ftBrowseExportBtn").addEventListener("click", () => ftRun(ftEl("ftBrowseExportBtn"), "Exporting…", () => ftExport(ftBrowseMessage(), ftSelNames())));
+  ftEl("ftBrowseCopyBtn").addEventListener("click", () => ftRun(ftEl("ftBrowseCopyBtn"), "Reading…", () => ftCopy(ftBrowseMessage(), ftSelNames())));
 
   ftEl("ftOrg").addEventListener("change", async () => {
     await ftFillPackages(ftEl("ftPackage"), ftEl("ftOrg").value, null);
