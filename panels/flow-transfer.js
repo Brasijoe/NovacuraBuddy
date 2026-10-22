@@ -22,6 +22,12 @@ let ftLayout = { mode: "packages", packageChoices: {} };
 // and single assets.
 let ftSel = { orgId: null, orgName: "", packages: new Map(), assets: new Map() };
 let ftEnvLoaded = false;
+let ftEnvOrgs = []; // the organisations the tree shows, for the filter
+// Filter index: orgId -> Promise of [{ id, name, assets }] (App Library first), each org's lists
+// loaded once when the filter first needs them.
+const ftEnvIndex = new Map();
+let ftFilterSeq = 0;
+let ftFilterTimer = null;
 
 const ftEl = (id) => document.getElementById(id);
 
@@ -29,11 +35,27 @@ const FT_CHOICE_LABELS = { use: "Use existing as-is", update: "Update existing",
 const FT_LOCATION_CHIPS = { package: "In target package", library: "In App Library" };
 const FT_RESULT_CHIPS = { use: ["Used as-is", "info"], update: ["Updated", "warn"], create: ["Created", "ok"], regenerate: ["Generated from IFS", "ok"] };
 
+/** Icon, colour class and label for an asset type. Flows are "component"; automations are taken
+ *  to be "workflow" or any type naming automation/machine (UNVERIFIED: only "component" and
+ *  "module" have been seen live), so the label also carries the raw type to check it. */
 function ftKind(type) {
-  if (type === "module") return { icon: "M", cls: "module", label: "Module" };
-  if (type === "connector") return { icon: "C", cls: "connector", label: "Connector" };
-  if (type === "component" || type === "workflow" || type === "flow") return { icon: "F", cls: "flow", label: "Flow" };
-  return { icon: String(type || "?").charAt(0).toUpperCase(), cls: "other", label: type };
+  const t = String(type || "");
+  const kind = t === "module" ? { icon: "M", cls: "module", label: "Module" }
+    : t === "connector" ? { icon: "C", cls: "connector", label: "Connector" }
+    : t === "workflow" || /automation|machine/i.test(t) ? { icon: "A", cls: "automation", label: "Automation" }
+    : t === "component" || t === "flow" ? { icon: "F", cls: "flow", label: "Flow" }
+    : { icon: (t || "?").charAt(0).toUpperCase(), cls: "other", label: t || "Unknown" };
+  return { ...kind, title: t && t !== kind.label.toLowerCase() ? `${kind.label} (type "${t}")` : kind.label };
+}
+
+/** The coloured letter icon for an asset type (shared with the Linked Flows tab). */
+function ftKindIcon(type) {
+  const kind = ftKind(type);
+  const icon = document.createElement("span");
+  icon.className = `ft-icon ft-icon-${kind.cls}`;
+  icon.textContent = kind.icon;
+  icon.title = kind.title;
+  return icon;
 }
 
 /** A small pill: tone "info" (blue), "ok" (green), "warn" (orange) or "muted". */
@@ -78,18 +100,14 @@ function ftRenderTree(container, pkg, decorate) {
     for (const node of nodes) {
       const li = document.createElement("li");
       const card = document.createElement("div");
-      const kind = ftKind(node.type);
       card.className = "ft-node" + (node.repeat ? " ft-repeat" : "") + (node.type === "connector" ? " ft-connector" : "");
       const head = document.createElement("div");
       head.className = "ft-node-head";
-      const icon = document.createElement("span");
-      icon.className = `ft-icon ft-icon-${kind.cls}`;
-      icon.textContent = kind.icon;
-      icon.title = kind.label;
+      const icon = ftKindIcon(node.type);
       const name = document.createElement("span");
       name.className = "ft-name";
       name.textContent = node.name;
-      head.append(icon, name, node.repeat ? ftChip("used above", "muted", "Listed in full further up") : ftChip(kind.label, "muted"));
+      head.append(icon, name, node.repeat ? ftChip("used above", "muted", "Listed in full further up") : ftChip(ftKind(node.type).label, "muted"));
       card.appendChild(head);
       if (!node.repeat && decorate) decorate(node, card);
       li.appendChild(card);
@@ -271,7 +289,7 @@ function ftEnvRow(spec) {
   const icon = document.createElement("span");
   icon.className = `ft-icon ft-icon-${kind.cls}`;
   icon.textContent = kind.icon;
-  icon.title = kind.label;
+  icon.title = kind.title || kind.label;
   const name = document.createElement("span");
   name.className = "ft-name";
   name.textContent = spec.name;
@@ -312,7 +330,11 @@ function ftEnvRow(spec) {
       name.style.cursor = "";
       return;
     }
-    for (const child of specs) children.appendChild(ftEnvRow(child));
+    for (const child of specs) {
+      const childLi = ftEnvRow(child);
+      children.appendChild(childLi);
+      if (child.autoOpen) childLi.open();
+    }
     ftEnvSync();
     ftEnvProbe(children, specs);
   };
@@ -352,6 +374,12 @@ function ftEnvAsset(org, asset, packageKey, selectable) {
   };
 }
 
+/** Asset rows of a package, flows before modules, by name. */
+function ftEnvAssetSpecs(org, assets, packageKey) {
+  const sorted = assets.slice().sort((a, b) => (a.type === "module") - (b.type === "module") || a.name.localeCompare(b.name));
+  return sorted.map((asset) => ftEnvAsset(org, asset, packageKey, true));
+}
+
 function ftEnvPackage(org, packageId, name) {
   const key = packageId || "";
   return {
@@ -360,8 +388,7 @@ function ftEnvPackage(org, packageId, name) {
     load: async () => {
       const response = await actionOrShowError({ type: "FT_LIST_ASSETS", orgId: org.id, packageId: packageId || null });
       if (!response) return null;
-      const assets = response.assets.slice().sort((a, b) => (a.type === "module") - (b.type === "module") || a.name.localeCompare(b.name));
-      return assets.map((asset) => ftEnvAsset(org, asset, key, true));
+      return ftEnvAssetSpecs(org, response.assets, key);
     }
   };
 }
@@ -422,12 +449,96 @@ async function ftEnvInit() {
     return;
   }
   const t = target && target.ok ? target.target : null;
+  ftEnvOrgs = orgs.orgs;
+  ftEnvIndex.clear();
   for (const org of orgs.orgs) {
     const li = ftEnvRow(ftEnvOrg(org));
     tree.appendChild(li);
     if (orgs.orgs.length === 1 || (t && t.orgId === org.id)) li.open();
   }
   ftEnvSync();
+  if (ftEl("ftEnvFilter").value.trim()) ftEnvFilter();
+}
+
+/* --- environment filter --- */
+
+/** True when every word of the filter is in one of the texts (case-insensitive). */
+function ftMatches(filter, ...texts) {
+  const words = String(filter || "").toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = texts.join(" ").toLowerCase();
+  return words.every((w) => hay.includes(w));
+}
+
+/** Every package (and the App Library) of an organisation with its assets, loaded once. A failed
+ *  load is forgotten so the next keystroke tries again. */
+function ftEnvIndexOf(org) {
+  if (!ftEnvIndex.has(org.id)) {
+    const load = (async () => {
+      const response = await send({ type: "FT_PACKAGES", orgId: org.id });
+      if (!response.ok) return null;
+      const packages = [{ id: null, name: "App Library" }, ...response.packages.map((p) => ({ id: p.id, name: p.name }))];
+      const queue = packages.slice();
+      const worker = async () => {
+        while (queue.length) {
+          const p = queue.shift();
+          const list = await send({ type: "FT_LIST_ASSETS", orgId: org.id, packageId: p.id });
+          p.assets = list.ok ? list.assets : [];
+        }
+      };
+      await Promise.all([1, 2, 3, 4].map(worker));
+      return packages;
+    })();
+    ftEnvIndex.set(org.id, load);
+    load.then((v) => { if (!v) ftEnvIndex.delete(org.id); }, () => ftEnvIndex.delete(org.id));
+  }
+  return ftEnvIndex.get(org.id);
+}
+
+/** While the filter has text: only the packages whose name matches (with all their assets,
+ *  closed) and the flows and modules whose name, or package name, matches (opened). The normal
+ *  tree comes back when the filter is cleared; ticks are shared by both. */
+async function ftEnvFilter() {
+  const filter = ftEl("ftEnvFilter").value.trim();
+  const seq = ++ftFilterSeq;
+  const out = ftEl("ftEnvFiltered");
+  ftEl("ftEnvTree").hidden = !!filter;
+  out.hidden = !filter;
+  if (!filter) {
+    out.innerHTML = "";
+    ftEnvSync();
+    return;
+  }
+  if (!ftEnvOrgs.length) { // no session yet: the tree's banner says why
+    ftEl("ftEnvTree").hidden = false;
+    out.hidden = true;
+    return;
+  }
+  if (!out.children.length) out.innerHTML = '<li class="ft-env-status">Searching…</li>';
+  const indexes = await Promise.all(ftEnvOrgs.map((org) => ftEnvIndexOf(org).catch(() => null)));
+  if (seq !== ftFilterSeq) return; // a newer keystroke is on its way
+  out.innerHTML = "";
+  let shown = 0;
+  ftEnvOrgs.forEach((org, i) => {
+    const packages = [];
+    for (const p of indexes[i] || []) {
+      const whole = ftMatches(filter, p.name);
+      const assets = whole ? p.assets : p.assets.filter((a) => ftMatches(filter, a.name, p.name));
+      if (!whole && !assets.length) continue;
+      shown += whole ? 1 : assets.length;
+      const spec = ftEnvPackage(org, p.id, p.name);
+      spec.load = assets.length ? async () => ftEnvAssetSpecs(org, assets, p.id || "") : null;
+      spec.autoOpen = !whole;
+      packages.push(spec);
+    }
+    if (!packages.length) return;
+    const li = ftEnvRow({ kind: "org", name: org.name, org, load: async () => packages });
+    out.appendChild(li);
+    li.open();
+  });
+  if (!shown) {
+    const failed = indexes.some((x) => !x);
+    out.innerHTML = `<li class="ft-env-status">${failed ? "Could not search every organisation. Refresh the Flow tab, click in it once, then type again." : "No package, flow or module matches."}</li>`;
+  }
 }
 
 function ftEnvToggle(spec, checked) {
@@ -451,7 +562,7 @@ function ftEnvToggle(spec, checked) {
 
 /** Syncs the checkboxes with the selection; an asset in a ticked package shows as included. */
 function ftEnvSync() {
-  for (const box of ftEl("ftEnvTree").querySelectorAll("input[data-select-key]")) {
+  for (const box of document.querySelectorAll("#ftEnvTree input[data-select-key], #ftEnvFiltered input[data-select-key]")) {
     const [kind, orgId, id] = box.dataset.selectKey.split(":");
     const inOrg = orgId === ftSel.orgId;
     if (kind === "package") {
@@ -765,6 +876,10 @@ function initFlowTransferPanel() {
     if (file) await ftRun(ftEl("ftImportBtn"), "Reading…", () => ftImportFile(file));
   });
 
+  ftEl("ftEnvFilter").addEventListener("input", () => {
+    clearTimeout(ftFilterTimer);
+    ftFilterTimer = setTimeout(ftEnvFilter, 150);
+  });
   ftEl("ftBrowse").addEventListener("toggle", () => {
     if (ftEl("ftBrowse").open && !ftEnvLoaded) ftEnvInit();
   });
