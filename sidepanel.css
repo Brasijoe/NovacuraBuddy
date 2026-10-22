@@ -331,9 +331,34 @@ main { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0
 [role="tabpanel"] { display: flex; flex-direction: column; gap: var(--space-3); }
 [role="tabpanel"][hidden] { display: none; }
 .section-divider { border: 0; border-top: 1px solid var(--surface-raised); margin: var(--space-2) 0 0; width: 100%; }
-.tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink-muted); padding: var(--space-2) var(--space-3); font-weight: 600; }
+.tab { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink-muted); padding: var(--space-2) 12px; font-weight: 600; }
 .tab:hover:not(:disabled) { color: var(--accent); border-color: transparent; }
 .tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Grouped tabs: the group button is underlined while one of its tabs is active (marked with a dot
+   in the menu); the menu drops down on hover, on click (touch) and on keyboard focus. */
+.tab-group { position: relative; }
+.tab-group-btn { display: inline-flex; align-items: center; gap: 4px; }
+.tab-caret { width: 0; height: 0; margin-left: 2px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: 0.7; transition: transform 0.15s; }
+.tab-menu {
+  position: absolute; top: calc(100% + 1px); left: 0; z-index: 20; min-width: 180px;
+  display: none; flex-direction: column; gap: 2px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--surface-raised); border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14);
+}
+.tab-group:hover:not(.is-suppressed) .tab-menu,
+.tab-group:focus-within:not(.is-suppressed) .tab-menu,
+.tab-group.is-open .tab-menu { display: flex; }
+.tab-group:hover:not(.is-suppressed) .tab-caret,
+.tab-group.is-open .tab-caret { transform: rotate(180deg); }
+.tab-item { border: none; border-radius: 8px; background: none; color: var(--ink); text-align: left; padding: 6px 10px; font-weight: 600; white-space: nowrap; }
+.tab-item:hover:not(:disabled), .tab-item:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+.tab-item.is-active { color: var(--accent); }
+.tab-item::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin: 0 8px 1px 0; vertical-align: middle; }
+.tab-item.is-active::before { background: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  .tab-item:hover:not(:disabled), .tab-item:focus-visible { background: var(--surface-raised); color: var(--ink); }
+}
 
 /* ---------- recorder ---------- */
 .recorder-controls { display: flex; gap: var(--space-2); }
