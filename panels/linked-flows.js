@@ -170,8 +170,8 @@ function lfRenderOpen() {
     const same = lfFlows().filter((a) => a.id !== asset.id && a.packageId !== asset.packageId && a.name.toUpperCase() === asset.name.toUpperCase());
     box.appendChild(lfH("span", { className: "api-hint", textContent: `${asset.packageName}${same.length ? ` · a flow with this name is also in ${same.map((a) => a.packageName).join(", ")}` : ""}` }));
     box.appendChild(lfH("div", { className: "deploy-actions" },
-      lfH("button", { className: "btn-primary", textContent: "Link this flow…", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }),
-      infoTip("Link this flow with copies in other packages: link flows that already exist there, create new linked copies, or both in one go. You see the plan before anything is written.")));
+      lfH("button", { className: "btn-primary", textContent: "Copy & link to packages…", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }),
+      infoTip("Copy this flow into other packages as linked copies, and/or link flows that already exist there. You pick the packages and see the plan before anything is written.")));
     return;
   }
   const group = lfGroups().get(asset.tag.id) || [asset];
@@ -192,6 +192,7 @@ function lfMemberActions(asset, status, primary) {
   if (status === "behind" || status === "conflict" || status === "differs") row.appendChild(pull);
   if (status === "conflict") row.appendChild(push);
   if (!primary) row.appendChild(lfH("button", { className: "btn-ghost", textContent: "Open", onclick: () => lfOpenInDesigner(asset.id) }));
+  if (primary) row.appendChild(lfH("button", { className: "btn-ghost", textContent: "Copy to more packages…", title: "Create more linked copies of this flow in other packages", onclick: () => lfStartLink([asset.id], { suggestSame: true }) }));
   row.appendChild(lfUnlinkButton(asset));
   return row;
 }
@@ -306,7 +307,7 @@ function lfRenderGroups() {
     .filter(([, m]) => !only || needs(m))
     .sort((a, b) => a[1][0].name.localeCompare(b[1][0].name));
   if (!shown.length) {
-    ul.appendChild(lfH("li", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Link flows above, or open a flow and use Link this flow…" }));
+    ul.appendChild(lfH("li", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Open a flow and use Copy & link to packages…, or tick flows under Link flows." }));
     return;
   }
   for (const [linkId, members] of shown) {
@@ -317,7 +318,8 @@ function lfRenderGroups() {
       lfH("div", { className: "ft-node-head" },
         lfH("span", { className: "ft-icon lf-icon-link", textContent: "⛓" }),
         lfH("span", { className: "ft-name", textContent: members[0].name }),
-        ftChip(linkId, "muted", "Link id")),
+        ftChip(linkId, "muted", "Link id"),
+        lfH("button", { className: "btn-ghost lf-add-pkg", textContent: "+ Packages", title: "Copy this flow into more packages, linked to the group", onclick: () => lfStartLink([(members.find((m) => lfStatusOf(m.id) === "in_sync") || members[0]).id], { suggestSame: true }) })),
       lfH("span", { className: "ft-kind", textContent: `${members.length} package${members.length === 1 ? "" : "s"} · rev ${maxRev}${latest ? ` from ${latest.packageName}` : ""}${lf.statusesLoading ? " · checking…" : ""}` }));
     const rows = lfH("ul", {});
     for (const m of members) {
@@ -426,24 +428,11 @@ function lfRenderLink() {
     root.appendChild(lfH("span", { className: "api-hint", textContent: `Version from ${source.packageName}${source.tag ? ", the group's copy" : ""}.` }));
   }
 
-  // Existing flows to link
-  const others = w.candidates.filter((id) => id !== w.sourceId).map(lfAsset).filter(Boolean);
-  if (others.length) {
-    const box = lfH("div", { className: "ft-node lf-checks" });
-    for (const a of others) {
-      const cb = lfH("input", { type: "checkbox", checked: w.adopt.has(a.id) });
-      cb.addEventListener("change", () => { if (cb.checked) w.adopt.add(a.id); else w.adopt.delete(a.id); lfRenderLink(); });
-      box.appendChild(lfH("label", { className: "api-check" }, cb, lfH("span", { textContent: `${a.name} in ${a.packageName}` })));
-    }
-    root.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Link existing flows" }), infoTip("These flows stay as they are and get the link tag. Their steps change only when someone pushes or pulls.")));
-    root.appendChild(box);
-  }
-
   // New copies
   const adoptPkgs = new Set([...w.adopt].map((id) => lfAsset(id)).filter(Boolean).map((a) => a.packageId));
   const pkgs = lf.scan.packages.filter((p) => !taken.has(p.id) && !adoptPkgs.has(p.id));
   for (const id of [...w.fresh]) if (taken.has(id) || adoptPkgs.has(id)) w.fresh.delete(id);
-  root.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Create linked copies in" }), infoTip("Copy and link in one go: each ticked package gets a new flow with the same name and steps, linked to the others and committed. Package modules it uses are taken from that package (same name), or copied there when missing. App Library modules are shared.")));
+  root.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Copy into these packages, linked" }), infoTip("Copy and link in one go: each ticked package gets a new flow with the same name and steps, linked to the others and committed. Package modules it uses are taken from that package (same name), or copied there when missing. App Library modules are shared.")));
   const filter = lfH("input", { type: "search", className: "lf-filter", placeholder: "Filter packages…", autocomplete: "off", value: w.pkgFilter || "" });
   root.appendChild(filter);
   const pkgBox = lfH("div", { className: "ft-node lf-checks lf-pkg-checks" });
@@ -462,6 +451,20 @@ function lfRenderLink() {
   filter.addEventListener("input", () => { w.pkgFilter = filter.value; renderPkgs(); });
   renderPkgs();
   root.appendChild(pkgBox);
+
+  // Existing flows to link
+  const others = w.candidates.filter((id) => id !== w.sourceId).map(lfAsset).filter(Boolean);
+  if (others.length) {
+    const box = lfH("div", { className: "ft-node lf-checks" });
+    for (const a of others) {
+      const cb = lfH("input", { type: "checkbox", checked: w.adopt.has(a.id) });
+      cb.addEventListener("change", () => { if (cb.checked) w.adopt.add(a.id); else w.adopt.delete(a.id); lfRenderLink(); });
+      box.appendChild(lfH("label", { className: "api-check" }, cb, lfH("span", { textContent: `${a.name} in ${a.packageName}` })));
+    }
+    root.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Also link existing flows" }), infoTip("These flows stay as they are and get the link tag. Their steps change only when someone pushes or pulls.")));
+    root.appendChild(box);
+  }
+
 
   root.appendChild(lfH("h2", { textContent: "What happens" }));
   root.appendChild(lfH("ul", { id: "lfLinkPlan", className: "ft-tree" }));
