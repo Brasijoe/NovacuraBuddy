@@ -88,3 +88,17 @@ test("library filter input exists and the editor defers the Module button to the
   const js = fs.readFileSync(path.join(__dirname, "cl-editor.js"), "utf8");
   assert.ok(js.includes("moduleFromPanelOnly: true"));
 });
+
+test("side panel has the Flows tab, its script, and the background loads flow-transfer after its dependencies", () => {
+  const html = fs.readFileSync(path.join(__dirname, "sidepanel.html"), "utf8");
+  assert.match(html, /id="tab-flows"/);
+  assert.match(html, /id="panel-flows"/);
+  const srcs = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(srcs.indexOf("panels/flow-transfer.js") < srcs.indexOf("sidepanel.js"));
+  const js = fs.readFileSync(path.join(__dirname, "sidepanel.js"), "utf8");
+  assert.match(js, /"flows"/);
+  assert.match(js, /initFlowTransferPanel\(\)/);
+  const bg = fs.readFileSync(path.join(__dirname, "background.js"), "utf8");
+  const block = bg.match(/importScripts\(([\s\S]*?)\);/)[1];
+  for (const dep of ["lib/flow-connect-rest.js", "lib/flow-designer-tab.js", "lib/flow-modules.js"]) assert.ok(block.indexOf(dep) < block.indexOf("lib/flow-transfer.js"), dep);
+});

@@ -429,6 +429,80 @@ input.rename-input { width: 100%; }
 .api-warnings ul { margin: 4px 0 0; padding-left: var(--space-3); font-size: 12px; color: var(--ink-muted); }
 .api-preview { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
 
+/* ---------- import / export (flows) ---------- */
+.ft-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.ft-row { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); }
+.ft-name { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.ft-note { font-size: 12px; color: var(--ink-muted); }
+.ft-note.ft-differs { color: var(--accent-orange); }
+.ft-result { display: flex; flex-direction: column; gap: var(--space-2); font-size: 13px; }
+.ft-result[hidden], #ftConnectorsBox[hidden] { display: none; }
+.ft-result > ul:not(.ft-tree) { margin: 0; padding-left: 18px; }
+
+/* dependency tree: guide lines, one card per asset */
+.ft-tree, .ft-tree ul { list-style: none; margin: 0; padding: 0; }
+.ft-tree ul { margin-left: 11px; padding-left: 14px; border-left: 1.5px solid var(--surface-raised); }
+.ft-tree li { position: relative; padding-top: 6px; }
+.ft-tree ul > li::before { content: ""; position: absolute; left: -14px; top: 19px; width: 12px; border-top: 1.5px solid var(--surface-raised); }
+.ft-tree ul > li:last-child::after { content: ""; position: absolute; left: -16px; top: 20px; bottom: 0; width: 3px; background: var(--bg, var(--surface)); }
+.ft-node { display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; border: 1px solid var(--surface-raised); border-radius: 10px; background: var(--surface); }
+.ft-node.ft-repeat { border-style: dashed; background: transparent; padding: 3px 10px; }
+.ft-node.ft-repeat .ft-name { font-weight: 400; color: var(--ink-muted); }
+.ft-node.ft-connector { background: transparent; padding: 3px 10px; }
+.ft-node-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ft-node-head .ft-name { font-size: 13px; }
+.ft-icon { flex-shrink: 0; width: 20px; height: 20px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; background: var(--neutral); }
+.ft-icon-flow { background: #0a68ff; }
+.ft-icon-module { background: #4031f8; }
+.ft-icon-connector { background: #1f9d55; }
+.ft-kind { font-size: 11px; color: var(--ink-muted); }
+.ft-node select, .ft-node input { font-size: 12px; }
+.ft-node-name { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-muted); }
+.ft-node-name input { flex: 1; min-width: 0; }
+
+.ft-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ft-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 500; line-height: 18px; white-space: nowrap; border: 1px solid transparent; text-decoration: none; }
+.ft-chip-info { background: #eaf2ff; color: #0b4fc0; border-color: var(--accent-soft); }
+.ft-chip-ok { background: #ecf8f0; color: #1d6b40; border-color: #c4e8d2; }
+.ft-chip-warn { background: #fff4ea; color: #a5470b; border-color: #ffd2b3; }
+.ft-chip-muted { background: transparent; color: var(--ink-muted); border-color: var(--surface-raised); }
+.ft-chip-link { background: var(--accent); color: var(--on-accent); }
+.ft-chip-link:hover { filter: brightness(1.1); }
+@media (prefers-color-scheme: dark) {
+  .ft-chip-info { background: rgba(12, 101, 244, 0.18); color: #bed7ff; border-color: rgba(12, 101, 244, 0.45); }
+  .ft-chip-ok { background: rgba(31, 157, 85, 0.14); color: #a7f3c4; border-color: rgba(31, 157, 85, 0.35); }
+  .ft-chip-warn { background: rgba(253, 110, 21, 0.14); color: #ffc9a3; border-color: rgba(253, 110, 21, 0.4); }
+}
+#ftMeta, #ftTargetHint { display: block; }
+#ftBrowse > *:not(summary) { margin-top: var(--space-2); }
+#ftBrowse .list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ft-ifs { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) var(--space-3); border: 1px dashed var(--accent-soft); border-radius: 10px; }
+.ft-ifs[hidden] { display: none; }
+
+/* environment tree: orgs > packages / App Library > assets > references, loaded per level */
+.ft-env, .ft-env ul { list-style: none; margin: 0; padding: 0; }
+.ft-env ul { margin-left: 10px; padding-left: 12px; border-left: 1.5px solid var(--surface-raised); }
+.ft-env-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 8px; font-size: 12.5px; min-width: 0; }
+.ft-env-row:hover { background: rgba(12, 101, 244, 0.06); }
+.ft-twisty { flex-shrink: 0; width: 18px; height: 18px; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; font-size: 11px; line-height: 18px; transition: transform 0.15s; }
+.ft-twisty[aria-expanded="true"] { transform: rotate(90deg); }
+.ft-twisty:disabled { visibility: hidden; }
+.ft-env-row .ft-name { font-weight: 500; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-env-row.ft-env-org > .ft-name { font-weight: 700; }
+.ft-env-row.ft-env-ref .ft-name { font-weight: 400; color: var(--ink-muted); }
+.ft-env-row input[type="checkbox"] { flex-shrink: 0; margin: 0; }
+.ft-icon-org { background: #3a4a8c; }
+.ft-icon-package { background: #fd6e15; }
+.ft-icon-library { background: #6b7a90; }
+.ft-env-status { font-size: 11.5px; color: var(--ink-muted); padding: 2px 0 2px 26px; }
+#ftEnvTree { max-height: 420px; overflow-y: auto; padding-right: 2px; }
+.ft-layout { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) var(--space-3); border: 1px solid var(--surface-raised); border-radius: 10px; }
+.ft-layout[hidden], #ftPackagesBox[hidden], #ftPackageField[hidden] { display: none; }
+#ftPackagesBox { display: flex; flex-direction: column; gap: var(--space-2); }
+.ft-env-hint { list-style: none; flex-wrap: wrap; font-size: 12.5px; margin: 4px 0; }
+.ft-env-hint span { flex-basis: 100%; }
+.ft-env-error { color: var(--accent-orange); }
+
 /* ---------- info icons ---------- */
 /* A small ⓘ next to anything that needs a word of explanation; panels/info-tip.js shows its
    data-tip text in one shared bubble on hover, focus or click. */

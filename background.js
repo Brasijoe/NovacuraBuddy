@@ -8,6 +8,7 @@ importScripts(
   "lib/tracking.js",
   "lib/flow-designer-tab.js",
   "lib/flow-modules.js",
+  "lib/flow-transfer.js",
   "lib/flow-token.js",
   "lib/ifs-client.js",
   "lib/ifs-permissions.js",
@@ -402,6 +403,33 @@ async function refreshDesignerTab(tab) {
   }
 }
 
+/** Import/Export tab: the target an import/copy starts on — the package of another open Designer tab
+ *  (most recently used first; the user's own login and package, nothing to ask), else the active
+ *  Designer tab's own. */
+async function handleFlowDefaultTarget({ excludeItemId }) {
+  const flowFetch = boundFlowFetch();
+  const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/admin/design/designer/*" });
+  const candidates = tabs
+    .map((t) => ({ tab: t, parsed: FlowDesignerTab.parseDesignerTabUrl(t.url) }))
+    .filter((c) => c.parsed)
+    .sort((a, b) => (b.tab.lastAccessed || 0) - (a.tab.lastAccessed || 0));
+  const other = candidates.find((c) => c.parsed.itemId !== excludeItemId);
+  const pick = other || candidates[0];
+  if (!pick) {
+    const { [LAST_FLOW_ORG_KEY]: orgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+    return orgId ? { orgId, packageId: null, fromOtherTab: false, tabTitle: "" } : null;
+  }
+  const packageId = await FlowDesignerTab.resolvePackageId({ flowFetch, orgId: pick.parsed.orgId, itemId: pick.parsed.itemId });
+  return { orgId: pick.parsed.orgId, packageId, fromOtherTab: !!other, tabTitle: pick.tab.title || "" };
+}
+
+/** After an import that changed the flow open in the active Designer tab, reload it there. */
+async function refreshIfOpen(orgId, itemIds) {
+  if (designerTabState && designerTabState.orgId === orgId && itemIds.includes(designerTabState.itemId)) {
+    await refreshDesignerTab({ ...designerTabState });
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
@@ -601,6 +629,58 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           log("API_CREATE_MODULE start:", message.moduleName, "(", (message.code || "").length, "bytes )");
           const saved = await ApiModuleService.saveModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, moduleName: message.moduleName, code: message.code, log });
           return sendResponse({ ok: true, result: await handleActivateModule(saved) });
+        }
+        case "FT_EXPORT": {
+          const generator = `NovacuraBuddy ${chrome.runtime.getManifest().version}`;
+          if (message.orgId) { // ticked in the environment tree: no Designer tab needed
+            log("FT_EXPORT start: org", message.orgId, "packages", message.packageIds, "assets", message.assetIds);
+            const pkg = await FlowTransfer.exportSelection({
+              flowFetch: boundFlowFetch(), orgId: message.orgId, packageIds: message.packageIds, assetIds: message.assetIds, generator, log
+            });
+            return sendResponse({ ok: true, pkg });
+          }
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
+          log("FT_EXPORT start: flow", tab.itemId, "package", packageId);
+          const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator, log });
+          return sendResponse({ ok: true, pkg });
+        }
+        case "FT_LIST_ASSETS":
+          return sendResponse({ ok: true, assets: await FlowTransfer.listPackageAssets({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null }) });
+        case "FT_ASSET_REFS":
+          return sendResponse({ ok: true, assets: await FlowTransfer.listAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId }) });
+        case "FT_REF_COUNTS":
+          return sendResponse({ ok: true, counts: await FlowTransfer.countAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemIds: message.itemIds }) });
+        case "FT_ORGS":
+          return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
+        case "FT_PACKAGES":
+          return sendResponse({ ok: true, packages: await FlowTransfer.listPackages({ flowFetch: boundFlowFetch(), orgId: message.orgId }) });
+        case "FT_DEFAULT_TARGET":
+          return sendResponse({ ok: true, target: await handleFlowDefaultTarget(message) });
+        case "FT_PLAN":
+          return sendResponse({ ok: true, plan: await FlowTransfer.planImport({ flowFetch: boundFlowFetch(), pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null, layout: message.layout }) });
+        case "FT_IMPORT": {
+          log("FT_IMPORT start: into org", message.orgId, "package", message.packageId || "(App Library)");
+          const flowFetch = boundFlowFetch();
+          let generateCode = null;
+          if (message.baseUrl) { // "Generate from IFS": the same code generation as Create module
+            const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
+            const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, masterKey);
+            generateCode = async (projectionName) => {
+              log("FT_IMPORT: generating", projectionName, "from", message.baseUrl);
+              const inputs = await ProjectionSearch.fetchProjectionCodegenInputs(message.baseUrl, ifsToken, projectionName);
+              return FlowModules.generateModuleCode({
+                flowFetch, csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
+                codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
+              });
+            };
+          }
+          const outcome = await FlowTransfer.runImport({
+            flowFetch, pkg: message.pkg, orgId: message.orgId, packageId: message.packageId || null, layout: message.layout,
+            choices: message.choices, connectorMap: message.connectorMap, names: message.names, generateCode, log
+          });
+          await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.choice === "update").map((r) => r.targetId));
+          return sendResponse({ ok: true, outcome });
         }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
