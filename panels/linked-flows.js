@@ -329,86 +329,57 @@ const lfLatestOf = (members) => {
   return members.find((m) => top && m.id === top.tag.src) || null;
 };
 
+/** The side panel shows only the group count next to the overview button; the overview tab
+ *  (linked-flows.html) shows the groups. */
 function lfRenderGroups() {
-  if (!lfEl("lfGroups")) return;
-  if (LF_PAGE) return lfRenderMatrix();
-  const ul = lfEl("lfGroups");
-  ul.innerHTML = "";
   if (!lf.scan) return;
-  const { groups, shown } = lfShownGroups();
-  if (!shown.length) {
-    ul.appendChild(lfH("li", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Use Copy & link flows to start a group." }));
-    return;
-  }
-  for (const [linkId, members] of shown) {
-    const maxRev = lfMaxRev(members);
-    const latest = lfLatestOf(members);
-    const card = lfH("div", { className: "ft-node" },
-      lfH("div", { className: "ft-node-head" },
-        lfH("span", { className: "ft-icon lf-icon-link", textContent: "⛓" }),
-        lfH("span", { className: "ft-name", textContent: members[0].name }),
-        ftChip(linkId, "muted", "Link id")),
-      lfH("span", { className: "ft-kind", textContent: `${members.length} package${members.length === 1 ? "" : "s"} · rev ${maxRev}${latest ? ` from ${latest.packageName}` : ""}${lf.statusesLoading ? " · checking…" : ""}` }));
-    const sync = lfSyncButton(members, false);
-    if (sync) card.appendChild(sync);
-    card.appendChild(lfCta({ icon: "link", tone: "blue", label: "Copy to more packages", title: "Copy this flow into more packages, linked to the group",
-      onclick: () => lfOpenCopy((members.find((m) => lfStatusOf(m.id) === "in_sync") || members[0]).id) }));
-    const rows = lfH("ul", {});
-    for (const m of members) {
-      const status = lfStatusOf(m.id);
-      const node = lfH("div", { className: "ft-node lf-member" },
-        lfH("div", { className: "ft-node-head" },
-          lfH("span", { className: `ft-icon ft-icon-${m.packageId ? "package" : "library"}`, textContent: m.packageId ? "P" : "L" }),
-          lfH("span", { className: "ft-name", textContent: m.packageName }),
-          m === latest ? lfH("span", { className: "ft-kind", textContent: "latest", title: "The newest version came from this copy" }) : null,
-          m.id === lf.itemId ? ftChip("open", "info") : null,
-          lfStatusChip(status)));
-      rows.appendChild(lfH("li", {}, node));
-    }
-    ul.appendChild(lfH("li", {}, card, rows));
-  }
+  if (LF_PAGE && lfEl("lfGroups")) return lfRenderMatrix();
+  if (lfEl("lfGroupCount")) lfShownGroups();
 }
 
 /* --- full-tab overview (linked-flows.html): one row per group, one column per package --- */
 
 const LF_DOT = { in_sync: "ok", changed: "info", behind: "info", conflict: "warn", differs: "warn", unknown: "muted", checking: "muted" };
 
+/** The overview table: Sync first, then the flow, then only that group's own copies as status
+ *  pills (problems first), so many packages never widen the table. */
 function lfRenderMatrix() {
   const root = lfEl("lfGroups");
   root.innerHTML = "";
   if (!lf.scan) return;
   const { groups, shown } = lfShownGroups();
   if (!shown.length) {
-    root.appendChild(lfH("p", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Link flows from the Linked Flows tab in the side panel." }));
+    root.appendChild(lfH("p", { className: "ft-env-status", textContent: groups.length ? "No group matches." : "No linked flows yet. Use Copy & link flows to start a group." }));
     return;
   }
-  const pkgs = new Map();
-  for (const [, members] of shown) for (const m of members) pkgs.set(m.packageId || "", m.packageName);
-  const cols = [...pkgs.entries()].sort((a, b) => (a[0] !== "") - (b[0] !== "") || a[1].localeCompare(b[1]));
-  const head = lfH("tr", {}, lfH("th", { className: "lf-mx-flow", textContent: "Flow" }),
-    ...cols.map(([, name]) => lfH("th", { className: "lf-mx-pkg" }, lfH("span", { textContent: name, title: name }))),
-    lfH("th", { className: "lf-mx-act", textContent: "" }));
+  const head = lfH("tr", {}, lfH("th", { className: "lf-mx-act", textContent: "" }), lfH("th", { className: "lf-mx-flow", textContent: "Flow" }), lfH("th", { textContent: "Copies" }));
   const body = lfH("tbody", {});
+  const rank = { conflict: 0, differs: 1, changed: 2, behind: 3, unknown: 4, checking: 5, in_sync: 6 };
   for (const [linkId, members] of shown) {
     const latest = lfLatestOf(members);
+    const inSync = members.filter((m) => lfStatusOf(m.id) === "in_sync").length;
     const tr = lfH("tr", { className: lf.page.selGroup === linkId ? "is-selected" : "" },
-      lfH("td", { className: "lf-mx-flow" },
+      lfH("td", { className: "lf-mx-act" }, lfSyncButton(members, true) || lfH("span", { className: "lf-mx-ok", textContent: lf.statusesLoading ? "Checking…" : "✓ In sync" })),
+      lfH("td", { className: "lf-mx-flow" }, lfH("div", { className: "lf-mx-flow-text" },
         lfH("strong", { textContent: members[0].name }),
         lfH("span", { className: "api-hint", textContent: `⛓ ${linkId} · rev ${lfMaxRev(members)}${latest ? ` from ${latest.packageName}` : ""}` }),
-        (lfSyncPlan(members) || {}).badge ? lfH("span", { className: "lf-mx-need", textContent: lfSyncPlan(members).badge }) : null));
-    for (const [pkgId] of cols) {
-      const m = members.find((x) => (x.packageId || "") === pkgId);
-      if (!m) { tr.appendChild(lfH("td", { className: "lf-mx-cell lf-mx-empty" }, lfH("span", { textContent: "·" }))); continue; }
+        lfH("span", { className: inSync === members.length ? "lf-mx-count" : "lf-mx-need", textContent: `${inSync} of ${members.length} in sync` }))));
+    const pills = lfH("div", { className: "lf-mx-pills" });
+    for (const m of [...members].sort((a, b) => (rank[lfStatusOf(a.id)] ?? 9) - (rank[lfStatusOf(b.id)] ?? 9) || a.packageName.localeCompare(b.packageName))) {
       const status = lfStatusOf(m.id);
       const [text, , tip] = LF_STATUS[status] || LF_STATUS.unknown;
-      const cell = lfH("button", { type: "button", className: `lf-mx-dot lf-mx-${LF_DOT[status] || "muted"}${lf.page.selMember === m.id ? " is-active" : ""}`, title: `${m.packageName}: ${text}${tip ? `. ${tip}` : ""}` },
-        lfH("span", { className: "lf-mx-pip" }), lfH("span", { textContent: text }), m === latest ? lfH("span", { className: "lf-mx-latest", textContent: "latest" }) : null);
-      cell.addEventListener("click", () => { lf.page.selGroup = linkId; lf.page.selMember = m.id; lfRenderMatrix(); lfRenderMemberDetail(m); });
-      tr.appendChild(lfH("td", { className: "lf-mx-cell" }, cell));
+      const pill = lfH("button", { type: "button", className: `lf-mx-dot lf-mx-${LF_DOT[status] || "muted"}${lf.page.selMember === m.id ? " is-active" : ""}`, title: `${text}${tip ? `. ${tip}` : ""}${m === latest ? " Latest version came from here." : ""}` },
+        lfH("span", { className: "lf-mx-pip" }), lfH("span", { textContent: m.packageName }), m === latest ? lfH("span", { className: "lf-mx-latest", textContent: "★" }) : null);
+      pill.addEventListener("click", () => { lf.page.selGroup = linkId; lf.page.selMember = m.id; lfRenderMatrix(); lfRenderMemberDetail(m); });
+      pills.appendChild(pill);
     }
-    tr.appendChild(lfH("td", { className: "lf-mx-act" }, lfSyncButton(members, true) || lfH("span", { className: "lf-mx-ok", textContent: lf.statusesLoading ? "Checking…" : "✓ In sync" })));
+    tr.appendChild(lfH("td", { className: "lf-mx-copies" }, pills));
     body.appendChild(tr);
   }
+  const legend = lfH("div", { className: "lf-mx-legend" },
+    ...[["ok", "In sync"], ["info", "Changed or behind"], ["warn", "Conflict or steps differ"]].map(([tone, label]) => lfH("span", { className: `lf-mx-key lf-mx-${tone}` }, lfH("span", { className: "lf-mx-pip" }), label)),
+    lfH("span", { className: "api-hint", textContent: "★ latest version · click a copy for details" }));
+  root.appendChild(legend);
   root.appendChild(lfH("div", { className: "lf-mx-wrap" }, lfH("table", { className: "lf-matrix" }, lfH("thead", {}, head), body)));
 }
 

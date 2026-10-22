@@ -255,15 +255,8 @@
         <div id="lfCopySlot" class="lf-cta-row"></div>
 
         <hr class="section-divider" />
-        <details id="lfGroupsSection" class="tracker-section" open>
-          <summary><h2>Linked groups</h2><span class="list-count" id="lfGroupCount"></span><span class="info-tip" data-tip="Every link group in this organisation, one row per package. The pill shows how that copy compares to the group: In sync, Changed, not pushed (edited there), Behind (another copy pushed a newer version), Conflict (both), or Steps differ (linked with other steps and not pushed or pulled since). 'latest' marks where the newest version came from."></span></summary>
-          <div class="lf-group-tools">
-            <div id="lfOverviewSlot" class="lf-cta-row"></div>
-            <input id="lfGroupFilter" type="search" class="lf-filter" placeholder="Filter groups…" autocomplete="off" />
-            <label class="api-check lf-only"><input type="checkbox" id="lfOnlyAttention" /> Only needing attention</label>
-          </div>
-          <ul id="lfGroups" class="ft-tree lf-groups"></ul>
-        </details>
+        <div class="lf-section-title"><h2>Linked groups</h2><span class="list-count" id="lfGroupCount"></span><span class="info-tip" data-tip="Every link group of this organisation, with a status per copy, Sync and deploy, is in the overview tab."></span></div>
+        <div id="lfOverviewSlot" class="lf-cta-row"></div>
       </div>
 
       <div id="lfWork" class="lf-work" hidden></div>
