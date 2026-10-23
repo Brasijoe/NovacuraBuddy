@@ -818,7 +818,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const { refs, failed } = await FlowDocumentation.readReferences({ flowFetch, orgId: tab.orgId, assets: scan.assets.filter((a) => !packageId || a.packageId === packageId || a.packageId === null), onProgress: (c, t) => progress("Reading flows to find where it is used", c, t) });
           const usedBy = FlowDocumentation.computeUsedBy(scan.assets, refs);
           const packageNames = new Map(scan.assets.map((a) => [a.id, a.packageName]));
-          for (const a of Object.values(pkg.assets)) a.packageName = packageNames.get(a.id) || null;
+          const packageById = new Map(scan.packages.map((p) => [p.id, p.name]));
+          for (const a of Object.values(pkg.assets)) a.packageName = packageNames.get(a.id) || packageById.get(a.packageId) || null;
           let ifs = null;
           if (message.baseUrl) {
             progress("Scanning IFS for callers");
@@ -839,17 +840,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               } catch (e) { /* unreadable projection: judged by its name only */ }
             }
           }
-          let products = null; // the apps, boards and automations (products) of the package that run this flow
+          // Apps, boards and automations are products. The flow open in the Designer may be one of them (its
+          // item id is the product id, not an asset id), so its name, kind and history come from the product.
+          let products = null;
+          let ownProduct = null;
           if (packageId) {
             try {
               const res = await flowFetch(`/admin/application/api/v2/organisations/${tab.orgId}/packages/${packageId}/products`);
               if (res.ok) {
-                products = ((await res.json()) || [])
-                  .filter((p) => (p.assetDto ? p.assetDto.assetId : (((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly)?.assetId) === tab.itemId)
-                  .map((p) => ({ id: p.id, name: p.name, type: p.type }));
+                const all = (await res.json()) || [];
+                const assetOf = (p) => p.assetDto ? p.assetDto.assetId : (((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly)?.assetId;
+                ownProduct = all.find((p) => p.id === tab.itemId) || null;
+                products = all.filter((p) => p.id === tab.itemId || assetOf(p) === tab.itemId).map((p) => ({ id: p.id, name: p.name, type: p.type }));
               }
             } catch (e) { log("Documentation: products not read:", e.message); }
           } else products = [];
+          const rootAsset = pkg.assets[tab.itemId];
+          if (ownProduct && rootAsset) {
+            rootAsset.name = ownProduct.name || rootAsset.name;
+            rootAsset.description = rootAsset.description || ownProduct.description || "";
+            rootAsset.packageId = packageId;
+            const own = scan.packages.find((p) => p.id === packageId);
+            if (own) rootAsset.packageName = own.name;
+            if (!scan.assets.some((a) => a.id === tab.itemId)) scan.assets.push({ id: tab.itemId, name: rootAsset.name, type: "component", mainBranch: ownProduct.mainBranch || null, packageId, packageName: rootAsset.packageName });
+          }
           let contributors = null;
           try { // names of whoever committed or saved the assets; read-only, left out if users can't be read
             const users = await FlowDocumentation.readUsers({ flowFetch, orgId: tab.orgId });
