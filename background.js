@@ -829,7 +829,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const pkg = await FlowTransfer.exportFlow({ flowFetch, orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
           progress("Finding where it is used");
           const scan = await linkScan(tab.orgId);
-          const { refs, failed } = await FlowDocumentation.readReferences({ flowFetch, orgId: tab.orgId, assets: scan.assets, onProgress: (c, t) => progress("Reading flows to find where it is used", c, t) });
+          // A flow can only use its own package's assets and the App Library, so a packaged asset is
+          // looked for in its package and the library; a global one (no package) in every package.
+          const { refs, failed } = await FlowDocumentation.readReferences({ flowFetch, orgId: tab.orgId, assets: scan.assets.filter((a) => !packageId || a.packageId === packageId || a.packageId === null), onProgress: (c, t) => progress("Reading flows to find where it is used", c, t) });
           const usedBy = FlowDocumentation.computeUsedBy(scan.assets, refs);
           const packageNames = new Map(scan.assets.map((a) => [a.id, a.packageName]));
           for (const a of Object.values(pkg.assets)) a.packageName = packageNames.get(a.id) || null;
