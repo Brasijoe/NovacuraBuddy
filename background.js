@@ -773,7 +773,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               for (const p of (await res.json()) || []) {
                 const ext = (p.extensionProperties || []).map((e) => e && e.value);
                 products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
-                  assetId: p.assetDto ? p.assetDto.assetId : null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
+                  // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
+                  assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
               }
             } catch (e) {
               log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
