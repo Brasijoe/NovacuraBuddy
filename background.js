@@ -28,7 +28,6 @@ importScripts(
   "lib/update-check.js",
   "lib/flow-deps.js",
   "lib/flow-documentation.js",
-  "lib/doc-publish.js",
   "apimodule/api-module-service.js"
 );
 
@@ -52,7 +51,6 @@ const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storag
 globalThis.__recorderInstanceStore = instanceStore; // RecorderCapture lists instances from the shared store
 const githubSettings = GithubSettings.createGithubSettings(chrome.storage.local);
 const qrHistory = QrHistory.createQrHistory(chrome.storage.local);
-const docPublisher = DocPublish.createPublisher({ storage: chrome.storage.local });
 const qrService = QrService.createQrService({ instanceStore, settings: githubSettings, history: qrHistory, cacheStorage: chrome.storage.local });
 const clService = ClService.createClService({ instanceStore, settings: githubSettings, history: qrHistory });
 
@@ -468,20 +466,6 @@ async function buildFlowIndex(orgId) {
   return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products };
 }
 
-/** Deletes published documentation gists past their expiry. Needs the unlocked master key (the GitHub
- *  token is stored encrypted), so with locked credentials it waits for the next run. */
-async function sweepPublishedDocs() {
-  if (!(await docPublisher.list()).some((e) => Date.parse(e.expiresAt) <= Date.now())) return;
-  let token;
-  try { token = await githubSettings.getToken(await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(null))); } catch { return; }
-  const { removed, failed } = await docPublisher.sweep({ token });
-  if (removed) log("Flow documentation: removed", removed, "expired published copy/copies");
-  for (const f of failed) logError("Flow documentation: could not remove expired copy:", f);
-}
-chrome.alarms.create("sweepPublishedDocs", { periodInMinutes: 15 });
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === "sweepPublishedDocs") sweepPublishedDocs().catch(() => {}); });
-sweepPublishedDocs().catch(() => {});
-
 /** Linked Flows tab: one scan of an organisation's assets (with link tags) is kept for a minute,
  *  so the open-flow strip, the Link flows list and the overview share it. Writes drop it. */
 const linkScans = new Map(); // orgId -> { at, promise }
@@ -876,19 +860,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
-        }
-        case "FDOC_PUBLISH": { // the only outward step: a secret gist that is deleted again after `hours`
-          const token = await githubSettings.getToken(await masterKey());
-          return sendResponse({ ok: true, entry: await docPublisher.publish({ token, name: message.name, files: message.files, hours: message.hours }) });
-        }
-        case "FDOC_LIST": {
-          sweepPublishedDocs().catch(() => {});
-          return sendResponse({ ok: true, entries: await docPublisher.list() });
-        }
-        case "FDOC_DELETE": { // removes a gist this extension published (its own, on request)
-          const token = await githubSettings.getToken(await masterKey());
-          await docPublisher.remove({ token, gistId: message.gistId });
-          return sendResponse({ ok: true });
         }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);

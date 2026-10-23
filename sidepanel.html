@@ -158,15 +158,11 @@
       <div id="fdocResult" hidden>
         <p id="fdocSummary" class="list-count"></p>
         <div class="search-row">
-          <button id="fdocDownloadBtn">Download</button>
-          <button id="fdocPublishBtn" class="btn-primary">Publish link (8 h)</button>
-          <span class="info-tip" data-tip="Uploads the documentation as a secret GitHub Gist using the GitHub token from Basic Data (it needs the gist permission). Anyone with the link can read it, so share it only with the LLM; Novacura Buddy deletes the gist again after 8 hours, as long as the browser is open and your credentials are unlocked."></span>
+          <button id="fdocDownloadBtn" class="btn-primary">Download for LLM</button>
+          <button id="fdocDownloadMoreBtn">README + JSON</button>
+          <span class="info-tip" data-tip="Download saves the LLM file (instructions plus all data). Attach it to a chat with an LLM and say: Look at the file and follow its instructions. README + JSON are a plain version for people and the raw export."></span>
         </div>
-        <div id="fdocPublishStatus" class="empty-state" hidden></div>
       </div>
-      <hr class="section-divider" />
-      <div class="section-head"><h2>Published links</h2></div>
-      <ul id="fdocPublished" class="qr-list"></ul>
     </section>
 
     <section id="panel-api-modules" role="tabpanel" hidden>
