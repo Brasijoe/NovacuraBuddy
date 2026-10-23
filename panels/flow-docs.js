@@ -112,6 +112,7 @@ document.getElementById("fdocPublishBtn").addEventListener("click", async () => 
       send({ type: "FDOC_PUBLISH", name: fdocResult.name, files, hours }),
       new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: "No answer from GitHub after 60 seconds." }), 60000))
     ]);
+    if (response.needsMasterPassword) return fdocPublishStatus("Publishing needs your saved GitHub token, which is protected by the master password: unlock your saved credentials above, then publish again.");
     if (!response.ok) return fdocPublishStatus(`Publishing failed: ${response.error}`);
     let copied = "";
     try { await navigator.clipboard.writeText(response.entry.rawUrl); copied = " (copied to the clipboard)"; } catch { /* the link is shown anyway */ }
