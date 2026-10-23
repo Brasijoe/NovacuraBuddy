@@ -15,7 +15,7 @@ The side panel groups its tabs into three menus. Hover the ⓘ icons in the pane
 - **Traffic Recorder** – records IFS projection calls with requests and responses. Filter them in the viewer, drop redundant ones and create a Flow asset from the rest.
 - **Quick Reports** – SQL Quick Reports kept in your GitHub repo. Deploy one to an IFS instance with permission sets, then create its Flow module.
 - **Custom LUs** – design Custom Logical Units with attributes and deploy them to an IFS instance, or add attributes to existing LUs.
-- **Flow Dependencies** – pick an IFS installation and scan it for everything that calls Novacura Flow (run.novacura.com / app.novacura.com, and/or your own addresses or parts of them): events, event actions, active workflows, routing addresses and page commands. The results open in a new tab as chains (Event → Event Action → Workflow → Routing Address → Flow endpoint), grouped per Flow endpoint. Read-only.
+- **Flow Dependencies** – pick an IFS installation and scan it for everything that calls Novacura Flow (run.novacura.com / app.novacura.com, and/or your own addresses or parts of them): events, event actions, active workflows, routing addresses and page commands. The results open in a new tab as chains (Event → Event Action → Workflow → Routing Address → Flow endpoint), grouped per endpoint or, for run.novacura.com / app.novacura.com, per Flow package of the called automation or app (switch on the results page). Read-only.
 
 **Flow Functions**
 - **API Modules** – turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module (list GETs become Queryables) and adds it to the open flow.

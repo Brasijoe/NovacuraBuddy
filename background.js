@@ -752,6 +752,36 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
           return sendResponse({ ok: true, result });
         }
+        case "FD_FLOW_INDEX": { // packages + assets of the open Flow organisation, for grouping per package (read-only)
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
+          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
+          const scan = await linkScan(orgId);
+          // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
+          // flow key at the end of a run.novacura.com URL.
+          const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
+          const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
+            ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
+          // Automations, apps and pages are products, listed per package (GET only). The key at the end
+          // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+          const flowFetch = boundFlowFetch();
+          const products = [];
+          for (const pkg of scan.packages) {
+            try {
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
+              if (!res.ok) continue;
+              for (const p of (await res.json()) || []) {
+                const ext = (p.extensionProperties || []).map((e) => e && e.value);
+                products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
+                  // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
+                  assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
+              }
+            } catch (e) {
+              log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
+            }
+          }
+          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products } });
+        }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
           const { [key]: result = null } = await chrome.storage.local.get(key);

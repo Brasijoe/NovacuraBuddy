@@ -49,3 +49,6 @@
 .fd-errors[hidden] { display: none; }
 .fd-errors summary { cursor: pointer; color: var(--accent-orange); }
 .fd-errors li { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+
+.fd-mode { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fd-mode button.is-active { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
