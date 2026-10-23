@@ -5,7 +5,8 @@
      runtime preamble (flow-runtime.js)
      enum modules + record types (flow-types.js)
      record mappers
-     Queryables          a list GET whose rows are records:
+     Queryables          a list GET with query params whose rows are records (without query
+                         params the plain function's rows already serve select … where):
                            let FindPetsByStatusSet = Queryable.Create<...>(restTranslation(), getFindPetsByStatusSetRows);
                          or, when the path needs values first, a function returning one:
                            function OwnerPetsSet(ownerId: number) { return Queryable.Create<...>(...(ownerId, _)); }
@@ -157,15 +158,20 @@
       const jsonResponse = resp && resp.schema && isJson(resp.contentType);
       const respType = jsonResponse ? registry.typeOf(resp.schema, `${fnName}_Result`) : null;
 
-      // ---- arguments: path, required query, body, optional query, headers ----
+      // ---- arguments: path, required query, body, required headers, optional query, optional
+      // headers, headers. Flow rejects a required argument after an optional one ("Optional
+      // arguments must be placed last in the argument list", live 2026-10-21).
       const requiredQuery = queryParams.filter((p) => p.required);
       const optionalQuery = queryParams.filter((p) => !p.required);
+      const requiredHeaders = headerParams.filter((p) => p.required);
+      const optionalHeaders = headerParams.filter((p) => !p.required);
       const args = [
         ...pathParams.map((p) => argDecl(p, false)),
         ...requiredQuery.map((p) => argDecl(p, false)),
         ...(bodyArg ? [bodyArg] : []),
+        ...requiredHeaders.map((p) => argDecl(p, false)),
         ...optionalQuery.map((p) => argDecl(p, true)),
-        ...headerParams.map((p) => argDecl(p, !p.required)),
+        ...optionalHeaders.map((p) => argDecl(p, true)),
         "headers: Header* = []"
       ];
       const url = `\`${pathExpr(op.path, argNames)}${queryParams.length ? `{restQueryString(${paramsExpr(queryParams, argNames, deref)})}` : ""}\``;
@@ -237,8 +243,9 @@
           ...pathParams.map(paramLine),
           ...requiredQuery.map(paramLine),
           bodyLine(),
+          ...requiredHeaders.map(paramLine),
           ...optionalQuery.map(paramLine),
-          ...headerParams.map(paramLine),
+          ...optionalHeaders.map(paramLine),
           "@param headers extra HTTP headers, merged over the generated ones",
           `@returns ${returnsWhat}${ok.length ? ` — ${ok.map(respText).join("; ")}` : ""}`,
           ...errors.map((r) => `@error ${respText(r)}`),
@@ -249,7 +256,9 @@
       functions.push(`${doc ? doc + "\n" : ""}function ${fnName}(${args.join(", ")})${returnType} {\n${body}\n}`);
 
       // ---- Queryable for a list GET of records ----
-      if (op.method !== "get" || !jsonResponse) continue;
+      // Only worth it when `where` has a query param to send to the API; otherwise Flow's own
+      // select on the plain function's rows does the same in memory.
+      if (op.method !== "get" || !jsonResponse || !queryParams.length) continue;
       const shape = SpecModel.listShape(resp.schema, deref);
       if (!shape) continue;
       const rowType = registry.typeOf(shape.item, `${fnName}_Row`);
@@ -289,7 +298,7 @@
       ].join("\n");
       const create = `Queryable.Create<RestQueryTranslation, ${rowType}, text>(restTranslation()`;
       const sent = whereParams.map((p) => p.name + (p.required ? " (required)" : ""));
-      const shortDoc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.length ? sent.join(", ") : "nothing"} is sent to the API, everything else is filtered in memory. */`;
+      const shortDoc2 = `/** ${op.method.toUpperCase()} ${op.path} as a data source: \`where\` on ${sent.join(", ")} is sent to the API, everything else is filtered in memory. */`;
       // A value for the usage example: the spec's example, its first enum value, or a typed placeholder.
       const sampleValue = (p) => {
         const sch = deref(p.schema);
@@ -311,12 +320,8 @@
           `Data source for ${op.method.toUpperCase()} ${op.path}${docLine(op) ? `: ${docLine(op)}` : ""}${op.deprecated ? " (deprecated)" : ""}`,
           `Rows: ${rowType}.`,
           fnArgs.length ? `Arguments: ${[...fixedArgs, ...rowHeaderParams].map(facts).join(". ")}.` : null,
-          whereParams.length
-            ? `\`where\` conditions (= or in, joined with and) on these query parameters are sent to the API: ${whereParams.map(facts).join(". ")}.`
-            : null,
-          whereParams.length
-            ? "Any other condition, order by and select are applied in memory to the rows the API returns."
-            : "Every `where` condition, order by and select are applied in memory to the rows the API returns.",
+          `\`where\` conditions (= or in, joined with and) on these query parameters are sent to the API: ${whereParams.map(facts).join(". ")}.`,
+          "Any other condition, order by and select are applied in memory to the rows the API returns.",
           `Example: return select * from ${from}${filter};`
         ]);
       };
@@ -347,7 +352,7 @@
     const decls = registry.declarations();
     const sections = [
       header,
-      FlowRuntime.runtimePreamble(model.basePath),
+      FlowRuntime.runtimePreamble(model.basePath, { queryables: queryables.length > 0 }),
       "/* ---------- Enumerations ---------- */",
       ...decls.filter((d) => d.kind === "enum").map((d) => d.text),
       "/* ---------- Types ---------- */",
@@ -401,6 +406,7 @@
     return model.operations.filter((op) => {
       const r = op.response;
       if (op.method !== "get" || !r || !r.schema || !isJson(r.contentType)) return false;
+      if (!op.params.some((p) => p.in === "query")) return false;
       const shape = SpecModel.listShape(r.schema, model.deref);
       return !!shape && registry.isRecord(registry.typeOf(shape.item, `${op.id}_Row`));
     }).map((op) => op.id);

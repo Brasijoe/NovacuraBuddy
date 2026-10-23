@@ -177,9 +177,62 @@ test("csv arrays join into one parameter, exploded arrays repeat it", () => {
   assert.match(exploded, /tags\.map\(v => new RestParam \{ name: 'tags', value: restText\(v\) \}\)\.eval\(\)/);
 });
 
-test("queryableIds marks list GETs of records only", () => {
+// Shape of the Flow Security API's GET /user/organization/{organizationId}: path param, required
+// header, no query params.
+const usersOfOrgModel = () => buildModel({
+  openapi: "3.0.0", info: { title: "Security API", version: "v3" },
+  paths: { "/user/organization/{organizationId}": { get: {
+    operationId: "getUsers",
+    parameters: [
+      { name: "organizationId", in: "path", required: true, schema: { type: "integer" } },
+      { name: "X-Origin", in: "header", required: true, schema: { type: "string" } }
+    ],
+    responses: { 200: { description: "", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserDto" } } } } } }
+  } } },
+  components: { schemas: { UserDto: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" } } } } }
+});
+
+test("a list GET without query params gets no Queryable: the plain function already returns the rows for select", () => {
+  const result = generateModule(usersOfOrgModel(), opts);
+  assert.equal(result.queryableCount, 0);
+  assert.match(result.code, /function getUsers\(organizationId: number, X_Origin: text, headers: Header\* = \[\]\): UserDto\* \{/);
+  assert.doesNotMatch(result.code, /Queryable|GetUsersSet|Data sources/);
+  assertBalanced(result.code);
+});
+
+test("a module without Queryables leaves out the Queryable runtime", () => {
+  const { code } = generateModule(usersOfOrgModel(), opts);
+  assert.doesNotMatch(code, /RestQueryTranslation|restTranslation|restFilter|restShape/);
+  assert.match(code, /private function GetResponse\(/);
+  assert.match(code, /private function restQueryString\(/);
+  const withSets = generateModule(buildModel(load("oas3-petstore-expanded.yaml")), opts).code;
+  assert.match(withSets, /^type RestQueryTranslation = \{/m);
+  assert.match(withSets, /private function restShape\(/);
+});
+
+test("required headers come before optional query params (Flow: optional arguments must be placed last)", () => {
+  // Flow Security API's GET /globalAdmin/user/search, live 2026-10-21
+  const model = buildModel({
+    openapi: "3.0.0", info: { title: "Security API", version: "v3" },
+    paths: { "/user/search": { get: {
+      operationId: "searchUsers",
+      parameters: [
+        { name: "EmailLike", in: "query", schema: { type: "string" } },
+        { name: "X-Origin", in: "header", required: true, schema: { type: "string" } },
+        { name: "X-Trace", in: "header", schema: { type: "string" } }
+      ],
+      responses: { 200: { description: "", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/UserDto" } } } } } }
+    } } },
+    components: { schemas: { UserDto: { type: "object", properties: { id: { type: "integer" } } } } }
+  });
+  const { code } = generateModule(model, opts);
+  assert.match(code, /function searchUsers\(X_Origin: text, EmailLike: text\? = null, X_Trace: text\? = null, headers: Header\* = \[\]\): UserDto\* \{/);
+});
+
+test("queryableIds marks list GETs of records that have query params only", () => {
   assert.deepEqual(queryableIds(buildModel(load("swagger-petstore-oas3.yaml"))), ["findPetsByStatus", "findPetsByTags"]);
   assert.deepEqual(queryableIds(buildModel(load("oas3-petstore.yaml"))), ["listPets"]);
+  assert.deepEqual(queryableIds(usersOfOrgModel()), []);
 });
 
 test("pathExpr URL-encodes each path parameter", () => {
