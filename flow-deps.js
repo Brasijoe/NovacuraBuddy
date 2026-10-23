@@ -50,7 +50,7 @@ function nodeSubLabel(node) {
       const target = flowIndex && FlowDeps.flowTargetForUrl(d.url, flowIndex);
       if (!target) return null;
       if (target.ambiguous) return `${target.assetName} in ${target.packageNames.join(", ")}?`;
-      return [target.packageName, target.assetName].filter(Boolean).join(" · ");
+      return [target.packageName, target.automationName, target.assetName].filter((v, i, all) => v && all.indexOf(v) === i).join(" · ");
     }
     case "pageCommand": {
       // modelId looks like "ClientMetadata.client:Customer": the page the command sits on.

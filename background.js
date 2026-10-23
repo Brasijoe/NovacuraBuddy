@@ -762,7 +762,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
           const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
             ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
-          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets } });
+          // Automations, apps and pages are products, listed per package (GET only). The key at the end
+          // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+          const flowFetch = boundFlowFetch();
+          const products = [];
+          for (const pkg of scan.packages) {
+            try {
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
+              if (!res.ok) continue;
+              for (const p of (await res.json()) || []) {
+                const ext = (p.extensionProperties || []).map((e) => e && e.value);
+                products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
+                  assetId: p.assetDto ? p.assetDto.assetId : null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
+              }
+            } catch (e) {
+              log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
+            }
+          }
+          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products } });
         }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
