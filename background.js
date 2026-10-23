@@ -26,6 +26,7 @@ importScripts(
   "lib/qr-service.js",
   "lib/cl-service.js",
   "lib/update-check.js",
+  "lib/flow-deps.js",
   "apimodule/api-module-service.js"
 );
 
@@ -58,6 +59,7 @@ const clService = ClService.createClService({ instanceStore, settings: githubSet
 // timer. The stored result carries `currentVersion`, so it is ignored once the user has installed
 // the update (no lingering banner).
 const UPDATE_INFO_KEY = "updateInfo";
+const FLOW_DEPS_PREFIX = "flowDeps:"; // + baseUrl, chrome.storage.local: the last dependency scan
 const UPDATE_DISMISSED_KEY = "updateDismissed";
 const UPDATE_CHECKED_AT_KEY = "updateCheckedAt";
 const UPDATE_CHECK_MAX_AGE_MS = 6 * 60 * 60 * 1000;
@@ -757,6 +759,50 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             await refreshIfOpen(message.orgId, [message.assetId]);
             return sendResponse({ ok: true });
           } finally { linkScanDone(message.orgId); }
+        case "FD_SCAN": { // Flow dependency scanner: read-only, the scan only gets GET methods
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const ifs = { get: client.get, getText: client.getText };
+          const onProgress = (step, current, total) =>
+            chrome.runtime.sendMessage({ type: "FD_SCAN_PROGRESS", scanId: message.scanId, step, current, total }).catch(() => {});
+          const result = { baseUrl: IfsInstances.normalizeBaseUrl(message.baseUrl), ...(await FlowDeps.runScan({ ifs, patterns: message.patterns, onProgress })) };
+          await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
+          return sendResponse({ ok: true, result });
+        }
+        case "FD_FLOW_INDEX": { // packages + assets of the open Flow organisation, for grouping per package (read-only)
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
+          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
+          const scan = await linkScan(orgId);
+          // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
+          // flow key at the end of a run.novacura.com URL.
+          const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
+          const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
+            ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
+          // Automations, apps and pages are products, listed per package (GET only). The key at the end
+          // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+          const flowFetch = boundFlowFetch();
+          const products = [];
+          for (const pkg of scan.packages) {
+            try {
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
+              if (!res.ok) continue;
+              for (const p of (await res.json()) || []) {
+                const ext = (p.extensionProperties || []).map((e) => e && e.value);
+                products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
+                  // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
+                  assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
+              }
+            } catch (e) {
+              log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
+            }
+          }
+          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products } });
+        }
+        case "FD_LAST_RESULT": {
+          const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
+          const { [key]: result = null } = await chrome.storage.local.get(key);
+          return sendResponse({ ok: true, result });
+        }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
           runUpdateCheckIfDue().catch((e) => logError("Update check failed:", e.message));
