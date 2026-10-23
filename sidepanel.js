@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "api-modules", "flows", "linked-flows", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "linked-flows", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -16,6 +16,7 @@ function showTab(name) {
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
   if (name === "flow-deps") fdOnShow();
+  if (name === "flow-docs") fdocOnShow();
   if (name === "linked-flows") lfOnShow();
 }
 

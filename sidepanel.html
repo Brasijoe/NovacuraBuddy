@@ -46,6 +46,7 @@
         <div class="tab-menu">
           <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
           <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported flows and modules are committed as a new version."></span></div>
+          <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation</button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
         </div>
       </div>
@@ -131,7 +132,7 @@
     </section>
 
     <section id="panel-flow-deps" role="tabpanel" hidden>
-      <div class="section-head"><h2>Select Flow installation</h2><span class="info-tip" data-tip="Choose the IFS installation (from Basic Data) and hit Scan. The scan reads routing addresses, active workflows (their BPMN diagrams), event actions and published page commands and finds every call to the addresses under Search for. The results open in a new tab, grouped per Flow endpoint. Large installations take a minute, since every active workflow diagram is downloaded. Read-only."></span></div>
+      <div class="section-head"><h2>Select IFS instance</h2><span class="info-tip" data-tip="Choose the IFS instance (from Basic Data) and hit Scan. The scan reads routing addresses, active workflows (their BPMN diagrams), event actions and published page commands and finds every call to the addresses under Search for. The results open in a new tab, grouped per Flow endpoint. Large instances take a minute, since every active workflow diagram is downloaded. Read-only."></span></div>
       <select id="fdInstanceSelect"></select>
       <div class="section-head"><h2>Search for</h2><span class="info-tip" data-tip="The addresses the scan looks for. Each entry matches anywhere inside a URL or text, so a part of an address works too (e.g. novacura.com or 10.49.101). Add as many as you need; untick the Novacura hosts to search only your own."></span></div>
       <label class="fd-default"><input type="checkbox" id="fdUseDefaults" checked /> run.novacura.com, app.novacura.com</label>
@@ -143,6 +144,25 @@
       <button id="fdScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
       <div id="fdHint" class="empty-state" hidden></div>
       <p id="fdLast" class="list-count" hidden></p>
+    </section>
+
+    <section id="panel-flow-docs" role="tabpanel" hidden>
+      <div class="section-head"><h2>Document the open flow</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every asset it uses, then finds which other flows use it (this reads all flows of the organisation, so it can take a moment). Nothing is changed in Flow or IFS."></span></div>
+      <label class="fd-default"><input type="checkbox" id="fdocIfs" /> Include IFS dependencies</label>
+      <select id="fdocInstance" hidden></select>
+      <span class="info-tip" data-tip="Also scans the chosen IFS installation for events, workflows, routing addresses and page commands that call this flow or the flows it uses. This calls IFS (read-only) and can take a minute."></span>
+      <label class="fd-default"><input type="checkbox" id="fdocDesign" checked /> Include Novacura design system <span class="info-tip" data-tip="Adds the Novacura design system (colours, fonts, copy and logo rules) at the end of the LLM document, so diagrams and documents the LLM creates from it look like Novacura."></span></label>
+      <textarea id="fdocNotes" rows="3" placeholder="Optional notes for the reader: purpose, background, known issues…"></textarea>
+      <button id="fdocGenerateBtn" class="btn-primary fd-scan-btn">Create documentation</button>
+      <div id="fdocHint" class="empty-state" hidden></div>
+      <div id="fdocResult" hidden>
+        <p id="fdocSummary" class="list-count"></p>
+        <div class="search-row">
+          <button id="fdocDownloadBtn" class="btn-primary">Download for LLM</button>
+          <button id="fdocDownloadMoreBtn">README + JSON</button>
+          <span class="info-tip" data-tip="Download saves the LLM file (instructions plus all data). Attach it to a chat with an LLM and say: Look at the file and follow its instructions. README + JSON are a plain version for people and the raw export."></span>
+        </div>
+      </div>
     </section>
 
     <section id="panel-api-modules" role="tabpanel" hidden>
@@ -332,6 +352,7 @@
     <script src="lib/flow-tree.js"></script>
     <script src="panels/flow-transfer.js"></script>
     <script src="panels/linked-flows.js"></script>
+    <script src="panels/flow-docs.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

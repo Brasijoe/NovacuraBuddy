@@ -21,6 +21,7 @@ The side panel groups its tabs into three menus. Hover the ⓘ icons in the pane
 - **API Modules** – turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module (list GETs become Queryables) and adds it to the open flow.
 - **Import/Export** – export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package.
 - **Linked Flows** – link copies of one flow across packages (all copies equal), push or pull changes with a step diff, sync a whole group and deploy the new versions to your Flow environments, with a full-tab overview of every group.
+- **Documentation** – document the flow open in the Designer tab for people and LLMs: steps with a Mermaid diagram, every asset it uses (recursively, with module source), which flows use it and, optionally, which IFS events and workflows call it. The LLM file opens with a task: write an eight-chapter flow documentation (name, type, business purpose, systems, trigger, process with BPM and SIPOC, participants, dependencies), so you only tell the LLM to follow the file. It also has custom IFS objects, contributors, a dependency map to visualise and (optionally) the Novacura design system.  Download the file and attach it to an LLM chat.
 
 **Basic Data** – your IFS instances, credentials and the GitHub repository used for Quick Reports and Custom LUs.
 

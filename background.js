@@ -27,6 +27,7 @@ importScripts(
   "lib/cl-service.js",
   "lib/update-check.js",
   "lib/flow-deps.js",
+  "lib/flow-documentation.js",
   "apimodule/api-module-service.js"
 );
 
@@ -434,6 +435,37 @@ async function refreshIfOpen(orgId, itemIds) {
   }
 }
 
+/** Packages, assets and automations of the open Flow organisation, for matching IFS callers to
+ *  flows and grouping per package (read-only). */
+async function buildFlowIndex(orgId) {
+  if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
+  const scan = await linkScan(orgId);
+  // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
+  // flow key at the end of a run.novacura.com URL.
+  const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
+  const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
+    ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
+  // Automations, apps and pages are products, listed per package (GET only). The key at the end
+  // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+  const flowFetch = boundFlowFetch();
+  const products = [];
+  for (const pkg of scan.packages) {
+    try {
+      const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
+      if (!res.ok) continue;
+      for (const p of (await res.json()) || []) {
+        const ext = (p.extensionProperties || []).map((e) => e && e.value);
+        products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
+          // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
+          assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
+      }
+    } catch (e) {
+      log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
+    }
+  }
+  return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products };
+}
+
 /** Linked Flows tab: one scan of an organisation's assets (with link tags) is kept for a minute,
  *  so the open-flow strip, the Link flows list and the overview share it. Writes drop it. */
 const linkScans = new Map(); // orgId -> { at, promise }
@@ -768,35 +800,91 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
           return sendResponse({ ok: true, result });
         }
-        case "FD_FLOW_INDEX": { // packages + assets of the open Flow organisation, for grouping per package (read-only)
+        case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
-          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
-          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
-          const scan = await linkScan(orgId);
-          // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
-          // flow key at the end of a run.novacura.com URL.
-          const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
-          const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
-            ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
-          // Automations, apps and pages are products, listed per package (GET only). The key at the end
-          // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+          return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+        }
+        case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
           const flowFetch = boundFlowFetch();
-          const products = [];
-          for (const pkg of scan.packages) {
-            try {
-              const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
-              if (!res.ok) continue;
-              for (const p of (await res.json()) || []) {
-                const ext = (p.extensionProperties || []).map((e) => e && e.value);
-                products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
-                  // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
-                  assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
-              }
-            } catch (e) {
-              log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
+          const progress = (step, current, total) => chrome.runtime.sendMessage({ type: "FDOC_PROGRESS", step, current, total }).catch(() => {});
+          progress("Reading the flow and everything it uses");
+          const pkg = await FlowTransfer.exportFlow({ flowFetch, orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
+          progress("Finding where it is used");
+          const scan = await linkScan(tab.orgId);
+          // A flow can only use its own package's assets and the App Library, so a packaged asset is
+          // looked for in its package and the library; a global one (no package) in every package.
+          const { refs, failed } = await FlowDocumentation.readReferences({ flowFetch, orgId: tab.orgId, assets: scan.assets.filter((a) => !packageId || a.packageId === packageId || a.packageId === null), onProgress: (c, t) => progress("Reading flows to find where it is used", c, t) });
+          const usedBy = FlowDocumentation.computeUsedBy(scan.assets, refs);
+          const packageNames = new Map(scan.assets.map((a) => [a.id, a.packageName]));
+          const packageById = new Map(scan.packages.map((p) => [p.id, p.name]));
+          for (const a of Object.values(pkg.assets)) a.packageName = packageNames.get(a.id) || packageById.get(a.packageId) || null;
+          let ifs = null;
+          if (message.baseUrl) {
+            progress("Scanning IFS for callers");
+            const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+            const result = await FlowDeps.runScan({ ifs: { get: client.get, getText: client.getText }, onProgress: (step, c, t) => progress(`IFS scan: ${step}`, c, t) });
+            const instance = (await instanceStore.listInstances()).find((i) => IfsInstances.normalizeBaseUrl(i.baseUrl) === IfsInstances.normalizeBaseUrl(message.baseUrl));
+            ifs = { instanceName: instance ? instance.name : message.baseUrl, scannedAt: result.scannedAt, chains: FlowDocumentation.ifsChainsFor(result.chains, await buildFlowIndex(tab.orgId), Object.keys(pkg.assets)) };
+          }
+          let projectionCategories = null;
+          if (message.baseUrl) { // Custom LU projections are recognised by their IFS category
+            projectionCategories = {};
+            const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+            for (const name of FlowDocumentation.allProjectionNames(pkg)) {
+              try {
+                const res = await client.get(`/main/ifsapplications/projection/v1/ProjectionExplorer.svc/ProjExplorerQuerySet?$filter=ProjectionName eq '${name.replace(/'/g, "")}'&$select=ProjectionName,Categories`);
+                const row = (res.value || [])[0];
+                if (row) projectionCategories[name] = row.Categories || "";
+              } catch (e) { /* unreadable projection: judged by its name only */ }
             }
           }
-          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products } });
+          // Apps, boards and automations are products. The flow open in the Designer may be one of them (its
+          // item id is the product id, not an asset id), so its name, kind and history come from the product.
+          let products = null;
+          let ownProduct = null;
+          if (packageId) {
+            try {
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${tab.orgId}/packages/${packageId}/products`);
+              if (res.ok) {
+                const all = (await res.json()) || [];
+                const assetOf = (p) => p.assetDto ? p.assetDto.assetId : (((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly)?.assetId;
+                ownProduct = all.find((p) => p.id === tab.itemId) || null;
+                products = all.filter((p) => p.id === tab.itemId || assetOf(p) === tab.itemId).map((p) => ({ id: p.id, name: p.name, type: p.type }));
+              }
+            } catch (e) { log("Documentation: products not read:", e.message); }
+          } else products = [];
+          const rootAsset = pkg.assets[tab.itemId];
+          // The Designer's own read of the open item names its kind (itemType: application, page, automation,
+          // component, module) and, when present, its name; it works for products as well as assets.
+          let itemType = null;
+          try {
+            const own = await FlowDesignerTab.getDesignerData({ flowFetch, orgId: tab.orgId, itemId: tab.itemId });
+            itemType = own.itemType || own.libraryItemType || null;
+            const ownName = own.name || own.itemName || own.title || null;
+            if (rootAsset && ownName && (!ownProduct)) rootAsset.name = ownName;
+            if (rootAsset && !rootAsset.description && typeof own.description === "string") rootAsset.description = own.description;
+            log("Documentation: designer item keys:", Object.keys(own).join(","), "itemType:", itemType);
+          } catch (e) { log("Documentation: designer item not read:", e.message); }
+          if (ownProduct && rootAsset) {
+            rootAsset.name = ownProduct.name || rootAsset.name;
+            rootAsset.description = rootAsset.description || ownProduct.description || "";
+            rootAsset.packageId = packageId;
+            const own = scan.packages.find((p) => p.id === packageId);
+            if (own) rootAsset.packageName = own.name;
+            if (!scan.assets.some((a) => a.id === tab.itemId)) scan.assets.push({ id: tab.itemId, name: rootAsset.name, type: "component", mainBranch: ownProduct.mainBranch || null, packageId, packageName: rootAsset.packageName });
+          }
+          let contributors = null;
+          try { // names of whoever committed or saved the assets; read-only, left out if users can't be read
+            const users = await FlowDocumentation.readUsers({ flowFetch, orgId: tab.orgId });
+            contributors = FlowDocumentation.contributorsOf({ scanAssets: scan.assets, assetIds: Object.keys(pkg.assets), rootId: tab.itemId, users });
+          } catch (e) { log("Documentation: contributors not read:", e.message); }
+          const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
+          const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, itemType, notes: message.notes, orgName, design: message.design !== false });
+          const rootName = pkg.assets[tab.itemId].name;
+          return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
