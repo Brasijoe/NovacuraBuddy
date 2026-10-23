@@ -757,7 +757,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
           if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
           const scan = await linkScan(orgId);
-          const assets = scan.assets.map(({ id, name, type, packageId, packageName }) => ({ id, name, type, packageId, packageName }));
+          // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
+          // flow key at the end of a run.novacura.com URL.
+          const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
+          const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
+            ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
           return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets } });
         }
         case "FD_LAST_RESULT": {
