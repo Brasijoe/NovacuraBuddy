@@ -27,6 +27,8 @@ importScripts(
   "lib/cl-service.js",
   "lib/update-check.js",
   "lib/flow-deps.js",
+  "lib/flow-documentation.js",
+  "lib/doc-publish.js",
   "apimodule/api-module-service.js"
 );
 
@@ -50,6 +52,7 @@ const instanceStore = IfsInstances.createIfsInstanceStore({ local: chrome.storag
 globalThis.__recorderInstanceStore = instanceStore; // RecorderCapture lists instances from the shared store
 const githubSettings = GithubSettings.createGithubSettings(chrome.storage.local);
 const qrHistory = QrHistory.createQrHistory(chrome.storage.local);
+const docPublisher = DocPublish.createPublisher({ storage: chrome.storage.local });
 const qrService = QrService.createQrService({ instanceStore, settings: githubSettings, history: qrHistory, cacheStorage: chrome.storage.local });
 const clService = ClService.createClService({ instanceStore, settings: githubSettings, history: qrHistory });
 
@@ -434,6 +437,51 @@ async function refreshIfOpen(orgId, itemIds) {
   }
 }
 
+/** Packages, assets and automations of the open Flow organisation, for matching IFS callers to
+ *  flows and grouping per package (read-only). */
+async function buildFlowIndex(orgId) {
+  if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
+  const scan = await linkScan(orgId);
+  // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
+  // flow key at the end of a run.novacura.com URL.
+  const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
+  const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
+    ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
+  // Automations, apps and pages are products, listed per package (GET only). The key at the end
+  // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+  const flowFetch = boundFlowFetch();
+  const products = [];
+  for (const pkg of scan.packages) {
+    try {
+      const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
+      if (!res.ok) continue;
+      for (const p of (await res.json()) || []) {
+        const ext = (p.extensionProperties || []).map((e) => e && e.value);
+        products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
+          // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
+          assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
+      }
+    } catch (e) {
+      log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
+    }
+  }
+  return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products };
+}
+
+/** Deletes published documentation gists past their expiry. Needs the unlocked master key (the GitHub
+ *  token is stored encrypted), so with locked credentials it waits for the next run. */
+async function sweepPublishedDocs() {
+  if (!(await docPublisher.list()).some((e) => Date.parse(e.expiresAt) <= Date.now())) return;
+  let token;
+  try { token = await githubSettings.getToken(await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(null))); } catch { return; }
+  const { removed, failed } = await docPublisher.sweep({ token });
+  if (removed) log("Flow documentation: removed", removed, "expired published copy/copies");
+  for (const f of failed) logError("Flow documentation: could not remove expired copy:", f);
+}
+chrome.alarms.create("sweepPublishedDocs", { periodInMinutes: 15 });
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === "sweepPublishedDocs") sweepPublishedDocs().catch(() => {}); });
+sweepPublishedDocs().catch(() => {});
+
 /** Linked Flows tab: one scan of an organisation's assets (with link tags) is kept for a minute,
  *  so the open-flow strip, the Link flows list and the overview share it. Writes drop it. */
 const linkScans = new Map(); // orgId -> { at, promise }
@@ -768,35 +816,47 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await chrome.storage.local.set({ [FLOW_DEPS_PREFIX + result.baseUrl]: result });
           return sendResponse({ ok: true, result });
         }
-        case "FD_FLOW_INDEX": { // packages + assets of the open Flow organisation, for grouping per package (read-only)
+        case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
-          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
-          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
-          const scan = await linkScan(orgId);
-          // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
-          // flow key at the end of a run.novacura.com URL.
-          const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
-          const assets = scan.assets.map(({ id, name, type, packageId, packageName, mainBranch }) =>
-            ({ id, name, type, packageId, packageName, keys: [...shortValues(mainBranch)] }));
-          // Automations, apps and pages are products, listed per package (GET only). The key at the end
-          // of a run.novacura.com URL is matched against them first; one failing package is skipped.
+          return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+        }
+        case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
           const flowFetch = boundFlowFetch();
-          const products = [];
-          for (const pkg of scan.packages) {
-            try {
-              const res = await flowFetch(`/admin/application/api/v2/organisations/${orgId}/packages/${pkg.id}/products`);
-              if (!res.ok) continue;
-              for (const p of (await res.json()) || []) {
-                const ext = (p.extensionProperties || []).map((e) => e && e.value);
-                products.push({ id: p.id, name: p.name, type: p.type, packageId: pkg.id, packageName: pkg.name,
-                  // The flow it runs: the asset it uses directly (live list call, 2026-10-23: no assetDto there).
-                  assetId: p.assetDto ? p.assetDto.assetId : ((((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly) || {}).assetId || null, keys: [...shortValues(p.mainBranch), ...ext.filter((v) => typeof v === "string" && v.length <= 64)] });
-              }
-            } catch (e) {
-              log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
-            }
+          const progress = (step, current, total) => chrome.runtime.sendMessage({ type: "FDOC_PROGRESS", step, current, total }).catch(() => {});
+          progress("Reading the flow and everything it uses");
+          const pkg = await FlowTransfer.exportFlow({ flowFetch, orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
+          progress("Finding where it is used");
+          const scan = await linkScan(tab.orgId);
+          const { refs, failed } = await FlowDocumentation.readReferences({ flowFetch, orgId: tab.orgId, assets: scan.assets, onProgress: (c, t) => progress("Reading flows to find where it is used", c, t) });
+          const usedBy = FlowDocumentation.computeUsedBy(scan.assets, refs);
+          const packageNames = new Map(scan.assets.map((a) => [a.id, a.packageName]));
+          for (const a of Object.values(pkg.assets)) a.packageName = packageNames.get(a.id) || null;
+          let ifs = null;
+          if (message.baseUrl) {
+            progress("Scanning IFS for callers");
+            const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+            const result = await FlowDeps.runScan({ ifs: { get: client.get, getText: client.getText }, onProgress: (step, c, t) => progress(`IFS scan: ${step}`, c, t) });
+            const instance = (await instanceStore.listInstances()).find((i) => IfsInstances.normalizeBaseUrl(i.baseUrl) === IfsInstances.normalizeBaseUrl(message.baseUrl));
+            ifs = { instanceName: instance ? instance.name : message.baseUrl, scannedAt: result.scannedAt, chains: FlowDocumentation.ifsChainsFor(result.chains, await buildFlowIndex(tab.orgId), Object.keys(pkg.assets)) };
           }
-          return sendResponse({ ok: true, index: { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products } });
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, notes: message.notes });
+          const rootName = pkg.assets[tab.itemId].name;
+          return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
+        }
+        case "FDOC_PUBLISH": { // the only outward step: a secret gist that is deleted again after `hours`
+          const token = await githubSettings.getToken(await masterKey());
+          return sendResponse({ ok: true, entry: await docPublisher.publish({ token, name: message.name, files: message.files, hours: message.hours }) });
+        }
+        case "FDOC_LIST": {
+          sweepPublishedDocs().catch(() => {});
+          return sendResponse({ ok: true, entries: await docPublisher.list() });
+        }
+        case "FDOC_DELETE": { // removes a gist this extension published (its own, on request)
+          const token = await githubSettings.getToken(await masterKey());
+          await docPublisher.remove({ token, gistId: message.gistId });
+          return sendResponse({ ok: true });
         }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
