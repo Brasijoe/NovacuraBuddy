@@ -1,5 +1,6 @@
 // Documentation tab: documents the flow open in the Designer tab for people and LLMs, to download or
 // to publish as a link that expires.
+let fdocPublishArmed = false;
 let fdocResult = null; // { name, files }
 
 function fdocHint(text) {
@@ -77,8 +78,17 @@ document.getElementById("fdocDownloadBtn").addEventListener("click", () => {
 document.getElementById("fdocPublishBtn").addEventListener("click", async () => {
   if (!fdocResult) return;
   const hours = 8;
-  if (!confirm(`Publish this documentation as a secret GitHub Gist? Anyone with the link can read it until it is deleted after ${hours} hours.`)) return;
   const btn = document.getElementById("fdocPublishBtn");
+  // window.confirm is blocked in the side panel (returns false without showing), so ask on the button.
+  if (!fdocPublishArmed) {
+    fdocPublishArmed = true;
+    btn.textContent = "Confirm: anyone with the link can read it";
+    fdocHint(`This uploads the documentation as a secret GitHub Gist. Anyone with the link can read it until it is deleted after ${hours} hours. Click again to publish.`);
+    setTimeout(() => { fdocPublishArmed = false; btn.textContent = "Publish link (8 h)"; }, 10000);
+    return;
+  }
+  fdocPublishArmed = false;
+  btn.textContent = "Publish link (8 h)";
   btn.disabled = true;
   fdocHint("Publishing…");
   // Published files carry the expiry so a reader (or LLM) sees it.
