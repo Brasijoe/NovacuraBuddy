@@ -856,6 +856,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             } catch (e) { log("Documentation: products not read:", e.message); }
           } else products = [];
           const rootAsset = pkg.assets[tab.itemId];
+          // The Designer's own read of the open item names its kind (itemType: application, page, automation,
+          // component, module) and, when present, its name; it works for products as well as assets.
+          let itemType = null;
+          try {
+            const own = await FlowDesignerTab.getDesignerData({ flowFetch, orgId: tab.orgId, itemId: tab.itemId });
+            itemType = own.itemType || own.libraryItemType || null;
+            const ownName = own.name || own.itemName || own.title || null;
+            if (rootAsset && ownName && (!ownProduct)) rootAsset.name = ownName;
+            if (rootAsset && !rootAsset.description && typeof own.description === "string") rootAsset.description = own.description;
+            log("Documentation: designer item keys:", Object.keys(own).join(","), "itemType:", itemType);
+          } catch (e) { log("Documentation: designer item not read:", e.message); }
           if (ownProduct && rootAsset) {
             rootAsset.name = ownProduct.name || rootAsset.name;
             rootAsset.description = rootAsset.description || ownProduct.description || "";
@@ -871,7 +882,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           } catch (e) { log("Documentation: contributors not read:", e.message); }
           const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
           const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
-          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, notes: message.notes, orgName, design: message.design !== false });
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, itemType, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
