@@ -855,9 +855,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               } catch (e) { /* unreadable projection: judged by its name only */ }
             }
           }
+          let contributors = null;
+          try { // names of whoever committed or saved the assets; read-only, left out if users can't be read
+            const users = await FlowDocumentation.readUsers({ flowFetch, orgId: tab.orgId });
+            contributors = FlowDocumentation.contributorsOf({ scanAssets: scan.assets, assetIds: Object.keys(pkg.assets), rootId: tab.itemId, users });
+          } catch (e) { log("Documentation: contributors not read:", e.message); }
           const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
           const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
-          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, notes: message.notes, orgName, design: message.design !== false });
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
