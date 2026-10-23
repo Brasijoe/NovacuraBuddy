@@ -43,7 +43,7 @@ function ftKind(type) {
   const kind = t === "module" ? { icon: "M", cls: "module", label: "Module" }
     : t === "connector" ? { icon: "C", cls: "connector", label: "Connector" }
     : t === "workflow" || /automation|machine/i.test(t) ? { icon: "A", cls: "automation", label: "Automation" }
-    : t === "component" || t === "flow" ? { icon: "F", cls: "flow", label: "Flow" }
+    : t === "component" || t === "flow" || t === "application" ? { icon: "F", cls: "flow", label: "Flow" }
     : { icon: (t || "?").charAt(0).toUpperCase(), cls: "other", label: t || "Unknown" };
   return { ...kind, title: t && t !== kind.label.toLowerCase() ? `${kind.label} (type "${t}")` : kind.label };
 }
