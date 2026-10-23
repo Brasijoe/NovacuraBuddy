@@ -151,6 +151,7 @@
       <label class="fd-default"><input type="checkbox" id="fdocIfs" /> Include IFS dependencies</label>
       <select id="fdocInstance" hidden></select>
       <span class="info-tip" data-tip="Also scans the chosen IFS installation for events, workflows, routing addresses and page commands that call this flow or the flows it uses. This calls IFS (read-only) and can take a minute."></span>
+      <label class="fd-default"><input type="checkbox" id="fdocDesign" checked /> Include Novacura design guidance <span class="info-tip" data-tip="Adds the Novacura colours and fonts at the end of the LLM document, so diagrams and documents the LLM creates from it look like Novacura."></span></label>
       <textarea id="fdocNotes" rows="3" placeholder="Optional notes for the reader: purpose, background, known issues…"></textarea>
       <button id="fdocGenerateBtn" class="btn-primary fd-scan-btn">Create documentation</button>
       <div id="fdocHint" class="empty-state" hidden></div>

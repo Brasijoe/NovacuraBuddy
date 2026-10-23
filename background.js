@@ -843,7 +843,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const instance = (await instanceStore.listInstances()).find((i) => IfsInstances.normalizeBaseUrl(i.baseUrl) === IfsInstances.normalizeBaseUrl(message.baseUrl));
             ifs = { instanceName: instance ? instance.name : message.baseUrl, scannedAt: result.scannedAt, chains: FlowDocumentation.ifsChainsFor(result.chains, await buildFlowIndex(tab.orgId), Object.keys(pkg.assets)) };
           }
-          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, notes: message.notes });
+          const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
+          const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }

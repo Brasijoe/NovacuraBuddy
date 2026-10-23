@@ -43,7 +43,7 @@ document.getElementById("fdocGenerateBtn").addEventListener("click", async () =>
   btn.disabled = true;
   document.getElementById("fdocResult").hidden = true;
   fdocHint("Starting…");
-  const response = await send({ type: "FDOC_GENERATE", baseUrl, notes: document.getElementById("fdocNotes").value.trim() });
+  const response = await send({ type: "FDOC_GENERATE", baseUrl, notes: document.getElementById("fdocNotes").value.trim(), design: document.getElementById("fdocDesign").checked });
   btn.disabled = false;
   if (!response.ok) return fdocHint(response.error);
   fdocResult = response;
