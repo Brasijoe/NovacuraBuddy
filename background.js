@@ -855,6 +855,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               } catch (e) { /* unreadable projection: judged by its name only */ }
             }
           }
+          let products = null; // the apps, boards and automations (products) of the package that run this flow
+          if (packageId) {
+            try {
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${tab.orgId}/packages/${packageId}/products`);
+              if (res.ok) {
+                products = ((await res.json()) || [])
+                  .filter((p) => (p.assetDto ? p.assetDto.assetId : (((p.mainBranch || {}).versionInfo || {}).assets || []).find((u) => !u.usedIndirectly)?.assetId) === tab.itemId)
+                  .map((p) => ({ id: p.id, name: p.name, type: p.type }));
+              }
+            } catch (e) { log("Documentation: products not read:", e.message); }
+          } else products = [];
           let contributors = null;
           try { // names of whoever committed or saved the assets; read-only, left out if users can't be read
             const users = await FlowDocumentation.readUsers({ flowFetch, orgId: tab.orgId });
@@ -862,7 +873,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           } catch (e) { log("Documentation: contributors not read:", e.message); }
           const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
           const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
-          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, notes: message.notes, orgName, design: message.design !== false });
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
