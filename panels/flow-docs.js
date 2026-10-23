@@ -75,6 +75,18 @@ document.getElementById("fdocDownloadBtn").addEventListener("click", () => {
   fdocSave(`${base}.flow.json`, fdocResult.files["flow.json"]);
 });
 
+// Status right under the Publish button, where the user is looking; `link` makes the result a clickable URL.
+function fdocPublishStatus(text, link) {
+  const el = document.getElementById("fdocPublishStatus");
+  el.textContent = text || "";
+  if (link) {
+    const a = document.createElement("a");
+    a.href = link; a.target = "_blank"; a.textContent = link;
+    el.append(" ", a);
+  }
+  el.hidden = !text;
+}
+
 document.getElementById("fdocPublishBtn").addEventListener("click", async () => {
   if (!fdocResult) return;
   const hours = 8;
@@ -83,24 +95,33 @@ document.getElementById("fdocPublishBtn").addEventListener("click", async () => 
   if (!fdocPublishArmed) {
     fdocPublishArmed = true;
     btn.textContent = "Confirm: anyone with the link can read it";
-    fdocHint(`This uploads the documentation as a secret GitHub Gist. Anyone with the link can read it until it is deleted after ${hours} hours. Click again to publish.`);
+    fdocPublishStatus(`This uploads the documentation as a secret GitHub Gist. Anyone with the link can read it until it is deleted after ${hours} hours. Click again to publish.`);
     setTimeout(() => { fdocPublishArmed = false; btn.textContent = "Publish link (8 h)"; }, 10000);
     return;
   }
   fdocPublishArmed = false;
   btn.textContent = "Publish link (8 h)";
   btn.disabled = true;
-  fdocHint("Publishing…");
-  // Published files carry the expiry so a reader (or LLM) sees it.
-  const expiresAt = new Date(Date.now() + hours * 3600e3).toISOString();
-  const stamp = (t) => t.replace(/^(- Generated:.*)$/m, `$1\n- This published copy expires: ${expiresAt}`);
-  const files = { "llm-context.md": stamp(fdocResult.files["llm-context.md"]), "README.md": stamp(fdocResult.files["README.md"]), "flow.json": fdocResult.files["flow.json"] };
-  const response = await send({ type: "FDOC_PUBLISH", name: fdocResult.name, files, hours });
-  btn.disabled = false;
-  if (!response.ok) return fdocHint(response.error);
-  fdocHint("");
-  try { await navigator.clipboard.writeText(response.entry.rawUrl); fdocHint("Published. The link to give the LLM is copied to the clipboard."); } catch { fdocHint("Published."); }
-  fdocRenderPublished();
+  fdocPublishStatus("Publishing…");
+  try {
+    // Published files carry the expiry so a reader (or LLM) sees it.
+    const expiresAt = new Date(Date.now() + hours * 3600e3).toISOString();
+    const stamp = (t) => t.replace(/^(- Generated:.*)$/m, `$1\n- This published copy expires: ${expiresAt}`);
+    const files = { "llm-context.md": stamp(fdocResult.files["llm-context.md"]), "README.md": stamp(fdocResult.files["README.md"]), "flow.json": fdocResult.files["flow.json"] };
+    const response = await Promise.race([
+      send({ type: "FDOC_PUBLISH", name: fdocResult.name, files, hours }),
+      new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: "No answer from GitHub after 60 seconds." }), 60000))
+    ]);
+    if (!response.ok) return fdocPublishStatus(`Publishing failed: ${response.error}`);
+    let copied = "";
+    try { await navigator.clipboard.writeText(response.entry.rawUrl); copied = " (copied to the clipboard)"; } catch { /* the link is shown anyway */ }
+    fdocPublishStatus(`Published${copied}. Give the LLM this link:`, response.entry.rawUrl);
+    fdocRenderPublished();
+  } catch (e) {
+    fdocPublishStatus(`Publishing failed: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 async function fdocRenderPublished() {
