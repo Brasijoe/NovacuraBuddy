@@ -843,9 +843,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const instance = (await instanceStore.listInstances()).find((i) => IfsInstances.normalizeBaseUrl(i.baseUrl) === IfsInstances.normalizeBaseUrl(message.baseUrl));
             ifs = { instanceName: instance ? instance.name : message.baseUrl, scannedAt: result.scannedAt, chains: FlowDocumentation.ifsChainsFor(result.chains, await buildFlowIndex(tab.orgId), Object.keys(pkg.assets)) };
           }
+          let projectionCategories = null;
+          if (message.baseUrl) { // Custom LU projections are recognised by their IFS category
+            projectionCategories = {};
+            const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+            for (const name of FlowDocumentation.allProjectionNames(pkg)) {
+              try {
+                const res = await client.get(`/main/ifsapplications/projection/v1/ProjectionExplorer.svc/ProjExplorerQuerySet?$filter=ProjectionName eq '${name.replace(/'/g, "")}'&$select=ProjectionName,Categories`);
+                const row = (res.value || [])[0];
+                if (row) projectionCategories[name] = row.Categories || "";
+              } catch (e) { /* unreadable projection: judged by its name only */ }
+            }
+          }
           const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
           const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
-          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, notes: message.notes, orgName, design: message.design !== false });
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
