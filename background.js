@@ -470,6 +470,58 @@ async function buildFlowIndex(orgId) {
   return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products };
 }
 
+
+/** Runs in the Designer page itself (MAIN world), read-only: what drawing library, globals and
+ *  Angular component state the canvas comes with, so the Module Compare marks can be placed on
+ *  the canvas. Returns text for the "Copy page info" diagnostics. */
+function designerPageProbe() {
+  const out = [];
+  const keysOf = (o, n = 40) => { try { return Object.keys(o).slice(0, n); } catch { return []; } };
+  const describe = (o, depth) => {
+    const parts = [];
+    for (const k of keysOf(o, 60)) {
+      let v; try { v = o[k]; } catch { continue; }
+      const t = typeof v;
+      if (t === "number" || t === "boolean") parts.push(`${k}=${v}`);
+      else if (t === "string") parts.push(`${k}="${v.slice(0, 40)}"`);
+      else if (t === "function") continue;
+      else if (v && t === "object") parts.push(depth > 0 ? `${k}:{${describe(v, depth - 1)}}` : `${k}:${Array.isArray(v) ? `[${v.length}]` : (v.constructor && v.constructor.name) || "obj"}`);
+    }
+    return parts.join(", ");
+  };
+  try {
+    const frame = document.createElement("iframe");
+    frame.style.display = "none";
+    document.body.appendChild(frame);
+    const clean = new Set(Object.keys(frame.contentWindow));
+    frame.remove();
+    const extra = Object.keys(window).filter((k) => !clean.has(k));
+    out.push(`globals: ${extra.slice(0, 60).join(" ")}`);
+    for (const lib of ["Konva", "PIXI", "fabric", "go", "createjs", "paper", "joint", "mxGraph", "ng", "Zone"]) if (window[lib]) out.push(`lib ${lib}: ${typeof window[lib]}`);
+  } catch (e) { out.push(`globals: ${e.message}`); }
+  const canvas = document.querySelector("canvas");
+  if (canvas) {
+    const r = canvas.getBoundingClientRect();
+    out.push(`canvas ${canvas.width}x${canvas.height} css ${Math.round(r.width)}x${Math.round(r.height)} at ${Math.round(r.left)},${Math.round(r.top)} dpr ${devicePixelRatio} style.transform "${canvas.style.transform}"`);
+    out.push(`canvas own props: ${Object.getOwnPropertyNames(canvas).join(" ")}`);
+    out.push(`canvas parent: ${canvas.parentElement && canvas.parentElement.tagName.toLowerCase()} props ${Object.getOwnPropertyNames(canvas.parentElement || {}).join(" ")}`);
+  }
+  for (const tag of ["app-designer-plane", "app-designer", "app-zoom-toolbar"]) {
+    const el = document.querySelector(tag);
+    if (!el) continue;
+    out.push(`${tag} own props: ${Object.getOwnPropertyNames(el).join(" ")} ngContext ${typeof el.__ngContext__} ${typeof el.__ngContext__ === "number" ? el.__ngContext__ : ""}`);
+    out.push(`${tag} text: "${(el.innerText || "").replace(/\s+/g, " ").slice(0, 80)}"`);
+    try {
+      if (window.ng && window.ng.getComponent) out.push(`${tag} component: ${describe(window.ng.getComponent(el), 1)}`);
+      else if (Array.isArray(el.__ngContext__)) {
+        const comp = el.__ngContext__.find((x) => x && typeof x === "object" && !Array.isArray(x) && x.constructor && x.constructor.name && x.constructor.name !== "Object");
+        if (comp) out.push(`${tag} component (${comp.constructor.name}): ${describe(comp, 1)}`);
+      }
+    } catch (e) { out.push(`${tag} component: ${e.message}`); }
+  }
+  return out.join("\n");
+}
+
 /** Linked Flows tab: one scan of an organisation's assets (with link tags) is kept for a minute,
  *  so the open-flow strip, the Link flows list and the overview share it. Writes drop it. */
 const linkScans = new Map(); // orgId -> { at, promise }
@@ -923,7 +975,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const uses = assets.some((r) => !r.usedIndirectly && wanted.has(r.assetId));
           // Per step (arrows aside) its label and text, so the results can name the steps that are hit.
           const steps = !uses ? [] : [...FlowLinks.materialize(d.data)].filter(([, e]) => e.kind !== "arrow").map(([id, e]) => ({
-            id, label: String(e.label || e.name || (e.configuration && e.configuration.label) || e.stepType || e.kind || id), text: ModuleCompare.flowText({ data: [e] })
+            id, label: String(e.label || e.name || (e.configuration && e.configuration.label) || e.stepType || e.kind || id), text: ModuleCompare.flowText({ data: [e] }),
+            location: e.location || null // where the Designer draws it (its canvas has no step elements)
           })).filter((st) => st.text);
           return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "", steps });
         }
@@ -941,6 +994,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             .filter((e) => e.orgId === message.orgId && e.flows && e.flows[message.itemId])
             .sort((a, b) => String(b.scannedAt).localeCompare(String(a.scannedAt)))[0];
           return sendResponse({ ok: true, marks: hit ? { ...hit.flows[message.itemId], scan: { orgId: hit.orgId, packageId: hit.packageId, baseUrl: hit.baseUrl } } : null });
+        }
+        case "MC_PAGE_PROBE": { // read-only look at how the Designer page draws its canvas (for placing the marks)
+          const [res] = await chrome.scripting.executeScript({ target: { tabId: _sender.tab.id }, world: "MAIN", func: designerPageProbe });
+          return sendResponse({ ok: true, text: res && res.result });
         }
         case "MC_OPEN_FLOW": { // opens (or switches to) the flow in the Designer; the content script focuses the step
           const url = `https://build.novacura.com/admin/design/designer/organizations/${message.orgId}/items/${message.flowId}`;

@@ -285,7 +285,10 @@ function mcRenderPanel() {
     const copy = h("a", null, "Copy page info");
     copy.title = "Copies a description of how this page draws its steps (tags, where the step names are) to send to the developer";
     copy.onclick = async () => {
-      try { await navigator.clipboard.writeText(mcDiagnostics()); copy.textContent = "Copied"; }
+      const probe = await chrome.runtime.sendMessage({ type: "MC_PAGE_PROBE" }).catch((e) => ({ ok: false, error: e.message }));
+      const locations = mc.marks.steps.map((st) => `${st.label}: location ${JSON.stringify(st.location)}`);
+      const text = [mcDiagnostics(), "step locations:", ...locations, "page probe:", probe && probe.ok ? probe.text : `failed: ${probe && probe.error}`].join("\n");
+      try { await navigator.clipboard.writeText(text); copy.textContent = "Copied"; }
       catch { copy.textContent = "Copy failed"; }
     };
     diag.append(copy);
