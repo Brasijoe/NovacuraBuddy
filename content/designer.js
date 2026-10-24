@@ -184,7 +184,7 @@ function mcDiagnostics() {
     `custom elements: ${[...tags].sort((x, y) => y[1] - x[1]).slice(0, 40).map(([t, n]) => `${t}(${n})`).join(" ")}`,
     "label search:", ...texts,
     "step ids in attributes:", ...(attrsWithIds.slice(0, 20).length ? attrsWithIds.slice(0, 20) : ["none"]),
-    `canvas texts (${mc.canvas ? mc.canvas.texts.length : "none reported"}): ${mc.canvas ? mc.canvas.texts.slice(0, 40).map((t) => `"${t.text.slice(0, 30)}"@${Math.round(t.left)},${Math.round(t.top)}`).join(" ") : ""}`
+    `canvas texts (${mc.canvas ? mc.canvas.texts.length : "none reported"}): ${mc.canvas ? mc.canvas.texts.slice(0, 40).map((t) => `"${t.text.slice(0, 30)}"@${Math.round(t.left)},${Math.round(t.top)}${t.card ? ` card ${Math.round(t.card.width)}x${Math.round(t.card.height)}` : ""}`).join(" ") : ""}`
   ].join("\n");
 }
 
@@ -203,7 +203,15 @@ addEventListener("novacura-buddy-canvas-texts", (e) => {
 });
 dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
 
-const MC_PAD = { x: 14, y: 12 }; // from the drawn name out to roughly the step's box
+/** The step box around a name drawn on the canvas: the card shape drawn around it, or else a guess
+ *  from the name (the step icon sits left of the name, the card has padding all round). */
+function mcCardRect(t) {
+  const c = t.card;
+  if (c && c.width >= t.width && c.height >= t.height) return { left: c.left, top: c.top, width: c.width, height: c.height, right: c.left + c.width, bottom: c.top + c.height };
+  const h = t.height || 14;
+  const left = t.left - h * 2.6, top = t.top - h * 0.9, right = t.left + t.width + h * 1.1, bottom = t.top + t.height + h * 0.9;
+  return { left, top, width: right - left, height: bottom - top, right, bottom };
+}
 
 function mcCanvasTargets(step) {
   if (!mc.canvas) return [];
@@ -214,10 +222,7 @@ function mcCanvasTargets(step) {
     const cut = text.replace(/(…|\.\.\.)$/, "").trim();
     return text === label || (cut !== text && cut.length >= 4 && label.startsWith(cut));
   });
-  return hits.map((t) => ({
-    canvasText: true,
-    rect: () => ({ left: t.left - MC_PAD.x, top: t.top - MC_PAD.y, width: t.width + 2 * MC_PAD.x, height: t.height + 2 * MC_PAD.y, right: t.left + t.width + MC_PAD.x, bottom: t.top + t.height + MC_PAD.y })
-  }));
+  return hits.map((t) => ({ canvasText: true, rect: () => mcCardRect(t) }));
 }
 
 /** A target's box on screen (an element, or a name drawn on the canvas). */
