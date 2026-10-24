@@ -28,6 +28,7 @@ importScripts(
   "lib/update-check.js",
   "lib/flow-deps.js",
   "lib/flow-documentation.js",
+  "lib/module-compare.js",
   "apimodule/api-module-service.js"
 );
 
@@ -61,6 +62,8 @@ const clService = ClService.createClService({ instanceStore, settings: githubSet
 // the update (no lingering banner).
 const UPDATE_INFO_KEY = "updateInfo";
 const FLOW_DEPS_PREFIX = "flowDeps:"; // + baseUrl, chrome.storage.local: the last dependency scan
+const MODULE_COMPARE_PREFIX = "moduleCompare:"; // + orgId|packageId|baseUrl, chrome.storage.local: the last module compare
+const moduleCompareKey = (m) => `${MODULE_COMPARE_PREFIX}${m.orgId}|${m.packageId || ""}|${IfsInstances.normalizeBaseUrl(m.baseUrl)}`;
 const UPDATE_DISMISSED_KEY = "updateDismissed";
 const UPDATE_CHECKED_AT_KEY = "updateCheckedAt";
 const UPDATE_CHECK_MAX_AGE_MS = 6 * 60 * 60 * 1000;
@@ -885,6 +888,57 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, itemType, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
+        }
+        case "MC_SCAN": { // Module compare: reads Flow and IFS, writes nothing (code-gen only returns code)
+          const flowFetch = boundFlowFetch();
+          const orgId = message.orgId;
+          const mk = await masterKey();
+          const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, mk);
+          const onProgress = (step, current, total) =>
+            chrome.runtime.sendMessage({ type: "MC_SCAN_PROGRESS", scanId: message.scanId, step, current, total }).catch(() => {});
+          log("MC_SCAN start: org", orgId, "package", message.packageId || "(all)", "IFS", message.baseUrl);
+          const result = await ModuleCompare.runScan({
+            packageId: message.packageId || null,
+            flow: {
+              listPackages: () => FlowTransfer.listPackages({ flowFetch, orgId }),
+              listAssets: (packageId) => FlowModules.listAssets({ flowFetch, orgId, packageId }),
+              readSource: (m) => FlowTransfer.readModuleSource({ flowFetch, orgId, assetId: m.id, versionId: m.versionId }),
+              readDesigner: (itemId) => FlowDesignerTab.getDesignerData({ flowFetch, orgId, itemId })
+            },
+            generateCode: async (projectionName) => {
+              const inputs = await ProjectionSearch.fetchProjectionCodegenInputs(message.baseUrl, ifsToken, projectionName);
+              return FlowModules.generateModuleCode({
+                flowFetch, csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
+                codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
+              });
+            },
+            ifsProjectionOf: FlowTransfer.ifsProjectionOf,
+            onProgress
+          });
+          const full = { ...result, orgId, packageId: message.packageId || null, baseUrl: IfsInstances.normalizeBaseUrl(message.baseUrl) };
+          await chrome.storage.local.set({ [moduleCompareKey(message)]: full });
+          log("MC_SCAN done:", result.modules.length, "modules,", result.errors.length, "errors");
+          return sendResponse({ ok: true, result: full });
+        }
+        case "MC_LAST_RESULT": {
+          const key = moduleCompareKey(message);
+          const { [key]: result = null } = await chrome.storage.local.get(key);
+          return sendResponse({ ok: true, result });
+        }
+        case "MC_UPDATE": { // user-clicked per module: commits the regenerated code, the same calls as Create module
+          const flowFetch = boundFlowFetch();
+          log("MC_UPDATE:", message.assetId, "in org", message.orgId, "package", message.packageId || "(App Library)");
+          const branch = await FlowModules.commitModuleCode({ flowFetch, orgId: message.orgId, packageId: message.packageId || null, assetId: message.assetId, flowScriptCode: message.code });
+          // The stored scan now shows this module as up to date.
+          const key = moduleCompareKey(message);
+          const { [key]: stored = null } = await chrome.storage.local.get(key);
+          if (stored) {
+            const m = stored.modules.find((x) => x.id === message.assetId);
+            if (m) { m.updatedAt = new Date().toISOString(); m.updated = true; }
+            await chrome.storage.local.set({ [key]: stored });
+          }
+          await refreshIfOpen(message.orgId, message.flowIds || []);
+          return sendResponse({ ok: true, headVersionId: branch.headVersionId });
         }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);

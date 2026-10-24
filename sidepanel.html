@@ -47,6 +47,7 @@
           <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
           <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported flows and modules are committed as a new version."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation</button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
+          <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
         </div>
       </div>
@@ -274,6 +275,18 @@
       <div id="ftResult" class="ft-result" hidden></div>
     </section>
 
+    <section id="panel-module-compare" role="tabpanel" hidden>
+      <div class="section-head"><h2>Organisation</h2><span class="info-tip" data-tip="The Flow organisation whose modules are compared. Preselected from the flow open in the Designer tab."></span></div>
+      <select id="mcOrgSelect"></select>
+      <div class="section-head"><h2>Package</h2><span class="info-tip" data-tip="All packages compares every module in the organisation. With one package, its modules and the global App Library modules are compared, and only that package's flows (plus App Library flows) are checked for where they are used."></span></div>
+      <select id="mcPackageSelect"><option value="">All packages</option></select>
+      <div class="section-head"><h2>IFS instance</h2><span class="info-tip" data-tip="The upgraded IFS instance (from Basic Data). Each module that was generated from an IFS projection is generated again from this instance's metadata with Flow's code generator, then compared. Nothing is written to Flow or IFS by the scan."></span></div>
+      <select id="mcInstanceSelect"></select>
+      <button id="mcScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
+      <div id="mcHint" class="empty-state" hidden></div>
+      <p id="mcLast" class="list-count" hidden></p>
+    </section>
+
     <section id="panel-linked-flows" role="tabpanel" hidden>
       <div class="lf-head">
         <label class="api-field lf-org">Organisation <select id="lfOrg"></select></label>
@@ -352,6 +365,7 @@
     <script src="lib/flow-tree.js"></script>
     <script src="panels/flow-transfer.js"></script>
     <script src="panels/linked-flows.js"></script>
+    <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
     <script src="sidepanel.js"></script>
   </body>
