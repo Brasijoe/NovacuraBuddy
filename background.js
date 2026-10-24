@@ -942,6 +942,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             .sort((a, b) => String(b.scannedAt).localeCompare(String(a.scannedAt)))[0];
           return sendResponse({ ok: true, marks: hit ? { ...hit.flows[message.itemId], scan: { orgId: hit.orgId, packageId: hit.packageId, baseUrl: hit.baseUrl } } : null });
         }
+        case "MC_OPEN_FLOW": { // opens (or switches to) the flow in the Designer; the content script focuses the step
+          const url = `https://build.novacura.com/admin/design/designer/organizations/${message.orgId}/items/${message.flowId}`;
+          await chrome.storage.local.set({ mcFocusRequest: { orgId: message.orgId, flowId: message.flowId, stepId: message.stepId || null, at: Date.now() } });
+          const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/*" });
+          const open = tabs.find((t) => (t.url || "").startsWith(url));
+          if (open) {
+            await chrome.tabs.update(open.id, { active: true });
+            await chrome.windows.update(open.windowId, { focused: true }).catch(() => {});
+          } else {
+            await chrome.tabs.create({ url });
+          }
+          return sendResponse({ ok: true });
+        }
         case "MC_OPEN_RESULTS": {
           const q = new URLSearchParams({ orgId: message.orgId, packageId: message.packageId || "", baseUrl: message.baseUrl });
           await chrome.tabs.create({ url: chrome.runtime.getURL(`module-compare.html?${q}`) });

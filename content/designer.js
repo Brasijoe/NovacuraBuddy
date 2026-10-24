@@ -90,28 +90,118 @@ function mcEnsureHost() {
   document.documentElement.appendChild(mc.host);
 }
 
-/** The canvas element of a step: by its id in an attribute, else every element showing its label. */
-function mcFindTargets(step) {
-  const esc = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : String(v).replace(/"/g, '\\"'));
-  const byId = document.querySelector(["id", "data-id", "data-step-id", "data-node-id", "data-element-id"].map((a) => `[${a}="${esc(step.id)}"]`).join(","));
-  if (byId && !mc.host.contains(byId)) return [byId];
-  const label = String(step.label || "").trim();
-  if (!label) return [];
-  const out = [];
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (n.nodeValue.trim() !== label) continue;
-    let el = n.parentElement;
-    if (!el || el.closest("#novacura-buddy-module-compare")) continue;
-    // Climb to the step's box: the nearest ancestor of a node-like size.
-    for (let i = 0; i < 4 && el.parentElement; i++) {
-      const r = el.getBoundingClientRect();
-      if (r.width >= 60 && r.height >= 28) break;
-      el = el.parentElement;
+/** Every root to search: the document, open shadow roots and same-origin iframes, at any depth. */
+function mcRoots() {
+  const roots = [document];
+  for (let i = 0; i < roots.length && i < 200; i++) {
+    const root = roots[i];
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot && el.shadowRoot !== mc.root) roots.push(el.shadowRoot);
+      if (el.tagName === "IFRAME") { try { if (el.contentDocument) roots.push(el.contentDocument); } catch { /* cross-origin */ } }
     }
-    out.push(el);
   }
-  return out;
+  return roots;
+}
+
+const mcNorm = (t) => String(t || "").replace(/\s+/g, " ").trim().toLowerCase();
+const MC_LABEL_ATTRS = ["title", "aria-label", "data-name", "data-label", "name"];
+const MC_ID_ATTRS = ["id", "data-id", "data-step-id", "data-node-id", "data-element-id", "data-item-id", "model-id", "data-model-id"];
+
+/** Climbs from a matched element to the step's box: the nearest ancestor of a node-like size. */
+function mcBox(el) {
+  for (let i = 0; i < 5 && el.parentElement; i++) {
+    const r = el.getBoundingClientRect();
+    if (r.width >= 60 && r.height >= 28) break;
+    el = el.parentElement;
+  }
+  return el;
+}
+
+/** The canvas elements of a step: by its id in an attribute, else by its label (exact text, a
+ *  text that starts with it, or a title/aria-label), searched through shadow roots and frames. */
+function mcFindTargets(step, roots) {
+  const label = mcNorm(step.label);
+  const exact = [], prefix = [];
+  for (const root of roots) {
+    for (const attr of MC_ID_ATTRS) {
+      const hit = root.querySelector(`[${attr}="${String(step.id).replace(/"/g, '\\"')}"]`);
+      if (hit && !(mc.host && mc.host.contains(hit))) return [hit];
+    }
+    if (!label) continue;
+    const walker = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const t = mcNorm(n.nodeValue);
+      if (!t || !n.parentElement || /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA)$/.test(n.parentElement.tagName)) continue;
+      if (t === label) exact.push(mcBox(n.parentElement));
+      else if (t.startsWith(label) && t.length <= label.length + 40) prefix.push(mcBox(n.parentElement));
+    }
+    for (const attr of MC_LABEL_ATTRS) {
+      for (const el of root.querySelectorAll(`[${attr}]`)) if (mcNorm(el.getAttribute(attr)) === label) exact.push(mcBox(el));
+    }
+  }
+  const found = exact.length ? exact : prefix;
+  return [...new Set(found)].filter((el) => !(el.closest && el.closest("#novacura-buddy-module-compare")));
+}
+
+/** What the page is made of, for finding out why steps aren't found (copied for the developer). */
+function mcDiagnostics() {
+  const roots = mcRoots();
+  const tags = new Map();
+  let canvases = [], svgs = 0, texts = [];
+  for (const root of roots) {
+    for (const el of root.querySelectorAll("*")) {
+      const tag = el.tagName.toLowerCase();
+      if (tag.includes("-")) tags.set(tag, (tags.get(tag) || 0) + 1);
+      if (tag === "canvas") { const r = el.getBoundingClientRect(); canvases.push(`${Math.round(r.width)}x${Math.round(r.height)}`); }
+      if (tag === "svg") svgs++;
+    }
+  }
+  const path = (el) => { const out = []; for (let e = el, i = 0; e && i < 7; e = e.parentElement, i++) out.unshift(e.tagName.toLowerCase() + (e.id ? `#${e.id}` : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\s+/).slice(0, 3).join(".") : "")); return out.join(" > "); };
+  for (const step of (mc.marks && mc.marks.steps) || []) {
+    const word = mcNorm(step.label).split(" ")[0];
+    let shown = 0;
+    for (const root of roots) {
+      const walker = (root.ownerDocument || root).createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n && shown < 3; n = walker.nextNode()) {
+        if (word && mcNorm(n.nodeValue).includes(word) && n.parentElement && !/^(SCRIPT|STYLE|NOSCRIPT)$/.test(n.parentElement.tagName)) {
+          texts.push(`"${step.label}" ~ "${n.nodeValue.trim().slice(0, 60)}" @ ${path(n.parentElement)}`);
+          shown++;
+        }
+      }
+    }
+    if (!shown) texts.push(`"${step.label}" (id ${step.id}): no text containing "${word}"`);
+  }
+  const attrsWithIds = [];
+  for (const step of (mc.marks && mc.marks.steps) || []) {
+    for (const root of roots) for (const el of root.querySelectorAll("*")) {
+      for (const at of el.attributes || []) if (at.value && at.value.includes(step.id)) attrsWithIds.push(`${step.id} in ${el.tagName.toLowerCase()}[${at.name}]`);
+    }
+  }
+  return [
+    `NovacuraBuddy Designer diagnostics ${new Date().toISOString()}`,
+    `url: ${location.pathname}`,
+    `roots: ${roots.length} (shadow roots/frames), iframes: ${document.querySelectorAll("iframe").length}, svg: ${svgs}, canvas: ${canvases.join(", ") || "none"}`,
+    `custom elements: ${[...tags].sort((x, y) => y[1] - x[1]).slice(0, 40).map(([t, n]) => `${t}(${n})`).join(" ")}`,
+    "label search:", ...texts,
+    "step ids in attributes:", ...(attrsWithIds.slice(0, 20).length ? attrsWithIds.slice(0, 20) : ["none"])
+  ].join("\n");
+}
+
+/** Scrolls a step into view, flashes its outline and selects it with a click, as the user would. */
+function mcFocusStep(stepId) {
+  const el = (mc.targets.get(stepId) || [])[0];
+  if (!el) return false;
+  el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+  setTimeout(() => {
+    const r = el.getBoundingClientRect();
+    const opts = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, view: window };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, opts) : new MouseEvent(type, opts));
+    }
+    mcPlace();
+    mc.layer.querySelectorAll(`[data-step="${stepId}"]`).forEach((o) => { o.classList.remove("flash"); void o.offsetWidth; o.classList.add("flash"); });
+  }, 450);
+  return true;
 }
 
 function mcPlace() {
@@ -126,6 +216,7 @@ function mcPlace() {
       if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
       const outline = document.createElement("div");
       outline.className = "outline";
+      outline.dataset.step = step.id;
       Object.assign(outline.style, { left: `${r.left - 3}px`, top: `${r.top - 3}px`, width: `${r.width + 6}px`, height: `${r.height + 6}px`, borderColor: color });
       const badge = document.createElement("div");
       badge.className = "badge";
@@ -178,12 +269,7 @@ function mcRenderPanel() {
       for (const f of u.findings.slice(0, 2)) row.append(h("div", "finding", `• ${f.text}`));
     }
     row.title = mcStepText(step);
-    row.onclick = () => {
-      const el = (mc.targets.get(step.id) || [])[0];
-      if (!el) return;
-      el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-      setTimeout(() => { mcPlace(); mc.layer.querySelectorAll(".outline").forEach((o) => o.classList.add("flash")); }, 400);
-    };
+    row.onclick = () => { mcLocate(); mcFocusStep(step.id); };
     list.append(row);
   }
   panel.append(list);
@@ -193,11 +279,25 @@ function mcRenderPanel() {
   open.onclick = () => chrome.runtime.sendMessage({ type: "MC_OPEN_RESULTS", ...mc.marks.scan }).catch(() => {});
   foot.append(open);
   panel.append(foot);
+  if (mc.marks.steps.some((st) => !(mc.targets.get(st.id) || []).length)) {
+    const diag = h("div", "foot");
+    diag.append("Some steps were not found on the canvas.");
+    const copy = h("a", null, "Copy page info");
+    copy.title = "Copies a description of how this page draws its steps (tags, where the step names are) to send to the developer";
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(mcDiagnostics()); copy.textContent = "Copied"; }
+      catch { copy.textContent = "Copy failed"; }
+    };
+    diag.append(copy);
+    panel.append(diag);
+  }
 }
 
 function mcLocate() {
   mc.targets = new Map();
-  if (mc.marks) for (const step of mc.marks.steps) mc.targets.set(step.id, mcFindTargets(step));
+  if (!mc.marks) return;
+  const roots = mcRoots();
+  for (const step of mc.marks.steps) mc.targets.set(step.id, mcFindTargets(step, roots));
 }
 
 async function mcRefresh(force) {
@@ -227,5 +327,26 @@ setInterval(() => {
 }, 1000);
 addEventListener("scroll", () => mcPlace(), true);
 addEventListener("resize", () => mcPlace());
-chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.moduleCompareMarks) mcRefresh(true); });
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.moduleCompareMarks) mcRefresh(true);
+  if (area === "local" && changes.mcFocusRequest) mcFocusPending();
+});
+
+// "Open the step" from the results page: the background stores { orgId, flowId, stepId, at } and
+// opens or activates this flow's tab; the step is focused once it is drawn (tried for 20s).
+async function mcFocusPending() {
+  const { mcFocusRequest: req } = await chrome.storage.local.get("mcFocusRequest");
+  const m = MC_DESIGNER_URL_RE.exec(location.href);
+  if (!req || !m || req.flowId !== m[2] || Date.now() - req.at > 60000) return;
+  await chrome.storage.local.remove("mcFocusRequest");
+  if (!req.stepId) return;
+  mc.hidden = false;
+  for (let i = 0; i < 40; i++) {
+    await mcRefresh(true);
+    mcLocate();
+    if (mcFocusStep(req.stepId)) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+mcFocusPending();
 setInterval(() => { if (mc.marks && !mc.hidden) mcPlace(); }, 300);

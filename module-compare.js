@@ -180,11 +180,15 @@ function renderFlowSteps(m, f) {
   for (const st of f.steps) {
     const row = document.createElement("div");
     row.className = `mc-step-row mc-step-${st.status}`;
-    const name = document.createElement("span");
+    const name = document.createElement("a");
+    name.href = "#";
     name.className = "mc-step-name";
     name.textContent = st.label;
+    name.title = "Open the flow in the Designer and focus this step";
+    name.onclick = (e) => { e.preventDefault(); openFlow(f.flowId, st.id); };
     const chips = document.createElement("span");
     chips.className = "ft-chips";
+    const checked = f.recheck && f.recheck.steps.find((x) => x.id === st.id);
     for (const key of st.items) {
       const u = byKey.get(key);
       if (!u) continue;
@@ -197,10 +201,50 @@ function renderFlowSteps(m, f) {
     chips.append(chip(label, cls));
     const sev = severityChip(st.severity);
     if (sev) chips.append(sev);
+    if (checked) {
+      const [rl, rc] = RECHECK_STATUS[checked.status];
+      chips.append(chip(rl, rc, recheckText(checked)));
+    }
     row.append(name, chips);
     wrap.append(row);
+    if (checked && checked.status !== "fixed") {
+      const detail = document.createElement("ul");
+      detail.className = "mc-findings mc-recheck-detail";
+      for (const item of checked.items) {
+        for (const fd of item.open) { const li = document.createElement("li"); li.append(chip("Still open", "crit"), ` ${item.name}: ${fd.text}`); detail.append(li); }
+        for (const fd of item.manual) { const li = document.createElement("li"); li.append(chip("Check by hand", "warn"), ` ${item.name}: ${fd.text}`); detail.append(li); }
+      }
+      if (detail.children.length) wrap.append(detail);
+    }
   }
   return wrap;
+}
+
+const RECHECK_STATUS = { fixed: ["Fixed", "ok"], open: ["Still open", "crit"], manual: ["Check by hand", "warn"] };
+
+function recheckText(checked) {
+  return checked.items.flatMap((i) => [...i.open.map((f) => `Open: ${i.name}: ${f.text}`), ...i.manual.map((f) => `Check: ${i.name}: ${f.text}`), ...i.fixed.map((f) => `Fixed: ${i.name}: ${f.text}`)]).join("\n") || (checked.gone ? "The step is gone." : "It no longer uses anything that changed.");
+}
+
+function openFlow(flowId, stepId) {
+  send({ type: "MC_OPEN_FLOW", orgId: sel.orgId, flowId, stepId: stepId || null });
+}
+
+/** Reads the flow again (not the module) and checks whether its steps now fit the updated module. */
+async function recheckFlow(m, f, btn) {
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+  try {
+    const response = await call({ type: "MC_FLOW", orgId: sel.orgId, itemId: f.flowId, moduleIds: [m.id] });
+    const re = ModuleCompare.recheckFlow({ module: m, flowId: f.flowId, steps: response.steps || [] });
+    if (re) f.recheck = re;
+    const saved = await send({ type: "MC_SAVE_RESULT", orgId: sel.orgId, packageId: sel.packageId, baseUrl: sel.baseUrl, result });
+    if (!saved.ok) showError(`The recheck could not be saved: ${saved.error}`);
+    showNotice(re && re.status === "fixed" ? `${f.flowName}: all affected steps are fixed.` : `${f.flowName}: rechecked — see the steps for what is still open.`);
+  } catch (e) {
+    showError(`Recheck of ${f.flowName} failed: ${e.message}`, true);
+  }
+  renderDetail();
 }
 
 function renderUsage(m) {
@@ -218,10 +262,26 @@ function renderUsage(m) {
     card.className = "fd-chain mc-flow";
     const head = document.createElement("div");
     head.className = "mc-change-head";
-    const name = document.createElement("strong");
+    const name = document.createElement("a");
+    name.href = "#";
+    name.className = "mc-flow-link";
     name.textContent = f.flowName;
+    name.title = "Open the flow in the Flow Designer";
+    name.onclick = (e) => { e.preventDefault(); openFlow(f.flowId, null); };
     head.append(name);
     if (f.packageName) head.append(chip(f.packageName, "muted"));
+    if (f.recheck) {
+      const [rl, rc] = RECHECK_STATUS[f.recheck.status];
+      head.append(chip(`${rl} · checked ${new Date(f.recheck.checkedAt).toLocaleTimeString()}`, rc));
+    }
+    if (f.used.some((u) => u.status !== "unchanged")) {
+      const btn = document.createElement("button");
+      btn.className = "mc-recheck-btn";
+      btn.textContent = "Recheck flow";
+      btn.title = "Reads this flow again (the module is not generated again) and checks whether its steps now fit the module's new code: new mandatory fields sent, removed fields and functions no longer used, calls with the right number of arguments. Changes that can't be checked automatically are listed as Check by hand.";
+      btn.onclick = () => recheckFlow(m, f, btn);
+      head.append(btn);
+    }
     card.append(head);
     if (f.steps && f.steps.length) {
       card.append(renderFlowSteps(m, f));
