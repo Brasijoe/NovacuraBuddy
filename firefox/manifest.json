@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "IFS Projection Tracker",
+  "name": "Novacura Buddy",
   "version": "0.1.0",
   "description": "Traces IFS Cloud projection calls and turns them into Novacura Flow Connect modules.",
   "permissions": ["storage", "webRequest", "tabs", "https://build.novacura.com/*"],
@@ -21,7 +21,7 @@
   },
   "sidebar_action": {
     "default_panel": "sidebar.html",
-    "default_title": "IFS Projection Tracker",
+    "default_title": "Novacura Buddy",
     "default_icon": "icons/icon48.png"
   },
   "content_scripts": [
