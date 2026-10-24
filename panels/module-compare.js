@@ -138,34 +138,94 @@ mcEl("mcScanBtn").addEventListener("click", async () => {
   mcOpenResults(sel, true);
 });
 
-/** Type-to-filter for a long dropdown: a search field above it hides the options that don't
- *  match and picks the first match when the current choice is filtered away. */
-function mcSearchable(selectId, placeholder) {
+/** Turns a <select> into a search-as-you-type combobox. The select stays (hidden) as the value
+ *  store, so the code above keeps using select.value, its options and its change event; the field
+ *  shows the chosen option, typing filters the open list in real time, arrows/Enter/Escape and
+ *  clicks pick. `allowEmpty`: the option with value "" is a real choice (All packages), not a
+ *  "Choose…" prompt. */
+function mcCombobox(selectId, placeholder, allowEmpty) {
   const select = mcEl(selectId);
+  const wrap = document.createElement("div");
+  wrap.className = "mc-combo";
   const input = document.createElement("input");
-  input.type = "search";
+  input.type = "text";
+  input.className = "mc-combo-input";
   input.placeholder = placeholder;
-  input.className = "mc-select-search";
-  select.before(input);
-  const apply = () => {
-    const q = input.value.trim().toLowerCase();
-    let first = null;
-    for (const o of select.options) {
-      const match = !q || o.textContent.toLowerCase().includes(q);
-      o.hidden = !!o.value && !match;
-      if (match && o.value && !first) first = o;
-    }
-    const current = select.selectedOptions[0];
-    if (q && first && (!current || current.hidden || !current.value)) {
-      select.value = first.value;
-      select.dispatchEvent(new Event("change"));
-    }
+  input.setAttribute("role", "combobox");
+  input.setAttribute("aria-expanded", "false");
+  input.autocomplete = "off";
+  const list = document.createElement("ul");
+  list.className = "mc-combo-list";
+  list.setAttribute("role", "listbox");
+  list.hidden = true;
+  select.before(wrap);
+  wrap.append(input, list, select);
+  select.hidden = true;
+
+  let active = -1;
+  let shown = [];
+  const label = () => {
+    const o = select.selectedOptions[0];
+    return o && (o.value || allowEmpty) ? o.textContent : "";
   };
-  input.addEventListener("input", apply);
-  // Options are rebuilt on every load; keep the filter applied.
-  new MutationObserver(() => { if (input.value) apply(); }).observe(select, { childList: true });
+  const sync = () => { if (document.activeElement !== input) input.value = label(); input.placeholder = label() || (select.options[0] ? select.options[0].textContent : placeholder); };
+  const render = (query) => {
+    const q = (query || "").trim().toLowerCase();
+    shown = [...select.options].filter((o) => (o.value || allowEmpty) && (!q || o.textContent.toLowerCase().includes(q)));
+    list.innerHTML = "";
+    if (!shown.length) {
+      const li = document.createElement("li");
+      li.className = "mc-combo-empty";
+      li.textContent = select.options.length > 1 ? "No match" : (select.options[0] ? select.options[0].textContent : "Nothing to choose");
+      list.append(li);
+    }
+    shown.forEach((o, i) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.className = `mc-combo-option${o.value === select.value ? " is-selected" : ""}${i === active ? " is-active" : ""}`;
+      li.textContent = o.textContent;
+      li.onmousedown = (e) => { e.preventDefault(); pick(o); };
+      list.append(li);
+    });
+    const activeLi = list.children[active];
+    if (activeLi) activeLi.scrollIntoView({ block: "nearest" });
+  };
+  const open = () => { list.hidden = false; input.setAttribute("aria-expanded", "true"); render(input.value === label() ? "" : input.value); };
+  const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; input.value = label(); };
+  const pick = (o) => {
+    const changed = select.value !== o.value;
+    select.value = o.value;
+    close();
+    input.blur();
+    if (changed) select.dispatchEvent(new Event("change"));
+  };
+
+  input.addEventListener("focus", () => { input.select(); open(); });
+  input.addEventListener("input", () => { active = 0; list.hidden = false; render(input.value); });
+  input.addEventListener("blur", close);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (list.hidden) open();
+      active = Math.max(0, Math.min(shown.length - 1, active + (e.key === "ArrowDown" ? 1 : -1)));
+      render(input.value === label() ? "" : input.value);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (shown[active >= 0 ? active : 0]) pick(shown[active >= 0 ? active : 0]);
+    } else if (e.key === "Escape") {
+      close();
+      input.blur();
+    }
+  });
+
+  // Keep the field in step with the select when the code above refills it or sets its value.
+  const valueDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+  Object.defineProperty(select, "value", { get() { return valueDesc.get.call(this); }, set(v) { valueDesc.set.call(this, v); sync(); } });
+  select.addEventListener("change", sync);
+  new MutationObserver(() => { sync(); if (!list.hidden) render(input.value === label() ? "" : input.value); }).observe(select, { childList: true });
+  sync();
 }
 
-mcSearchable("mcOrgSelect", "Search organisations…");
-mcSearchable("mcPackageSelect", "Search packages…");
-mcSearchable("mcInstanceSelect", "Search IFS instances…");
+mcCombobox("mcOrgSelect", "Search organisations…");
+mcCombobox("mcPackageSelect", "Search packages…", true);
+mcCombobox("mcInstanceSelect", "Search IFS instances…");
