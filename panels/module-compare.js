@@ -125,6 +125,14 @@ mcEl("mcOrgSelect").addEventListener("change", mcLoadPackages);
 mcEl("mcPackageSelect").addEventListener("change", mcShowLast);
 mcEl("mcInstanceSelect").addEventListener("change", mcShowLast);
 
+// Designer marks on/off (content/designer.js reads the same setting).
+const mcMarksToggle = mcEl("mcMarksToggle");
+chrome.storage.local.get("mcMarksOff").then(({ mcMarksOff }) => { mcMarksToggle.checked = !mcMarksOff; });
+mcMarksToggle.addEventListener("change", () => chrome.storage.local.set({ mcMarksOff: !mcMarksToggle.checked }));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.mcMarksOff) mcMarksToggle.checked = !changes.mcMarksOff.newValue;
+});
+
 mcEl("mcScanBtn").addEventListener("click", async () => {
   const sel = mcSelection();
   if (!sel.orgId || !sel.baseUrl) return;

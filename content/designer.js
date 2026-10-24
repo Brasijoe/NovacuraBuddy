@@ -48,7 +48,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 const MC_DESIGNER_URL_RE = /\/admin\/design\/designer\/organizations\/([^/]+)\/items\/([^/?#]+)/;
 const MC_COLORS = { critical: "#ff3333", major: "#fd6e15", minor: "#0c65f4", info: "#6b7280" };
 const MC_SEVERITY = { critical: "Critical", major: "Major", minor: "Minor", info: "Info" };
-const mc = { key: null, marks: null, collapsed: false, hidden: false, host: null, root: null, layer: null, targets: new Map() };
+const mc = { key: null, marks: null, collapsed: false, hidden: false, marksOff: false, host: null, root: null, layer: null, targets: new Map() };
 
 function mcEnsureHost() {
   if (mc.host) return;
@@ -66,6 +66,8 @@ function mcEnsureHost() {
     .count { min-width: 20px; height: 20px; border-radius: 10px; background: #ff3333; color: #fff; font-weight: 700; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
     .count.orange { background: #fd6e15; }
     button { font: inherit; border: none; background: none; cursor: pointer; color: #6b7280; padding: 2px 6px; border-radius: 6px; }
+    .switch { border: 1px solid #d1d5db; font-size: 11px; white-space: nowrap; }
+    .switch.on { background: #e0f2e9; border-color: #34a853; color: #137333; }
     button:hover { background: #f1f2fa; color: #141635; }
     .list { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
     .row { border: 1px solid #eceef8; border-left: 4px solid; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
@@ -208,21 +210,52 @@ dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
 function mcCardRect(t) {
   const c = t.card;
   if (c && c.width >= t.width && c.height >= t.height) return { left: c.left, top: c.top, width: c.width, height: c.height, right: c.left + c.width, bottom: c.top + c.height };
-  const h = t.height || 14;
+  const h = t.lineHeight || t.height || 14;
   const left = t.left - h * 2.6, top = t.top - h * 0.9, right = t.left + t.width + h * 1.1, bottom = t.top + t.height + h * 0.9;
   return { left, top, width: right - left, height: bottom - top, right, bottom };
 }
 
+/** Names as the canvas shows them: long names wrap onto more lines (same left edge, next line just
+ *  below), so the lines are joined back into one name. Each entry keeps the first line's box. */
+function mcCanvasNames() {
+  if (mc.canvasNames && mc.canvasNames.src === mc.canvas) return mc.canvasNames.list;
+  const seen = new Set();
+  const texts = mc.canvas.texts.filter((t) => {
+    const k = `${t.text}|${Math.round(t.left)}|${Math.round(t.top)}`;
+    return !seen.has(k) && seen.add(k);
+  });
+  const below = (t) => texts.find((n) => n !== t && Math.abs(n.left - t.left) < 2 && n.top > t.top && n.top - t.top <= t.height * 1.8);
+  const isNext = new Set(texts.map(below).filter(Boolean));
+  const list = [];
+  for (const t of texts) {
+    let text = t.text, cur = t, bottom = t.top + t.height, right = t.left + t.width;
+    list.push({ ...t, name: text });
+    if (isNext.has(t)) continue; // also part of a name that starts on a line above
+    for (let i = 0, n; i < 4 && (n = below(cur)); i++) {
+      text += n.text; cur = n; bottom = n.top + n.height; right = Math.max(right, n.left + n.width);
+      list.push({ ...t, name: text, width: right - t.left, height: bottom - t.top, lineHeight: t.height });
+    }
+  }
+  mc.canvasNames = { src: mc.canvas, list };
+  return list;
+}
+
 function mcCanvasTargets(step) {
   if (!mc.canvas) return [];
-  const label = mcNorm(step.label);
+  const label = mcNorm(step.label).replace(/\s+/g, "");
   if (!label) return [];
-  const hits = mc.canvas.texts.filter((t) => {
-    const text = mcNorm(t.text);
-    const cut = text.replace(/(…|\.\.\.)$/, "").trim();
+  const hits = mcCanvasNames().filter((t) => {
+    const text = mcNorm(t.name).replace(/\s+/g, "");
+    const cut = text.replace(/(…|\.\.\.)$/, "");
     return text === label || (cut !== text && cut.length >= 4 && label.startsWith(cut));
   });
-  return hits.map((t) => ({ canvasText: true, rect: () => mcCardRect(t) }));
+  // Keep the longest join per spot (a name and its first line alone can both match a cut label).
+  const best = new Map();
+  for (const t of hits) {
+    const k = `${Math.round(t.left)}|${Math.round(t.top)}`;
+    if (!best.has(k) || best.get(k).name.length < t.name.length) best.set(k, t);
+  }
+  return [...best.values()].map((t) => ({ canvasText: true, rect: () => mcCardRect(t) }));
 }
 
 /** A target's box on screen (an element, or a name drawn on the canvas). */
@@ -273,7 +306,7 @@ function mcFocusStep(stepId) {
 function mcPlace() {
   if (!mc.layer) return;
   mc.layer.innerHTML = "";
-  if (!mc.marks || mc.hidden) return;
+  if (!mc.marks || mc.hidden || mc.marksOff) return;
   for (const step of mc.marks.steps) {
     const color = MC_COLORS[step.severity] || MC_COLORS.minor;
     for (const target of mc.targets.get(step.id) || []) {
@@ -311,9 +344,12 @@ function mcRenderPanel() {
   const count = h("span", `count${impacted ? "" : " orange"}`, String(mc.marks.steps.length));
   count.title = `${impacted} impacted, ${mc.marks.steps.length - impacted} with minor changes`;
   const toggle = h("button", null, mc.collapsed ? "▴" : "▾");
+  const onOff = h("button", `switch${mc.marksOff ? "" : " on"}`, mc.marksOff ? "Marks off" : "Marks on");
+  onOff.title = "Show or hide the marks on the steps (the list stays)";
+  onOff.onclick = (e) => { e.stopPropagation(); mcSetMarksOff(!mc.marksOff); };
   const close = h("button", null, "✕");
   close.title = "Hide the marks for this flow (until the page is reloaded)";
-  head.append(count, h("b", null, "Steps affected by module changes"), toggle, close);
+  head.append(count, h("b", null, "Steps affected by module changes"), onOff, toggle, close);
   head.onclick = (e) => { if (e.target === close) return; mc.collapsed = !mc.collapsed; mcRenderPanel(); };
   close.onclick = () => { mc.hidden = true; mcRenderPanel(); mcPlace(); };
   panel.append(head);
@@ -399,7 +435,16 @@ setInterval(() => {
 }, 1000);
 addEventListener("scroll", () => mcPlace(), true);
 addEventListener("resize", () => mcPlace());
+// Marks on/off, remembered for all Designer tabs (also switched from the Module Compare tab).
+function mcSetMarksOff(off) {
+  mc.marksOff = !!off;
+  chrome.storage.local.set({ mcMarksOff: mc.marksOff });
+  mcRenderPanel();
+  mcPlace();
+}
+chrome.storage.local.get("mcMarksOff").then(({ mcMarksOff }) => { mc.marksOff = !!mcMarksOff; if (mc.marks) { mcRenderPanel(); mcPlace(); } });
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.mcMarksOff) { mc.marksOff = !!changes.mcMarksOff.newValue; if (mc.marks) { mc.hidden = false; mcRenderPanel(); mcPlace(); } }
   if (area === "local" && changes.moduleCompareMarks) mcRefresh(true);
   if (area === "local" && changes.mcFocusRequest) mcFocusPending();
 });
@@ -413,6 +458,7 @@ async function mcFocusPending() {
   await chrome.storage.local.remove("mcFocusRequest");
   if (!req.stepId) return;
   mc.hidden = false;
+  if (mc.marksOff) mcSetMarksOff(false);
   for (let i = 0; i < 40; i++) {
     await mcRefresh(true);
     mcLocate();
