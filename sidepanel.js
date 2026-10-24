@@ -110,4 +110,4 @@ initFlowTransferPanel();
 initLinkedFlowsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); }, 5000);

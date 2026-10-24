@@ -278,6 +278,7 @@
     <section id="panel-module-compare" role="tabpanel" hidden>
       <div class="section-head"><h2>Organisation</h2><span class="info-tip" data-tip="The Flow organisation whose modules are compared. Preselected from the flow open in the Designer tab."></span></div>
       <select id="mcOrgSelect"></select>
+      <div id="mcOrgHint" class="empty-state" hidden></div>
       <div class="section-head"><h2>Package</h2><span class="info-tip" data-tip="All packages compares every module in the organisation. With one package, its modules and the global App Library modules are compared, and only that package's flows (plus App Library flows) are checked for where they are used."></span></div>
       <select id="mcPackageSelect"><option value="">All packages</option></select>
       <div class="section-head"><h2>IFS instance</h2><span class="info-tip" data-tip="The upgraded IFS instance (from Basic Data). Each module that was generated from an IFS projection is generated again from this instance's metadata with Flow's code generator, then compared. Nothing is written to Flow or IFS by the scan."></span></div>

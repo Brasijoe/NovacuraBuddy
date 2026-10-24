@@ -59,36 +59,66 @@ async function mcLoadPackages() {
   mcShowLast();
 }
 
-async function mcOnShow() {
-  const [ctx, orgs, instances] = await Promise.all([send({ type: "LF_CONTEXT" }), send({ type: "FT_ORGS" }), send({ type: "LIST_INSTANCES" })]);
-  mcHint("");
+let mcOrgsLoaded = false;
+
+/** Fills the organisation list once Flow has a session. The dropdown is always shown; until the
+ *  organisations can be read it offers the Designer tab's organisation (if known) and a hint, and
+ *  the 5s poll (refreshModuleCompareState) tries again. */
+async function mcLoadOrgs() {
   const orgSelect = mcEl("mcOrgSelect");
-  const previousOrg = orgSelect.value;
-  orgSelect.innerHTML = "";
-  if (!orgs.ok) {
-    orgSelect.hidden = true;
-    mcHint(orgs.error || "Open a flow in the Flow Designer tab first: the organisations are read from Flow.");
-  } else {
-    orgSelect.hidden = false;
-    orgSelect.append(new Option("Choose an organisation…", ""));
-    for (const o of orgs.orgs) orgSelect.append(new Option(o.name, o.id));
-    const wanted = previousOrg || (ctx.ok && ctx.orgId) || (orgs.orgs.length === 1 ? orgs.orgs[0].id : "");
-    if (orgs.orgs.some((o) => o.id === wanted)) orgSelect.value = wanted;
+  const [ctx, orgs] = await Promise.all([send({ type: "LF_CONTEXT" }), send({ type: "FT_ORGS" })]);
+  const previous = orgSelect.value;
+  const designerOrg = ctx.ok ? ctx.orgId : null;
+  if (!orgs.ok || !orgs.orgs.length) {
+    if (!orgSelect.options.length) {
+      orgSelect.append(new Option(designerOrg ? "Organisation of the open flow" : "No Flow session yet…", designerOrg || ""));
+      mcLoadPackages();
+    }
+    mcEl("mcOrgHint").textContent = orgs.ok
+      ? "Flow returned no organisations for your user."
+      : "No Flow session yet: open Flow in a tab (or refresh the open Flow tab) and click in it once. The list fills in by itself.";
+    mcEl("mcOrgHint").hidden = false;
+    return false;
   }
+  mcEl("mcOrgHint").hidden = true;
+  orgSelect.innerHTML = "";
+  orgSelect.append(new Option("Choose an organisation…", ""));
+  for (const o of orgs.orgs) orgSelect.append(new Option(o.name, o.id));
+  const wanted = previous || designerOrg || (orgs.orgs.length === 1 ? orgs.orgs[0].id : "");
+  if (orgs.orgs.some((o) => o.id === wanted)) orgSelect.value = wanted;
+  mcOrgsLoaded = true;
+  await mcLoadPackages();
+  return true;
+}
+
+async function mcLoadInstances() {
+  const instances = await send({ type: "LIST_INSTANCES" });
   const instSelect = mcEl("mcInstanceSelect");
   const previousInst = instSelect.value;
   instSelect.innerHTML = "";
-  if (!instances.ok) mcHint(instances.error);
-  else if (!instances.instances.length) { instSelect.hidden = true; mcHint("No IFS instances yet — add one in Basic Data."); }
-  else {
-    instSelect.hidden = false;
-    instSelect.append(new Option("Choose an IFS instance…", ""));
-    const list = instances.instances.slice().sort((a, b) => a.name.localeCompare(b.name));
-    for (const i of list) instSelect.append(new Option(i.name, i.baseUrl));
-    if (list.some((i) => i.baseUrl === previousInst)) instSelect.value = previousInst;
-    else if (list.length === 1) instSelect.value = list[0].baseUrl;
+  if (!instances.ok) return mcHint(instances.error);
+  if (!instances.instances.length) {
+    instSelect.append(new Option("No IFS instances yet", ""));
+    return mcHint("No IFS instances yet — add one in Basic Data.");
   }
-  await mcLoadPackages();
+  instSelect.append(new Option("Choose an IFS instance…", ""));
+  const list = instances.instances.slice().sort((a, b) => a.name.localeCompare(b.name));
+  for (const i of list) instSelect.append(new Option(i.name, i.baseUrl));
+  if (list.some((i) => i.baseUrl === previousInst)) instSelect.value = previousInst;
+  else if (list.length === 1) instSelect.value = list[0].baseUrl;
+}
+
+async function mcOnShow() {
+  mcHint("");
+  await mcLoadInstances();
+  await mcLoadOrgs();
+  mcShowLast();
+}
+
+/** From the side panel's 5s poll: picks up the Flow session if it arrived after the tab opened. */
+function refreshModuleCompareState() {
+  const panel = mcEl("panel-module-compare");
+  if (panel && !panel.hidden && !mcOrgsLoaded) mcLoadOrgs();
 }
 
 mcEl("mcOrgSelect").addEventListener("change", mcLoadPackages);
