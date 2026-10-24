@@ -28,6 +28,7 @@ importScripts(
   "lib/update-check.js",
   "lib/flow-deps.js",
   "lib/flow-documentation.js",
+  "lib/module-compare.js",
   "apimodule/api-module-service.js"
 );
 
@@ -61,6 +62,9 @@ const clService = ClService.createClService({ instanceStore, settings: githubSet
 // the update (no lingering banner).
 const UPDATE_INFO_KEY = "updateInfo";
 const FLOW_DEPS_PREFIX = "flowDeps:"; // + baseUrl, chrome.storage.local: the last dependency scan
+const MODULE_COMPARE_PREFIX = "moduleCompare:"; // + orgId|packageId|baseUrl, chrome.storage.local: the last module compare
+const MODULE_COMPARE_MARKS_KEY = "moduleCompareMarks"; // { [result key]: { orgId, packageId, baseUrl, scannedAt, flows: flowMarks } }
+const moduleCompareKey = (m) => `${MODULE_COMPARE_PREFIX}${m.orgId}|${m.packageId || ""}|${IfsInstances.normalizeBaseUrl(m.baseUrl)}`;
 const UPDATE_DISMISSED_KEY = "updateDismissed";
 const UPDATE_CHECKED_AT_KEY = "updateCheckedAt";
 const UPDATE_CHECK_MAX_AGE_MS = 6 * 60 * 60 * 1000;
@@ -497,7 +501,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const { masterPassword, fields, token, report, code, ...safeMessage } = message;
+      const { masterPassword, fields, token, report, code, result: _result, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage, report ? { report: report.id } : "");
       const masterKey = () => instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
       switch (message.type) {
@@ -885,6 +889,83 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, itemType, notes: message.notes, orgName, design: message.design !== false });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
+        }
+        // Module compare: the results page runs the scan (ModuleCompare.runScan) and calls these
+        // short reads one by one, so no single message outlives the service worker. Nothing here
+        // writes; MC_GENERATE only returns code from Flow's code generator.
+        case "MC_ASSETS": {
+          const assets = await FlowModules.listAssets({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null });
+          return sendResponse({ ok: true, assets: assets.map((a) => ({ id: a.id, name: a.name, type: a.type, mainBranch: a.mainBranch ? { headVersionId: a.mainBranch.headVersionId } : null })) });
+        }
+        case "MC_SOURCE":
+          return sendResponse({ ok: true, source: await FlowTransfer.readModuleSource({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId, versionId: message.versionId }) });
+        case "MC_GENERATE": {
+          const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
+          const meta = await ProjectionSearch.queryProjectionMeta(message.baseUrl, ifsToken, message.projection);
+          if (!meta) return sendResponse({ ok: true, notFound: true, error: `Projection ${message.projection} was not found in the IFS instance.` });
+          let inputs;
+          try {
+            inputs = await ProjectionSearch.fetchProjectionCodegenInputs(message.baseUrl, ifsToken, message.projection);
+          } catch (e) {
+            if (/No Main, Integration, or ExternalB2B service URL/.test(e.message)) return sendResponse({ ok: true, notFound: true, error: `Projection ${message.projection} exists in IFS but has no service URL.` });
+            throw e;
+          }
+          const code = await FlowModules.generateModuleCode({
+            flowFetch: boundFlowFetch(), csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
+            codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
+          });
+          return sendResponse({ ok: true, code });
+        }
+        case "MC_FLOW": { // a flow's module references and its step data as text
+          const d = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          const assets = (d.assets || []).map(({ assetId, usedIndirectly }) => ({ assetId, usedIndirectly: !!usedIndirectly }));
+          const wanted = new Set(message.moduleIds || []);
+          const uses = assets.some((r) => !r.usedIndirectly && wanted.has(r.assetId));
+          // Per step (arrows aside) its label and text, so the results can name the steps that are hit.
+          const steps = !uses ? [] : [...FlowLinks.materialize(d.data)].filter(([, e]) => e.kind !== "arrow").map(([id, e]) => ({
+            id, label: String(e.label || e.name || (e.configuration && e.configuration.label) || e.stepType || e.kind || id), text: ModuleCompare.flowText({ data: [e] })
+          })).filter((st) => st.text);
+          return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "", steps });
+        }
+        case "MC_SAVE_RESULT": {
+          // The result, plus the steps it marks in the Designer (kept small, one entry per scan).
+          const key = moduleCompareKey(message);
+          const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
+          index[key] = { orgId: message.orgId, packageId: message.packageId || null, baseUrl: message.baseUrl, scannedAt: message.result.scannedAt, flows: ModuleCompare.flowMarks(message.result) };
+          await chrome.storage.local.set({ [key]: message.result, [MODULE_COMPARE_MARKS_KEY]: index });
+          return sendResponse({ ok: true });
+        }
+        case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
+          const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
+          const hit = Object.values(index)
+            .filter((e) => e.orgId === message.orgId && e.flows && e.flows[message.itemId])
+            .sort((a, b) => String(b.scannedAt).localeCompare(String(a.scannedAt)))[0];
+          return sendResponse({ ok: true, marks: hit ? { ...hit.flows[message.itemId], scan: { orgId: hit.orgId, packageId: hit.packageId, baseUrl: hit.baseUrl } } : null });
+        }
+        case "MC_OPEN_RESULTS": {
+          const q = new URLSearchParams({ orgId: message.orgId, packageId: message.packageId || "", baseUrl: message.baseUrl });
+          await chrome.tabs.create({ url: chrome.runtime.getURL(`module-compare.html?${q}`) });
+          return sendResponse({ ok: true });
+        }
+        case "MC_LAST_RESULT": {
+          const key = moduleCompareKey(message);
+          const { [key]: result = null } = await chrome.storage.local.get(key);
+          return sendResponse({ ok: true, result });
+        }
+        case "MC_UPDATE": { // user-clicked per module: commits the regenerated code, the same calls as Create module
+          const flowFetch = boundFlowFetch();
+          log("MC_UPDATE:", message.assetId, "in org", message.orgId, "package", message.packageId || "(App Library)");
+          const branch = await FlowModules.commitModuleCode({ flowFetch, orgId: message.orgId, packageId: message.packageId || null, assetId: message.assetId, flowScriptCode: message.code });
+          // The stored scan now shows this module as up to date.
+          const key = moduleCompareKey(message);
+          const { [key]: stored = null } = await chrome.storage.local.get(key);
+          if (stored) {
+            const m = stored.modules.find((x) => x.id === message.assetId);
+            if (m) { m.updatedAt = new Date().toISOString(); m.updated = true; }
+            await chrome.storage.local.set({ [key]: stored });
+          }
+          await refreshIfOpen(message.orgId, message.flowIds || []);
+          return sendResponse({ ok: true, headVersionId: branch.headVersionId });
         }
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);

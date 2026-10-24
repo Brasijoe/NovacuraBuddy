@@ -799,3 +799,15 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .fd-address-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .fd-address-list li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: var(--radius-full); background: var(--surface-raised); font-family: var(--font-mono); font-size: 12px; }
 .fd-address-list button { padding: 0 6px; border: none; background: none; line-height: 1.4; }
+
+/* --- Module Compare: search-as-you-type comboboxes --- */
+.mc-combo { position: relative; display: flex; flex-direction: column; }
+.mc-combo .mc-combo-input { width: 100%; box-sizing: border-box; padding-right: 28px !important; background-image: linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%), linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.mc-combo-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
+.mc-combo-option { padding: 6px 10px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
+.mc-combo-option:hover, .mc-combo-option.is-active { background: var(--accent-soft); }
+.mc-combo-option.is-selected { font-weight: 600; }
+.mc-combo-empty { padding: 6px 10px; color: var(--ink-muted); }
+@media (prefers-color-scheme: dark) {
+  .mc-combo-option:hover, .mc-combo-option.is-active { background: rgba(64, 120, 255, 0.2); }
+}
