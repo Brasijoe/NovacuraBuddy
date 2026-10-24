@@ -183,24 +183,85 @@ function mcDiagnostics() {
     `roots: ${roots.length} (shadow roots/frames), iframes: ${document.querySelectorAll("iframe").length}, svg: ${svgs}, canvas: ${canvases.join(", ") || "none"}`,
     `custom elements: ${[...tags].sort((x, y) => y[1] - x[1]).slice(0, 40).map(([t, n]) => `${t}(${n})`).join(" ")}`,
     "label search:", ...texts,
-    "step ids in attributes:", ...(attrsWithIds.slice(0, 20).length ? attrsWithIds.slice(0, 20) : ["none"])
+    "step ids in attributes:", ...(attrsWithIds.slice(0, 20).length ? attrsWithIds.slice(0, 20) : ["none"]),
+    `canvas texts (${mc.canvas ? mc.canvas.texts.length : "none reported"}): ${mc.canvas ? mc.canvas.texts.slice(0, 40).map((t) => `"${t.text.slice(0, 30)}"@${Math.round(t.left)},${Math.round(t.top)}`).join(" ") : ""}`
   ].join("\n");
 }
 
+
+// The Designer draws its flow on a <canvas>: content/canvas-hook.js (in the page) reports where
+// every text is drawn. A step is found there by its name (also when the canvas cuts it short with
+// "…"); the mark is drawn around the name.
+mc.canvas = null; // { canvas: rect, texts: [{ text, left, top, width, height }] }
+addEventListener("novacura-buddy-canvas-texts", (e) => {
+  try { mc.canvas = JSON.parse(e.detail); } catch { return; }
+  if (!mc.marks || mc.hidden) return;
+  const missingBefore = mc.marks.steps.filter((st) => !(mc.targets.get(st.id) || []).length).length;
+  mcLocate();
+  mcPlace();
+  if (mc.marks.steps.filter((st) => !(mc.targets.get(st.id) || []).length).length !== missingBefore) mcRenderPanel();
+});
+dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
+
+const MC_PAD = { x: 14, y: 12 }; // from the drawn name out to roughly the step's box
+
+function mcCanvasTargets(step) {
+  if (!mc.canvas) return [];
+  const label = mcNorm(step.label);
+  if (!label) return [];
+  const hits = mc.canvas.texts.filter((t) => {
+    const text = mcNorm(t.text);
+    const cut = text.replace(/(…|\.\.\.)$/, "").trim();
+    return text === label || (cut !== text && cut.length >= 4 && label.startsWith(cut));
+  });
+  return hits.map((t) => ({
+    canvasText: true,
+    rect: () => ({ left: t.left - MC_PAD.x, top: t.top - MC_PAD.y, width: t.width + 2 * MC_PAD.x, height: t.height + 2 * MC_PAD.y, right: t.left + t.width + MC_PAD.x, bottom: t.top + t.height + MC_PAD.y })
+  }));
+}
+
+/** A target's box on screen (an element, or a name drawn on the canvas). */
+const mcRect = (target) => (target.canvasText ? target.rect() : target.getBoundingClientRect());
+
 /** Scrolls a step into view, flashes its outline and selects it with a click, as the user would. */
 function mcFocusStep(stepId) {
-  const el = (mc.targets.get(stepId) || [])[0];
-  if (!el) return false;
-  el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
-  setTimeout(() => {
-    const r = el.getBoundingClientRect();
-    const opts = { bubbles: true, cancelable: true, composed: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, view: window };
-    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
-      el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, opts) : new MouseEvent(type, opts));
-    }
+  const target = (mc.targets.get(stepId) || [])[0];
+  if (!target) return false;
+  const flash = () => {
     mcPlace();
     mc.layer.querySelectorAll(`[data-step="${stepId}"]`).forEach((o) => { o.classList.remove("flash"); void o.offsetWidth; o.classList.add("flash"); });
-  }, 450);
+  };
+  // Select the step the way a user does: a click on it (on the canvas, at the drawn name).
+  const clickAt = (r) => {
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const el = target.canvasText ? document.elementFromPoint(x, y) : target;
+    if (!el || (mc.host && mc.host.contains(el))) return;
+    const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, buttons: 1, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, opts) : new MouseEvent(type, { ...opts, buttons: type.endsWith("down") ? 1 : 0 }));
+    }
+  };
+  if (!target.canvasText) {
+    target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    setTimeout(() => { clickAt(target.getBoundingClientRect()); flash(); }, 450);
+    return true;
+  }
+  const box = mc.canvas.canvas;
+  const r = mcRect(target);
+  const inView = r.left >= box.left && r.top >= box.top && r.right <= box.left + box.width && r.bottom <= box.top + box.height;
+  if (!inView) {
+    // Off screen: ask the canvas to scroll towards it (mouse-wheel panning); the next redraw
+    // reports the new position and the step is focused from there.
+    const canvas = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    if (canvas) {
+      const dx = r.left + r.width / 2 - (box.left + box.width / 2), dy = r.top + r.height / 2 - (box.top + box.height / 2);
+      canvas.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, deltaX: dx, deltaY: dy, deltaMode: 0 }));
+    }
+    setTimeout(() => { mcLocate(); const t = (mc.targets.get(stepId) || [])[0]; if (t) { clickAt(mcRect(t)); } flash(); }, 500);
+    return true;
+  }
+  clickAt(r);
+  flash();
   return true;
 }
 
@@ -210,9 +271,9 @@ function mcPlace() {
   if (!mc.marks || mc.hidden) return;
   for (const step of mc.marks.steps) {
     const color = MC_COLORS[step.severity] || MC_COLORS.minor;
-    for (const el of mc.targets.get(step.id) || []) {
-      if (!el.isConnected) continue;
-      const r = el.getBoundingClientRect();
+    for (const target of mc.targets.get(step.id) || []) {
+      if (!target.canvasText && !target.isConnected) continue;
+      const r = mcRect(target);
       if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
       const outline = document.createElement("div");
       outline.className = "outline";
@@ -300,7 +361,10 @@ function mcLocate() {
   mc.targets = new Map();
   if (!mc.marks) return;
   const roots = mcRoots();
-  for (const step of mc.marks.steps) mc.targets.set(step.id, mcFindTargets(step, roots));
+  for (const step of mc.marks.steps) {
+    const found = mcFindTargets(step, roots);
+    mc.targets.set(step.id, found.length ? found : mcCanvasTargets(step));
+  }
 }
 
 async function mcRefresh(force) {
