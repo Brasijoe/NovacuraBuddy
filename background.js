@@ -63,6 +63,7 @@ const clService = ClService.createClService({ instanceStore, settings: githubSet
 const UPDATE_INFO_KEY = "updateInfo";
 const FLOW_DEPS_PREFIX = "flowDeps:"; // + baseUrl, chrome.storage.local: the last dependency scan
 const MODULE_COMPARE_PREFIX = "moduleCompare:"; // + orgId|packageId|baseUrl, chrome.storage.local: the last module compare
+const MODULE_COMPARE_MARKS_KEY = "moduleCompareMarks"; // { [result key]: { orgId, packageId, baseUrl, scannedAt, flows: flowMarks } }
 const moduleCompareKey = (m) => `${MODULE_COMPARE_PREFIX}${m.orgId}|${m.packageId || ""}|${IfsInstances.normalizeBaseUrl(m.baseUrl)}`;
 const UPDATE_DISMISSED_KEY = "updateDismissed";
 const UPDATE_CHECKED_AT_KEY = "updateCheckedAt";
@@ -926,9 +927,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           })).filter((st) => st.text);
           return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "", steps });
         }
-        case "MC_SAVE_RESULT":
-          await chrome.storage.local.set({ [moduleCompareKey(message)]: message.result });
+        case "MC_SAVE_RESULT": {
+          // The result, plus the steps it marks in the Designer (kept small, one entry per scan).
+          const key = moduleCompareKey(message);
+          const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
+          index[key] = { orgId: message.orgId, packageId: message.packageId || null, baseUrl: message.baseUrl, scannedAt: message.result.scannedAt, flows: ModuleCompare.flowMarks(message.result) };
+          await chrome.storage.local.set({ [key]: message.result, [MODULE_COMPARE_MARKS_KEY]: index });
           return sendResponse({ ok: true });
+        }
+        case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
+          const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
+          const hit = Object.values(index)
+            .filter((e) => e.orgId === message.orgId && e.flows && e.flows[message.itemId])
+            .sort((a, b) => String(b.scannedAt).localeCompare(String(a.scannedAt)))[0];
+          return sendResponse({ ok: true, marks: hit ? { ...hit.flows[message.itemId], scan: { orgId: hit.orgId, packageId: hit.packageId, baseUrl: hit.baseUrl } } : null });
+        }
+        case "MC_OPEN_RESULTS": {
+          const q = new URLSearchParams({ orgId: message.orgId, packageId: message.packageId || "", baseUrl: message.baseUrl });
+          await chrome.tabs.create({ url: chrome.runtime.getURL(`module-compare.html?${q}`) });
+          return sendResponse({ ok: true });
+        }
         case "MC_LAST_RESULT": {
           const key = moduleCompareKey(message);
           const { [key]: result = null } = await chrome.storage.local.get(key);
