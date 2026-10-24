@@ -137,3 +137,35 @@ mcEl("mcScanBtn").addEventListener("click", async () => {
   mcHint("");
   mcOpenResults(sel, true);
 });
+
+/** Type-to-filter for a long dropdown: a search field above it hides the options that don't
+ *  match and picks the first match when the current choice is filtered away. */
+function mcSearchable(selectId, placeholder) {
+  const select = mcEl(selectId);
+  const input = document.createElement("input");
+  input.type = "search";
+  input.placeholder = placeholder;
+  input.className = "mc-select-search";
+  select.before(input);
+  const apply = () => {
+    const q = input.value.trim().toLowerCase();
+    let first = null;
+    for (const o of select.options) {
+      const match = !q || o.textContent.toLowerCase().includes(q);
+      o.hidden = !!o.value && !match;
+      if (match && o.value && !first) first = o;
+    }
+    const current = select.selectedOptions[0];
+    if (q && first && (!current || current.hidden || !current.value)) {
+      select.value = first.value;
+      select.dispatchEvent(new Event("change"));
+    }
+  };
+  input.addEventListener("input", apply);
+  // Options are rebuilt on every load; keep the filter applied.
+  new MutationObserver(() => { if (input.value) apply(); }).observe(select, { childList: true });
+}
+
+mcSearchable("mcOrgSelect", "Search organisations…");
+mcSearchable("mcPackageSelect", "Search packages…");
+mcSearchable("mcInstanceSelect", "Search IFS instances…");

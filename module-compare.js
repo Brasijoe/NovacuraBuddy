@@ -6,7 +6,7 @@ const sel = { orgId: params.get("orgId"), packageId: params.get("packageId") || 
 const el = (id) => document.getElementById(id);
 
 const STATUS = {
-  same: ["No changes", "ok"], changed: ["Changes", "warn"], error: ["Error", "crit"], skipped: ["Not from IFS", "muted"], updated: ["Updated", "info"]
+  same: ["No changes", "ok"], changed: ["Changes", "warn"], error: ["Error", "crit"], skipped: ["Not from IFS", "muted"], notfound: ["Not found in IFS", "crit"], updated: ["Updated", "info"]
 };
 const USE_STATUS = { unchanged: ["Unchanged", "ok"], changed: ["Changed", "warn"], impacted: ["Impacted", "crit"] };
 const SEVERITY_LABEL = { critical: "Critical", major: "Major", minor: "Minor", info: "Info" };
@@ -295,7 +295,7 @@ function renderDetail() {
   if (m.status === "changed" && !m.updated && m.newSource) head.append(updateButton(m));
   detail.append(head);
 
-  if (m.status === "error" || m.status === "skipped") {
+  if (m.status === "error" || m.status === "skipped" || m.status === "notfound") {
     const p = document.createElement("p");
     p.className = "empty-state";
     p.textContent = m.error;
@@ -324,11 +324,13 @@ function renderSummary() {
   const changed = ms.filter((m) => m.status === "changed" && !m.updated);
   const impacted = changed.reduce((n, m) => n + (m.impactedCount || 0), 0);
   const skipped = ms.filter((m) => m.status === "skipped").length;
+  const notFound = ms.filter((m) => m.status === "notfound").length;
   const failed = ms.filter((m) => m.status === "error").length;
   el("mcSummary").textContent = [
     `Scanned ${new Date(result.scannedAt).toLocaleString()}: ${ms.length} module(s), ${changed.length} with changes, ${impacted} impacted function(s) in use`,
     `${result.flowCount} flow(s) checked`,
     skipped ? `${skipped} not generated from IFS` : null,
+    notFound ? `${notFound} not found in IFS` : null,
     failed ? `${failed} failed` : null
   ].filter(Boolean).join(" · ");
   el("mcUpdateAllBtn").hidden = !changed.some((m) => m.newSource);
@@ -360,27 +362,94 @@ function showResult(r) {
   for (const e of errors) { const li = document.createElement("li"); li.textContent = e; el("mcErrorList").append(li); }
 }
 
-let currentScanId = null;
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type !== "MC_SCAN_PROGRESS" || message.scanId !== currentScanId) return;
-  const pct = message.total ? Math.round((message.current / message.total) * 100) : 0;
-  el("mcProgressFill").style.width = `${pct}%`;
-  el("mcProgressLabel").textContent = `${message.step}: ${message.current}/${message.total}`;
-});
+/* --- Scan: runs here (not in the service worker) as many short background reads, so no single
+   call can time out however many modules and flows there are. --- */
+
+// Same header test as FlowTransfer.ifsProjectionOf (the background's copy).
+const ifsProjectionOf = (source) => {
+  const header = /^\s*\/\*[\s\S]*?\*\//.exec(String(source || ""));
+  const m = header && /#importSource\("[^"]*?\/([A-Za-z0-9_]+)\.svc[^"]*"\)/.exec(header[0]);
+  return m ? m[1] : null;
+};
+
+/** A background call that throws on failure (the scan's per-item errors are collected by runScan). */
+async function call(message) {
+  const response = await send({ ...message, masterPassword: "" });
+  if (!response.ok) throw new Error(explainLocked(response));
+  return response;
+}
+
+const stepState = {}; // step id -> { current, total, state: "todo" | "running" | "done" }
+
+function renderSteps() {
+  const list = el("mcSteps");
+  list.innerHTML = "";
+  for (const step of ModuleCompare.SCAN_STEPS) {
+    const st = stepState[step.id] || { state: "todo" };
+    const li = document.createElement("li");
+    li.className = `mc-step mc-step-${st.state}`;
+    const mark = document.createElement("span");
+    mark.className = "mc-step-mark";
+    mark.textContent = st.state === "done" ? "✓" : st.state === "running" ? "" : st.state === "failed" ? "!" : "";
+    const label = document.createElement("span");
+    label.textContent = step.label;
+    const count = document.createElement("span");
+    count.className = "list-count";
+    count.textContent = st.total ? `${st.current}/${st.total}` : "";
+    li.append(mark, label, count);
+    list.append(li);
+  }
+}
+
+function onStep(id, current, total) {
+  const ids = ModuleCompare.SCAN_STEPS.map((s) => s.id);
+  for (const prev of ids.slice(0, ids.indexOf(id))) if (stepState[prev] && stepState[prev].state !== "done") stepState[prev].state = "done";
+  stepState[id] = { current, total, state: current >= total ? "done" : "running" };
+  const index = ids.indexOf(id) + (total ? current / total : 0);
+  el("mcProgressFill").style.width = `${Math.round((index / ids.length) * 100)}%`;
+  renderSteps();
+}
 
 async function scan() {
   const btn = el("mcRescanBtn");
   btn.disabled = true;
-  currentScanId = `${Date.now()}-${Math.random()}`;
+  clearError(true);
+  for (const k of Object.keys(stepState)) delete stepState[k];
+  renderSteps();
   el("mcProgress").hidden = false;
   el("mcProgressFill").style.width = "0%";
-  el("mcProgressLabel").textContent = "Starting…";
   if (!result) el("mcEmpty").hidden = true;
-  const response = await send({ type: "MC_SCAN", ...sel, scanId: currentScanId, masterPassword: "" });
-  el("mcProgress").hidden = true;
-  btn.disabled = false;
-  if (!response.ok) return showError(`Scan failed: ${explainLocked(response)}`, true);
-  showResult(response.result);
+  const { orgId, packageId, baseUrl } = sel;
+  try {
+    const r = await ModuleCompare.runScan({
+      packageId: packageId || null,
+      flow: {
+        listPackages: async () => (await call({ type: "FT_PACKAGES", orgId })).packages,
+        listAssets: async (pkg) => (await call({ type: "MC_ASSETS", orgId, packageId: pkg })).assets,
+        readSource: async (m) => (await call({ type: "MC_SOURCE", orgId, assetId: m.id, versionId: m.versionId })).source,
+        readDesigner: async (itemId, moduleIds) => call({ type: "MC_FLOW", orgId, itemId, moduleIds })
+      },
+      generateCode: async (projection) => {
+        const response = await call({ type: "MC_GENERATE", baseUrl, projection });
+        if (response.notFound) throw Object.assign(new Error(response.error), { notFound: true });
+        return response.code;
+      },
+      ifsProjectionOf,
+      onProgress: onStep
+    });
+    const full = { ...r, orgId, packageId: packageId || null, baseUrl };
+    const saved = await send({ type: "MC_SAVE_RESULT", orgId, packageId, baseUrl, result: full });
+    if (!saved.ok) showError(`The result could not be saved for later: ${saved.error}`);
+    el("mcProgress").hidden = true;
+    showResult(full);
+  } catch (e) {
+    const running = Object.values(stepState).find((st) => st.state === "running");
+    if (running) running.state = "failed";
+    renderSteps();
+    showError(`Scan failed: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 el("mcUpdateAllBtn").onclick = async () => {

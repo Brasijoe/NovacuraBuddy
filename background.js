@@ -500,7 +500,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const { masterPassword, fields, token, report, code, ...safeMessage } = message;
+      const { masterPassword, fields, token, report, code, result: _result, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage, report ? { report: report.id } : "");
       const masterKey = () => instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
       switch (message.type) {
@@ -889,37 +889,42 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
-        case "MC_SCAN": { // Module compare: reads Flow and IFS, writes nothing (code-gen only returns code)
-          const flowFetch = boundFlowFetch();
-          const orgId = message.orgId;
-          const mk = await masterKey();
-          const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, mk);
-          const onProgress = (step, current, total) =>
-            chrome.runtime.sendMessage({ type: "MC_SCAN_PROGRESS", scanId: message.scanId, step, current, total }).catch(() => {});
-          log("MC_SCAN start: org", orgId, "package", message.packageId || "(all)", "IFS", message.baseUrl);
-          const result = await ModuleCompare.runScan({
-            packageId: message.packageId || null,
-            flow: {
-              listPackages: () => FlowTransfer.listPackages({ flowFetch, orgId }),
-              listAssets: (packageId) => FlowModules.listAssets({ flowFetch, orgId, packageId }),
-              readSource: (m) => FlowTransfer.readModuleSource({ flowFetch, orgId, assetId: m.id, versionId: m.versionId }),
-              readDesigner: (itemId) => FlowDesignerTab.getDesignerData({ flowFetch, orgId, itemId })
-            },
-            generateCode: async (projectionName) => {
-              const inputs = await ProjectionSearch.fetchProjectionCodegenInputs(message.baseUrl, ifsToken, projectionName);
-              return FlowModules.generateModuleCode({
-                flowFetch, csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
-                codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
-              });
-            },
-            ifsProjectionOf: FlowTransfer.ifsProjectionOf,
-            onProgress
-          });
-          const full = { ...result, orgId, packageId: message.packageId || null, baseUrl: IfsInstances.normalizeBaseUrl(message.baseUrl) };
-          await chrome.storage.local.set({ [moduleCompareKey(message)]: full });
-          log("MC_SCAN done:", result.modules.length, "modules,", result.errors.length, "errors");
-          return sendResponse({ ok: true, result: full });
+        // Module compare: the results page runs the scan (ModuleCompare.runScan) and calls these
+        // short reads one by one, so no single message outlives the service worker. Nothing here
+        // writes; MC_GENERATE only returns code from Flow's code generator.
+        case "MC_ASSETS": {
+          const assets = await FlowModules.listAssets({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId || null });
+          return sendResponse({ ok: true, assets: assets.map((a) => ({ id: a.id, name: a.name, type: a.type, mainBranch: a.mainBranch ? { headVersionId: a.mainBranch.headVersionId } : null })) });
         }
+        case "MC_SOURCE":
+          return sendResponse({ ok: true, source: await FlowTransfer.readModuleSource({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId, versionId: message.versionId }) });
+        case "MC_GENERATE": {
+          const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
+          const meta = await ProjectionSearch.queryProjectionMeta(message.baseUrl, ifsToken, message.projection);
+          if (!meta) return sendResponse({ ok: true, notFound: true, error: `Projection ${message.projection} was not found in the IFS instance.` });
+          let inputs;
+          try {
+            inputs = await ProjectionSearch.fetchProjectionCodegenInputs(message.baseUrl, ifsToken, message.projection);
+          } catch (e) {
+            if (/No Main, Integration, or ExternalB2B service URL/.test(e.message)) return sendResponse({ ok: true, notFound: true, error: `Projection ${message.projection} exists in IFS but has no service URL.` });
+            throw e;
+          }
+          const code = await FlowModules.generateModuleCode({
+            flowFetch: boundFlowFetch(), csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
+            codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
+          });
+          return sendResponse({ ok: true, code });
+        }
+        case "MC_FLOW": { // a flow's module references and its step data as text
+          const d = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          const assets = (d.assets || []).map(({ assetId, usedIndirectly }) => ({ assetId, usedIndirectly: !!usedIndirectly }));
+          const wanted = new Set(message.moduleIds || []);
+          const uses = assets.some((r) => !r.usedIndirectly && wanted.has(r.assetId));
+          return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "" });
+        }
+        case "MC_SAVE_RESULT":
+          await chrome.storage.local.set({ [moduleCompareKey(message)]: message.result });
+          return sendResponse({ ok: true });
         case "MC_LAST_RESULT": {
           const key = moduleCompareKey(message);
           const { [key]: result = null } = await chrome.storage.local.get(key);

@@ -47,3 +47,15 @@
   .mc-module.is-active .fd-group-name { background: none; color: inherit; }
   .mc-module.is-active .list-count { background: none; color: var(--ink-muted); }
 }
+
+.mc-progress { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-2) 0; }
+.mc-progress[hidden] { display: none; }
+.mc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mc-step { display: flex; align-items: center; gap: 8px; }
+.mc-step-mark { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; border: 2px solid var(--surface-raised); box-sizing: border-box; }
+.mc-step-done .mc-step-mark { background: var(--accent-green); border-color: var(--accent-green); }
+.mc-step-running .mc-step-mark { border-color: var(--accent); border-top-color: transparent; animation: mc-spin 0.8s linear infinite; }
+.mc-step-running { font-weight: 600; }
+.mc-step-todo { color: var(--ink-muted); }
+.mc-step-failed .mc-step-mark { background: var(--accent-red); border-color: var(--accent-red); }
+@keyframes mc-spin { to { transform: rotate(360deg); } }
