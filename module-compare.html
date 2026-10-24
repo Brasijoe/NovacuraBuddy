@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Module compare</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+    <link rel="stylesheet" href="qr-editor.css" />
+    <link rel="stylesheet" href="flow-deps.css" />
+    <link rel="stylesheet" href="module-compare.css" />
+  </head>
+  <body class="qr-editor-page">
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+    <div id="notice" class="banner banner-success" hidden></div>
+
+    <header class="topbar fd-topbar">
+      <div>
+        <h1 id="mcTitle">Module compare</h1>
+        <p id="mcSubtitle" class="list-count"></p>
+      </div>
+      <div class="mc-top-actions">
+        <button id="mcUpdateAllBtn" hidden>Update all changed</button>
+        <span class="info-tip" data-tip="Commits the code generated from the IFS instance into every changed module, as a new version (the same calls as Create module). Flows pick up the new module version when they are refreshed. Fix what the impact list shows afterwards."></span>
+        <button id="mcRescanBtn" class="btn-primary">Rescan</button>
+      </div>
+    </header>
+
+    <div id="mcProgress" class="mc-progress" hidden>
+      <div class="fd-progress-bar"><div id="mcProgressFill" class="fd-progress-fill"></div></div>
+      <ul id="mcSteps" class="mc-steps"></ul>
+    </div>
+
+    <p id="mcSummary" class="list-count"></p>
+    <div id="mcEmpty" class="empty-state" hidden></div>
+
+    <div id="mcResults" class="fd-grid mc-grid" hidden>
+      <aside class="fd-side">
+        <div class="section-head"><h2>Modules</h2><span class="info-tip" data-tip="Every module in the scan with its status. No changes: the code generated from the IFS instance matches the module (apart from the header). Changes: it differs. The red number counts the functions, types and data sources your flows use that a major or critical change hits; the orange one those with minor changes only."></span></div>
+        <input id="mcFilter" type="search" placeholder="Filter modules…" />
+        <label class="fd-default"><input type="checkbox" id="mcOnlyChanged" /> Show only changed</label>
+        <ul id="mcModuleList" class="fd-group-list"></ul>
+      </aside>
+      <section class="fd-main" id="mcDetail"></section>
+    </div>
+
+    <details id="mcErrors" class="fd-errors" hidden>
+      <summary id="mcErrorsSummary"></summary>
+      <ul id="mcErrorList"></ul>
+    </details>
+
+    <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
+    <script src="lib/module-compare.js"></script>
+    <script src="module-compare.js"></script>
+  </body>
+</html>

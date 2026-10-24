@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "linked-flows", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "module-compare", "linked-flows", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -18,6 +18,7 @@ function showTab(name) {
   if (name === "flow-deps") fdOnShow();
   if (name === "flow-docs") fdocOnShow();
   if (name === "linked-flows") lfOnShow();
+  if (name === "module-compare") mcOnShow();
 }
 
 for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => { showTab(tab); closeTabMenus(); });
@@ -109,4 +110,4 @@ initFlowTransferPanel();
 initLinkedFlowsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); }, 5000);
