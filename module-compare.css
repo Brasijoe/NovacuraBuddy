@@ -59,3 +59,13 @@
 .mc-step-todo { color: var(--ink-muted); }
 .mc-step-failed .mc-step-mark { background: var(--accent-red); border-color: var(--accent-red); }
 @keyframes mc-spin { to { transform: rotate(360deg); } }
+
+.mc-steps-table { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--space-2); }
+.mc-sub { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.mc-step-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: 5px 10px; border-radius: 8px; border: 1px solid var(--surface-raised); border-left-width: 4px; }
+.mc-step-row.mc-step-impacted { border-left-color: var(--accent-red); }
+.mc-step-row.mc-step-changed { border-left-color: var(--accent-orange); }
+.mc-step-row.mc-step-unchanged { border-left-color: var(--accent-green); }
+.mc-step-name { font-weight: 600; overflow-wrap: anywhere; }
+.mc-chip-click { cursor: pointer; font-family: var(--font-mono); }
+.mc-chip-click:hover { filter: brightness(0.95); text-decoration: underline; }

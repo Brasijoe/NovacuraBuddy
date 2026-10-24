@@ -920,7 +920,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const assets = (d.assets || []).map(({ assetId, usedIndirectly }) => ({ assetId, usedIndirectly: !!usedIndirectly }));
           const wanted = new Set(message.moduleIds || []);
           const uses = assets.some((r) => !r.usedIndirectly && wanted.has(r.assetId));
-          return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "" });
+          // Per step (arrows aside) its label and text, so the results can name the steps that are hit.
+          const steps = !uses ? [] : [...FlowLinks.materialize(d.data)].filter(([, e]) => e.kind !== "arrow").map(([id, e]) => ({
+            id, label: String(e.label || e.name || (e.configuration && e.configuration.label) || e.stepType || e.kind || id), text: ModuleCompare.flowText({ data: [e] })
+          })).filter((st) => st.text);
+          return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "", steps });
         }
         case "MC_SAVE_RESULT":
           await chrome.storage.local.set({ [moduleCompareKey(message)]: message.result });

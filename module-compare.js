@@ -166,6 +166,43 @@ function selectItem(key, flowId) {
   if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/** The flow's steps that use the module: step name, what of the module it uses (click one for its
+ *  diff), status and severity. */
+function renderFlowSteps(m, f) {
+  const wrap = document.createElement("div");
+  wrap.className = "mc-steps-table";
+  const title = document.createElement("div");
+  title.className = "mc-sub";
+  title.append(`Steps (${f.steps.filter((st) => st.status !== "unchanged").length} affected of ${f.steps.length} using the module)`);
+  title.append(infoTip("The steps of this flow whose configuration uses the module, with what they use. Impacted: a major or critical change reaches it. Changed: only minor changes. The same marks show on the steps in the Flow Designer."));
+  wrap.append(title);
+  const byKey = new Map(f.used.map((u) => [u.key, u]));
+  for (const st of f.steps) {
+    const row = document.createElement("div");
+    row.className = `mc-step-row mc-step-${st.status}`;
+    const name = document.createElement("span");
+    name.className = "mc-step-name";
+    name.textContent = st.label;
+    const chips = document.createElement("span");
+    chips.className = "ft-chips";
+    for (const key of st.items) {
+      const u = byKey.get(key);
+      if (!u) continue;
+      const c = chip(u.name, u.status === "impacted" ? "crit" : u.status === "changed" ? "warn" : "muted", "Show what changed");
+      c.classList.add("mc-chip-click");
+      c.onclick = () => selectItem(u.key, f.flowId);
+      chips.append(c);
+    }
+    const [label, cls] = USE_STATUS[st.status];
+    chips.append(chip(label, cls));
+    const sev = severityChip(st.severity);
+    if (sev) chips.append(sev);
+    row.append(name, chips);
+    wrap.append(row);
+  }
+  return wrap;
+}
+
 function renderUsage(m) {
   const wrap = document.createElement("div");
   wrap.append(section(`Where it is used (${m.usage.length} flow${m.usage.length === 1 ? "" : "s"})`, "The flows in the scan that reference this module, and the functions, types and data sources of it they use (found in the flow's steps by name). A function counts as impacted when it, or any sub-function or type it depends on, has a major or critical change. Click one to see its diff."));
@@ -186,6 +223,13 @@ function renderUsage(m) {
     head.append(name);
     if (f.packageName) head.append(chip(f.packageName, "muted"));
     card.append(head);
+    if (f.steps && f.steps.length) {
+      card.append(renderFlowSteps(m, f));
+      const sub = document.createElement("div");
+      sub.className = "mc-sub";
+      sub.textContent = "Functions, types and data sources used";
+      card.append(sub);
+    }
     const table = document.createElement("div");
     table.className = "mc-used";
     for (const u of f.used) {
