@@ -26,6 +26,15 @@ document.getElementById("fdocIfs").addEventListener("change", (e) => {
   if (e.target.checked && !select.options.length) fdocHint("No IFS installations yet — add one in Basic Data.");
 });
 
+// High BPM level maps IFS dependencies in depth, which needs an IFS installation.
+function fdocBpmNote() {
+  const high = document.getElementById("fdocBpmLevel").value === "high";
+  const ifs = document.getElementById("fdocIfs").checked;
+  document.getElementById("fdocBpmNote").hidden = !(high && !ifs);
+}
+document.getElementById("fdocBpmLevel").addEventListener("change", fdocBpmNote);
+document.getElementById("fdocIfs").addEventListener("change", fdocBpmNote);
+
 document.getElementById("fdocGenerateBtn").addEventListener("click", async () => {
   const btn = document.getElementById("fdocGenerateBtn");
   const useIfs = document.getElementById("fdocIfs").checked && document.getElementById("fdocInstance").value;
@@ -41,7 +50,7 @@ document.getElementById("fdocGenerateBtn").addEventListener("click", async () =>
   btn.disabled = true;
   document.getElementById("fdocResult").hidden = true;
   fdocHint("Starting…");
-  const response = await send({ type: "FDOC_GENERATE", baseUrl, notes: document.getElementById("fdocNotes").value.trim(), design: document.getElementById("fdocDesign").checked });
+  const response = await send({ type: "FDOC_GENERATE", baseUrl, notes: document.getElementById("fdocNotes").value.trim(), design: document.getElementById("fdocDesign").checked, docLevel: document.getElementById("fdocDocLevel").value, bpmLevel: document.getElementById("fdocBpmLevel").value });
   btn.disabled = false;
   if (!response.ok) return fdocHint(response.error);
   fdocResult = response;
