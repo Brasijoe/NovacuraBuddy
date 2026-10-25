@@ -10,6 +10,7 @@ importScripts(
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
   "lib/flow-links.js",
+  "lib/flow-commit-chain.js",
   "lib/flow-environments.js",
   "lib/flow-token.js",
   "lib/ifs-client.js",
@@ -836,6 +837,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
           return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }
+        case "CC_PLAN": // the open flow's dependency tree, bottom to top (read-only)
+          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log }) });
+        case "CC_COMMIT": // one asset per message, so a long chain never hits the message timeout
+          try {
+            log("CC_COMMIT:", message.asset.name, message.asset.type);
+            const out = await FlowCommitChain.commitOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, bump: message.bump, log });
+            await refreshIfOpen(message.orgId, [message.asset.id]);
+            return sendResponse({ ok: true, ...out });
+          } finally { linkScanDone(message.orgId); }
+        case "CC_UNDO":
+          try {
+            await FlowCommitChain.undoOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, undo: message.undo });
+            await refreshIfOpen(message.orgId, [message.asset.id]);
+            return sendResponse({ ok: true });
+          } finally { linkScanDone(message.orgId); }
         case "LF_UNLINK":
           try {
             await FlowLinks.unlink({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId });
