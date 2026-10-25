@@ -896,6 +896,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               } catch (e) { /* unreadable projection: judged by its name only */ }
             }
           }
+          let projectionDetails = null;
+          if (message.baseUrl && message.bpmLevel === "high") { // what each IFS projection contains (entities, fields)
+            progress("Reading the IFS projections the flow uses");
+            projectionDetails = {};
+            const token = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
+            const usedText = Object.values(pkg.assets).map((a) => a.designer ? JSON.stringify(a.designer.data || []) : String(a.source || "")).join("\n");
+            for (const name of FlowDocumentation.allProjectionNames(pkg)) {
+              try {
+                const meta = await ProjectionSearch.queryProjectionMeta(message.baseUrl, token, name);
+                const serviceUrl = await ProjectionSearch.getServiceUrl(message.baseUrl, token, name, meta && meta.Categories);
+                if (!serviceUrl) throw new Error("no service URL");
+                const csdl = await ProjectionSearch.fetchIfsText(ProjectionSearch.resolveIfsUrl(message.baseUrl, serviceUrl) + "/$metadata", token);
+                projectionDetails[name] = FlowDocumentation.summariseCsdl(csdl, usedText);
+              } catch (e) { log("Documentation: projection details not read for", name, e.message); projectionDetails[name] = null; }
+            }
+          }
           // Apps, boards and automations are products. The flow open in the Designer may be one of them (its
           // item id is the product id, not an asset id), so its name, kind and history come from the product.
           let products = null;
@@ -938,7 +954,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           } catch (e) { log("Documentation: contributors not read:", e.message); }
           const orgs = await FlowTransfer.listOrganisations({ flowFetch }).catch(() => []);
           const orgName = (orgs.find((o) => o.id === tab.orgId) || {}).name || null;
-          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, itemType, notes: message.notes, orgName, design: message.design !== false });
+          const files = FlowDocumentation.buildDocs({ pkg, rootId: tab.itemId, usedBy, ifs, projectionCategories, contributors, products, itemType, notes: message.notes, orgName, design: message.design !== false, docLevel: message.docLevel, bpmLevel: message.bpmLevel, projectionDetails });
           const rootName = pkg.assets[tab.itemId].name;
           return sendResponse({ ok: true, name: rootName, files, stats: { assets: Object.keys(pkg.assets).length, usedBy: (usedBy[tab.itemId] || []).length, ifsChains: ifs ? (ifs.chains[tab.itemId] || []).length : null, unreadFlows: failed } });
         }
