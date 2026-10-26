@@ -119,6 +119,8 @@ function ccRender() {
   root.appendChild(lfH("div", { className: "lf-label" },
     lfH("h2", { textContent: "Used by" }),
     lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : ccPlural(items.length - 1, "asset uses it", "assets use it") }),
+    lfH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing).map((i) => i.id)); ccRender(); } }),
+    lfH("button", { type: "button", className: "btn-ghost", textContent: "None", title: "Untick every asset", onclick: () => { cc.selected = new Set(); ccRender(); } }),
     infoTip("The open asset at the top and, branching below it, the flows that use it, and the flows that use those. All are ticked; unticking one leaves out its whole branch. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. Hover a row for details."),
     lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every asset, its package and whether it was read) to send to the developer",
       onclick: async (e) => { try { await navigator.clipboard.writeText(cc.plan.info); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } })));
