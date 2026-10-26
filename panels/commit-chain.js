@@ -202,7 +202,9 @@ function ccTreeLayout() {
   // The open asset is the source and not part of the tree: what uses it are the top level entries.
   const top = kids.get(cc.plan.rootId);
   top.forEach((k, i) => walk(k, "", i === top.length - 1, 0));
-  return rows;
+  // Drawn upside down: the top level users on top, down to what uses the open asset directly
+  // (the source, not shown, would be below).
+  return rows.reverse().map((r) => ({ ...r, guide: r.guide.replace("└─ ", "┌─ ") }));
 }
 
 /** Ids of the branch below a node: every asset that uses it, directly or through others. */
@@ -217,7 +219,7 @@ function ccBranch(id) {
 function ccRow(item, number, guide, row) {
   const state = cc.run && cc.run.done.get(item.id);
   const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
-  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing, title: ccIsProduct(item) ? `An ${item.type} is only saved from here (Save only); commit it in the Designer.` : "" });
+  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing, title: ccIsProduct(item) ? `An ${item.type} is saved with the new versions, never committed from here: commit it in the Designer.` : "" });
   input.addEventListener("change", () => {
     for (const id of [item.id, ...ccBranch(item.id)]) if (input.checked) cc.selected.add(id); else cc.selected.delete(id);
     ccRender();
@@ -225,13 +227,13 @@ function ccRow(item, number, guide, row) {
   const info = [`${item.type}${item.packageName ? ` · ${item.packageName}` : " · App Library"}`, ...item.reasons.map((r) => r.text), item.missing ? "Not found in this organisation" : null,
     ...(item.products || []).map((p) => `Runs as ${p.type} "${p.name}"`)].filter(Boolean).join("\n");
   const fold = row.kids
-    ? lfH("button", { type: "button", className: "btn-ghost cc-fold", textContent: cc.collapsed.has(item.id) ? "▸" : "▾", title: cc.collapsed.has(item.id) ? `Show the ${ccPlural(ccBranch(item.id).length, "asset", "assets")} below` : "Hide the branch below",
+    ? lfH("button", { type: "button", className: "btn-ghost cc-fold", textContent: cc.collapsed.has(item.id) ? "▸" : "▴", title: cc.collapsed.has(item.id) ? `Show the ${ccPlural(ccBranch(item.id).length, "asset", "assets")} above that use it` : "Hide the branch above",
         onclick: () => { if (cc.collapsed.has(item.id)) cc.collapsed.delete(item.id); else cc.collapsed.add(item.id); ccRender(); } })
     : lfH("span", { className: "cc-fold" });
   return lfH("div", { className: `cc-node${row.grey ? " cc-grey" : ""}`, title: info },
     lfH("span", { className: "cc-guide", textContent: guide }), fold,
     lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
-    state ? (state.skipped ? ftChip("✓ Up to date", "ok", "Already up to date: nothing was saved or committed") : ftChip(cc.run.commit ? "Committed" : "Saved", "ok"))
+    state ? (state.skipped ? ftChip("✓ Up to date", "ok", "Already up to date: nothing was saved or committed") : state.savedOnly ? ftChip("Saved, commit in Designer", "info", "Saved with the new versions of what it uses. Commit it in the Designer: committing apps from here is switched off.") : ftChip(cc.run.commit ? "Committed" : "Saved", "ok"))
     : failed ? ftChip("Failed", "warn", cc.run.failed.error)
     : !item.needs && !item.missing ? ftChip("✓ Up to date", "ok", "Uses the newest committed version of everything below it and has no changes of its own")
     : lfH("span"));
@@ -292,7 +294,7 @@ function ccRenderDeploy() {
 async function ccRun() {
   if (cc.run && cc.run.running) return;
   // A module has nothing to save without a commit, so a save-only run leaves it out.
-  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && (cc.mode === "commit" ? !ccIsProduct(i) : i.type !== "module"));
+  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && (cc.mode === "commit" || i.type !== "module"));
   const run = { done: new Map(), failed: null, running: true, finished: false, deployRows: [], commit: cc.mode === "commit" };
   cc.run = run;
   ccRender();
@@ -313,13 +315,16 @@ async function ccRun() {
     const rootItem = ccItem(cc.plan.rootId);
     const text = (cc.message || "").trim();
     const commitMessage = item.id === cc.plan.rootId ? (text || undefined) : `Commit from Asset ${rootItem ? rootItem.name : ""}: ${text || "Auto generated version."}`;
-    const response = await send({ type: "CC_COMMIT", orgId: cc.orgId, asset, bump, commit: run.commit, commitMessage });
+    // Apps, pages and automations are only saved (with the new versions): committing them from here
+    // emptied one, so they are committed in the Designer.
+    const saveOnly = ccIsProduct(item);
+    const response = await send({ type: "CC_COMMIT", orgId: cc.orgId, asset, bump, commit: run.commit && !saveOnly, commitMessage });
     if (!response || !response.ok) {
       run.failed = { id: item.id, error: (response && response.error) || "No response from the extension." };
       break;
     }
     committedHere.add(item.id);
-    run.done.set(item.id, { headVersionId: response.headVersionId, undo: response.undo });
+    run.done.set(item.id, { headVersionId: response.headVersionId, undo: response.undo, savedOnly: run.commit && saveOnly });
     ccRender();
   }
   try {
@@ -334,7 +339,7 @@ async function ccRun() {
 }
 
 async function ccDeploy(run) {
-  const committed = [...run.done.keys()].filter((id) => !run.done.get(id).skipped);
+  const committed = [...run.done.keys()].filter((id) => !run.done.get(id).skipped && !run.done.get(id).savedOnly);
   const flows = ccDeployables().filter((i) => committed.includes(i.id));
   const envs = cc.envs ? cc.envs.list.filter((e) => cc.deploy.has(e.id)) : [];
   if (!flows.length) { run.deployRows.push({ ok: true, title: "Nothing to deploy", note: "No flow or automation was committed in this run." }); return; }
