@@ -66,10 +66,19 @@ async function refreshByInstance() {
   fillTable(els.byInstance, response.deployments.map((d) => [reportNames[d.qrId] || d.qrId, d.quickReportId, fmt(d.deployedAt)]));
 }
 
+// Deploying never needs GitHub: the editor's own text is what gets sent. A report that isn't in
+// the library yet gets a local id from its name, so re-deploys still update the same Quick Report.
+function deployableReport() {
+  const name = els.name.value.trim();
+  const content = els.sql.value;
+  if (!name || !content.trim()) return null;
+  const localId = `local-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+  return { id: editing.id || localId, name, content };
+}
+
 function renderDeploy() {
-  els.deployHint.hidden = !!editing.id;
-  if (!editing.id) { els.deployForm.innerHTML = ""; return; }
-  renderDeployForm(els.deployForm, () => (dirty ? null : { id: editing.id, name: els.name.value.trim(), content: els.sql.value }), {
+  els.deployHint.hidden = true;
+  renderDeployForm(els.deployForm, deployableReport, {
     send,
     onError: (message) => showError(message, true)
   });
@@ -101,6 +110,12 @@ async function loadInstances() {
 async function loadReports() {
   const id = new URLSearchParams(location.search).get("id");
   let reports;
+  const settings = await send({ type: "QR_GET_SETTINGS" });
+  if (settings.ok && !settings.hasToken) {
+    reportNames = {};
+    showNotice("No GitHub token saved — saving to the library is off, but you can still write and deploy a report.");
+    return renderDeploy();
+  }
   const response = await send({ type: "QR_LIST", masterPassword: "" });
   if (response.ok) {
     reports = response.reports;
