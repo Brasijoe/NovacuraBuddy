@@ -53,4 +53,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=${{ steps.version.outputs.version }}
-          gh release create "v$v" "NovacuraBuddy-v$v.zip" --target "$GITHUB_SHA" --title "v$v" --generate-notes
+          # Title: "Novacura Buddy v0.4.0 beta" when manifest.json has version_name "0.4.0 beta", else "Novacura Buddy v0.4.0".
+          # Not marked as a prerelease: the update banner reads /releases/latest, which skips prereleases.
+          name=$(node -p "require('./manifest.json').version_name || ''")
+          title="Novacura Buddy v${name:-$v}"
+          gh release create "v$v" "NovacuraBuddy-v$v.zip" --target "$GITHUB_SHA" --title "$title" --generate-notes
