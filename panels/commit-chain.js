@@ -63,7 +63,8 @@ async function ccLoad() {
   if (seq !== cc.loadSeq) return;
   if (!response) return ccRender();
   cc.plan = response.plan;
-  cc.selected = new Set(cc.plan.items.filter((i) => i.needs).map((i) => i.id));
+  // Apps, pages and automations are shown but not ticked: committing them is untested (only components and modules are).
+  cc.selected = new Set(cc.plan.items.filter((i) => i.needs && (i.type === "component" || i.type === "module")).map((i) => i.id));
   cc.deploy = new Set();
   cc.prodOk = false;
   cc.envs = null;
