@@ -17,7 +17,8 @@ const cc = {
   deploy: new Set(),
   prodOk: false,
   loadSeq: 0,
-  loading: false
+  loading: false,
+  progress: null // { current, total, name } of the scan
 };
 
 const ccEl = (id) => document.getElementById(id);
@@ -53,6 +54,7 @@ async function ccLoad() {
   if (!cc.orgId || !cc.itemId || cc.loading) return;
   const seq = ++cc.loadSeq;
   cc.loading = true;
+  cc.progress = null;
   cc.run = null;
   cc.plan = null;
   ccRender();
@@ -68,6 +70,13 @@ async function ccLoad() {
   ccRender();
   ccLoadEnvironments();
 }
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (!message || message.type !== "CC_PROGRESS" || !cc.loading || message.orgId !== cc.orgId) return;
+  cc.progress = { current: message.current, total: message.total, name: message.name };
+  const status = ccEl("ccRoot").querySelector(".ft-env-status");
+  if (status) status.textContent = `Scanning flow ${Math.min(cc.progress.current + 1, cc.progress.total)} of ${cc.progress.total}: ${cc.progress.name}`;
+});
 
 /** Flows and automations of the tree that a run would commit: the ones that can be deployed. */
 const ccDeployables = () => (cc.plan && cc.mode === "commit" ? cc.plan.items.filter((i) => lfDeployable(i) && cc.selected.has(i.id)) : []);
@@ -92,7 +101,7 @@ function ccRender() {
   const title = ccEl("ccTitle");
   const rootItem = cc.plan ? ccItem(cc.plan.rootId) : null;
   title.textContent = rootItem ? `${rootItem.name} · ${rootItem.packageName}` : cc.itemId ? "" : "Open a flow in the Flow Designer.";
-  if (cc.loading) { root.appendChild(lfH("span", { className: "ft-env-status", textContent: "Reading where it is used…" })); return; }
+  if (cc.loading) { root.appendChild(lfH("span", { className: "ft-env-status", textContent: cc.progress ? `Scanning flow ${Math.min(cc.progress.current + 1, cc.progress.total)} of ${cc.progress.total}: ${cc.progress.name}` : "Listing the assets…" })); return; }
   if (!cc.plan) return;
   if (cc.run && (cc.run.finished || cc.run.failed)) return ccRenderResults(root);
 
@@ -108,6 +117,7 @@ function ccRender() {
     lfH("h2", { textContent: "Used by" }),
     lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : `${ccPlural(items.length - 1, "asset uses", "assets use")} it · ${needing.length} to update` }),
     infoTip("The open asset at the top and, indented below it, the flows that use it, and the flows that use those. Untick what should stay as it is. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. A row says why it is ticked: changes of its own, an older version of something it uses, or something it uses that is updated first.")));
+  root.appendChild(lfH("span", { className: "api-hint", textContent: `Scanned ${ccPlural(cc.plan.scanned, "flow", "flows")}${cc.plan.failed.length ? `; ${cc.plan.failed.length} could not be read (${cc.plan.failed.slice(0, 5).join(", ")}${cc.plan.failed.length > 5 ? ", …" : ""})` : ""}.` }));
   if (!needing.length) {
     root.appendChild(lfH("div", { className: "banner banner-deployed", textContent: unknown ? "Nothing is marked as changed. Flow doesn't say which assets have uncommitted changes, so tick the ones you want updated below." : "Everything in this tree is up to date." }));
   }

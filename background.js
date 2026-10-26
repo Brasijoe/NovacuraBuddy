@@ -837,8 +837,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
           return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }
-        case "CC_PLAN": // the open flow's dependency tree, bottom to top (read-only)
-          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log }) });
+        case "CC_PLAN": { // the tree of flows that use the open asset, bottom to top (read-only)
+          const onProgress = (current, total, name) => chrome.runtime.sendMessage({ type: "CC_PROGRESS", orgId: message.orgId, current, total, name }).catch(() => {});
+          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log, onProgress }) });
+        }
         case "CC_COMMIT": // one asset per message, so a long chain never hits the message timeout
           try {
             log("CC_COMMIT:", message.asset.name, message.asset.type);
