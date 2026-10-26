@@ -328,11 +328,12 @@ async function ccDeploy(run) {
   if (!flows.length) { run.deployRows.push({ ok: true, title: "Nothing to deploy", note: "No flow or automation was committed in this run." }); return; }
   const name = (id) => { const i = ccItem(id); return i ? i.name : id; };
   for (const env of envs) {
-    const res = await send({ type: "LF_DEPLOY", orgId: cc.orgId, envId: env.id, assetIds: flows.map((f) => f.id) });
+    const res = await send({ type: "LF_DEPLOY", orgId: cc.orgId, envId: env.id, assetIds: flows.map((f) => f.id), flows: flows.map((f) => ({ id: f.id, type: f.type, packageId: f.packageId, headVersionId: (run.done.get(f.id) || {}).headVersionId || null })) });
     const label = `${env.name}${env.isProduction ? " (PROD)" : ""}`;
     if (!res.ok) { run.deployRows.push({ ok: false, title: `Deploy to ${label}`, note: res.error }); continue; }
     const good = res.results.filter((x) => x.ok);
     const bad = res.results.filter((x) => !x.ok);
+    if (!res.results.length) bad.push({ id: flows[0].id, error: "Flow was not asked to deploy anything: none of the committed assets could be matched to a deployable flow or automation." });
     run.deployRows.push({
       ok: !!good.length,
       title: `${!good.length ? "Not deployed to" : bad.length ? "Partly deployed to" : "Deployed to"} ${label}`,

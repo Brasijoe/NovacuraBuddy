@@ -833,7 +833,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const flowFetch = boundFlowFetch();
           linkScanDone(message.orgId);
           const index = new Map((await linkScan(message.orgId, true)).assets.map((a) => [a.id, a]));
-          const flows = message.assetIds.map((id) => index.get(id)).filter(Boolean).map((a) => ({ id: a.id, type: a.type, packageId: a.packageId, headVersionId: a.mainBranch && a.mainBranch.headVersionId }));
+          // Apps and automations are products and not in the asset scan: the panel passes what it knows of them.
+          const given = new Map((message.flows || []).map((f) => [f.id, f]));
+          const flows = [];
+          for (const id of message.assetIds) {
+            const a = index.get(id), g = given.get(id) || {};
+            let head = g.headVersionId || (a && a.mainBranch && a.mainBranch.headVersionId) || null;
+            const packageId = a ? a.packageId : g.packageId;
+            if (!head && packageId) { // the product's own record names its head version
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${message.orgId}/packages/${packageId}/products/${id}`).catch(() => null);
+              const product = res && res.ok ? await res.json().catch(() => null) : null;
+              head = product && product.mainBranch ? product.mainBranch.headVersionId : null;
+            }
+            flows.push({ id, type: a ? a.type : g.type, packageId, headVersionId: head });
+          }
           log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
           return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }
