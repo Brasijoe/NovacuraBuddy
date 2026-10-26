@@ -303,16 +303,42 @@ function mcFocusStep(stepId) {
   return true;
 }
 
+// A step detail window (Flowscript editor, step settings, ...) opens over the canvas: the marks and
+// the corner list would show through or over it, so they step aside while one is open.
+const MC_DIALOG_SELECTOR = 'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"], .cdk-overlay-pane, .cdk-overlay-backdrop, .modal, mat-dialog-container, [class*="dialog" i], [class*="modal" i]';
+
+function mcDialogOpen() {
+  for (const el of document.querySelectorAll(MC_DIALOG_SELECTOR)) {
+    if (mc.host && mc.host.contains(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 120 || r.height < 80) continue;
+    const css = getComputedStyle(el);
+    if (css.display === "none" || css.visibility === "hidden" || css.opacity === "0") continue;
+    return true;
+  }
+  return false;
+}
+
+/** True when something other than the canvas is on top of this point (a window, menu or panel). */
+function mcCovered(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return !!el && el.tagName !== "CANVAS" && !(mc.host && (mc.host === el || mc.host.contains(el)));
+}
+
 function mcPlace() {
   if (!mc.layer) return;
   mc.layer.innerHTML = "";
-  if (!mc.marks || mc.hidden || mc.marksOff) return;
+  const panel = mc.root.querySelector(".panel");
+  const dialog = mcDialogOpen();
+  if (panel) panel.style.visibility = dialog ? "hidden" : "";
+  if (!mc.marks || mc.hidden || mc.marksOff || dialog) return;
   for (const step of mc.marks.steps) {
     const color = MC_COLORS[step.severity] || MC_COLORS.minor;
     for (const target of mc.targets.get(step.id) || []) {
       if (!target.canvasText && !target.isConnected) continue;
       const r = mcRect(target);
       if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
+      if (mcCovered(r.left + r.width / 2, r.top + r.height / 2)) continue;
       const outline = document.createElement("div");
       outline.className = "outline";
       outline.dataset.step = step.id;
