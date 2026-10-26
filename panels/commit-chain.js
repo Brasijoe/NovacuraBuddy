@@ -194,7 +194,7 @@ function ccTreeLayout() {
   const { kids, active } = ccStructure();
   const rows = [];
   const walk = (id, prefix, last, depth) => {
-    rows.push({ id, guide: depth ? prefix + (last ? "└─ " : "├─ ") : "", grey: !active.get(id), kids: kids.get(id).length });
+    rows.push({ id, depth, grey: !active.get(id), kids: kids.get(id).length });
     if (cc.collapsed.has(id)) return;
     const list = kids.get(id);
     list.forEach((k, i) => walk(k, depth ? prefix + (last ? "   " : "│  ") : "", i === list.length - 1, depth + 1));
@@ -202,9 +202,12 @@ function ccTreeLayout() {
   // The open asset is the source and not part of the tree: what uses it are the top level entries.
   const top = kids.get(cc.plan.rootId);
   top.forEach((k, i) => walk(k, "", i === top.length - 1, 0));
-  // Drawn upside down: the top level users on top, down to what uses the open asset directly
-  // (the source, not shown, would be below).
-  return rows.reverse().map((r) => ({ ...r, guide: r.guide.replace("└─ ", "┌─ ") }));
+  // Drawn upside down and mirrored: the highest users on top and furthest left, each level below
+  // one step to the right, what uses the open asset directly last (the source, not shown, would be
+  // below). The connector points down to the asset a row uses. Vertical branch lines can't be drawn
+  // on the left of the names this way, so every row carries its own connector.
+  const deepest = rows.reduce((m, r) => Math.max(m, r.depth), 0);
+  return rows.reverse().map((r) => ({ ...r, guide: "   ".repeat(deepest - r.depth) + "┌─ " }));
 }
 
 /** Ids of the branch below a node: every asset that uses it, directly or through others. */
