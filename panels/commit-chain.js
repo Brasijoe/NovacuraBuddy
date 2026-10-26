@@ -231,9 +231,10 @@ function ccRow(item, number, guide, row) {
   return lfH("div", { className: `cc-node${row.grey ? " cc-grey" : ""}`, title: info },
     lfH("span", { className: "cc-guide", textContent: guide }), fold,
     lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
-    ccIsProduct(item) ? lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy structure", title: "Copies how this item stores its content (field names, sizes, step types; no content) so committing it can be built safely. Read-only.",
-      onclick: async (e) => { const res = await send({ type: "CC_SHAPE", orgId: cc.orgId, itemId: item.id }); try { await navigator.clipboard.writeText(res.ok ? res.text : `failed: ${res.error}`); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } })
-    : state ? (state.skipped ? ftChip("Up to date", "muted", "Already up to date: nothing was saved or committed") : ftChip(cc.run.commit ? "Committed" : "Saved", "ok")) : failed ? ftChip("Failed", "warn", cc.run.failed.error) : lfH("span"));
+    state ? (state.skipped ? ftChip("✓ Up to date", "ok", "Already up to date: nothing was saved or committed") : ftChip(cc.run.commit ? "Committed" : "Saved", "ok"))
+    : failed ? ftChip("Failed", "warn", cc.run.failed.error)
+    : !item.needs && !item.missing ? ftChip("✓ Up to date", "ok", "Uses the newest committed version of everything below it and has no changes of its own")
+    : lfH("span"));
 }
 
 function ccProgress() {
