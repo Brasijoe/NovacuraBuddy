@@ -824,3 +824,4 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cc-deps { display: flex; flex-direction: column; gap: 3px; padding: 4px 10px 8px 40px; background: var(--surface); }
 .cc-dep { display: flex; align-items: center; gap: 6px; }
 .cc-mode { display: flex; gap: 16px; padding: 4px 0; }
+.cc-message-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; } .cc-message { flex: 1; min-width: 0; }

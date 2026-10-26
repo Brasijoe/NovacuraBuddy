@@ -10,6 +10,7 @@ const cc = {
   hasToken: false,
   plan: null,
   selected: new Set(),
+  message: "", // the open asset's last commit message, passed on to the flows above it
   mode: "commit", // "commit" or "save" (save only moves the references and saves, no new version)
   open: new Set(), // rows with their dependency list unfolded
   run: null, // { done: Map id -> result, failed: { id, error } | null, running }
@@ -65,6 +66,7 @@ async function ccLoad() {
   cc.plan = response.plan;
   // Apps, pages and automations are shown but not ticked: committing them is untested (only components and modules are).
   cc.selected = new Set(cc.plan.items.filter((i) => i.needs && (i.type === "component" || i.type === "module")).map((i) => i.id));
+  cc.message = (ccItem(cc.plan.rootId) || {}).lastCommitMessage || "";
   cc.deploy = new Set();
   cc.prodOk = false;
   cc.envs = null;
@@ -167,6 +169,12 @@ function ccRenderMode() {
     row.appendChild(lfH("label", { className: "api-check" }, input, lfH("span", { textContent: label })));
   }
   box.appendChild(row);
+  const rootItem = ccItem(cc.plan.rootId);
+  const msg = lfH("input", { type: "text", className: "cc-message", value: cc.message, placeholder: "Auto generated version.", disabled: busy });
+  msg.addEventListener("input", () => { cc.message = msg.value; });
+  box.appendChild(lfH("label", { className: "cc-message-row" },
+    lfH("span", { className: "api-hint", textContent: `Commit message of ${rootItem ? rootItem.name : "the open asset"}` }), msg,
+    infoTip(`The flows above the open asset are committed as "Commit from Asset ${rootItem ? rootItem.name : "<asset>"}: <this message>". It starts as the open asset's last commit message when Flow tells it, otherwise empty (then "Auto generated version.").`)));
   return box;
 }
 
@@ -268,7 +276,10 @@ async function ccRun() {
     const bump = item.deps.map((d) => ccItem(d.id)).filter((dep) => dep && !dep.missing && (!dep.dirty || committedHere.has(dep.id)))
       .map((dep) => ({ assetId: dep.id, packageId: dep.packageId }));
     const asset = { id: item.id, name: item.name, type: item.type, packageId: item.packageId };
-    const response = await send({ type: "CC_COMMIT", orgId: cc.orgId, asset, bump, commit: run.commit });
+    const rootItem = ccItem(cc.plan.rootId);
+    const text = (cc.message || "").trim();
+    const commitMessage = item.id === cc.plan.rootId ? (text || undefined) : `Commit from Asset ${rootItem ? rootItem.name : ""}: ${text || "Auto generated version."}`;
+    const response = await send({ type: "CC_COMMIT", orgId: cc.orgId, asset, bump, commit: run.commit, commitMessage });
     if (!response || !response.ok) {
       run.failed = { id: item.id, error: (response && response.error) || "No response from the extension." };
       break;
