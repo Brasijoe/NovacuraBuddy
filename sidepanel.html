@@ -320,8 +320,8 @@
     <section id="panel-commit-chain" role="tabpanel" hidden>
       <div class="lf-head">
         <span id="ccTitle" class="api-hint">Open a flow in the Flow Designer.</span>
-        <button id="ccRescanBtn" class="btn-ghost" title="Read the open flow and everything it uses again">Check again</button>
-        <span class="info-tip" data-tip="A flow uses its modules and sub-flows at one version each. When one of them changes, it has to be committed first, and the flow above it then has to point at the new version before it is committed itself. This tab does that for the whole tree of the open flow, leaves first. Only assets of the flow's own package and the App Library are involved. Nothing is deleted."></span>
+        <button id="ccRescanBtn" class="btn-ghost" title="Scan again where the open asset is used">Check again</button>
+        <span class="info-tip" data-tip="A flow uses its modules and sub-flows at one version each. When one of them changes, the flows that use it have to point at the new version. This tab scans where the open asset is used (the flows that use it, and the flows that use those) and shows them as a tree. Untick what should stay as it is, then commit (default) or only save, bottom to top. Only assets of the same package and the App Library are involved. Nothing is deleted."></span>
       </div>
       <p id="ccSessionHint" class="api-hint" hidden></p>
       <div id="ccRoot" class="lf-work"></div>

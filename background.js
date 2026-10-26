@@ -842,7 +842,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "CC_COMMIT": // one asset per message, so a long chain never hits the message timeout
           try {
             log("CC_COMMIT:", message.asset.name, message.asset.type);
-            const out = await FlowCommitChain.commitOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, bump: message.bump, log });
+            const out = await FlowCommitChain.commitOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, bump: message.bump, log, commit: message.commit !== false });
             await refreshIfOpen(message.orgId, [message.asset.id]);
             return sendResponse({ ok: true, ...out });
           } finally { linkScanDone(message.orgId); }

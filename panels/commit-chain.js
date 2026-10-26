@@ -1,4 +1,4 @@
-/* Commit Dependencies tab: commits the open flow and everything it uses, bottom to top
+/* Commit Dependencies tab: updates the open asset's users, a tree of the flows above it, bottom to top
  * (lib/flow-commit-chain.js). The preview lists the tree leaves first with what needs a commit and
  * why, all ticked; the run commits one asset at a time, stops at the first error and offers Undo
  * per commit. Deploy chips and the PROD confirmation are the Linked Flows ones. */
@@ -10,7 +10,7 @@ const cc = {
   hasToken: false,
   plan: null,
   selected: new Set(),
-  showAll: false,
+  mode: "commit", // "commit" or "save" (save only moves the references and saves, no new version)
   open: new Set(), // rows with their dependency list unfolded
   run: null, // { done: Map id -> result, failed: { id, error } | null, running }
   envs: null,
@@ -70,7 +70,7 @@ async function ccLoad() {
 }
 
 /** Flows and automations of the tree that a run would commit: the ones that can be deployed. */
-const ccDeployables = () => (cc.plan ? cc.plan.items.filter((i) => lfDeployable(i) && cc.selected.has(i.id)) : []);
+const ccDeployables = () => (cc.plan && cc.mode === "commit" ? cc.plan.items.filter((i) => lfDeployable(i) && cc.selected.has(i.id)) : []);
 
 async function ccLoadEnvironments() {
   const seq = cc.loadSeq;
@@ -92,7 +92,7 @@ function ccRender() {
   const title = ccEl("ccTitle");
   const rootItem = cc.plan ? ccItem(cc.plan.rootId) : null;
   title.textContent = rootItem ? `${rootItem.name} · ${rootItem.packageName}` : cc.itemId ? "" : "Open a flow in the Flow Designer.";
-  if (cc.loading) { root.appendChild(lfH("span", { className: "ft-env-status", textContent: "Reading the flow and everything it uses…" })); return; }
+  if (cc.loading) { root.appendChild(lfH("span", { className: "ft-env-status", textContent: "Reading where it is used…" })); return; }
   if (!cc.plan) return;
   if (cc.run && (cc.run.finished || cc.run.failed)) return ccRenderResults(root);
 
@@ -105,42 +105,55 @@ function ccRender() {
       lfH("span", { className: "api-hint", textContent: `${cc.plan.cycles.map((c) => c.join(" → ")).join("; ")}. These cannot be put in order; the loop is cut where it closes, so one of them is committed before it points at the other's newest version.` })));
   }
   root.appendChild(lfH("div", { className: "lf-label" },
-    lfH("h2", { textContent: "Bottom to top" }),
-    lfH("span", { className: "list-count", textContent: needing.length ? `${ccPlural(needing.length, "asset needs", "assets need")} a commit · ${items.length} in the tree` : `${items.length} in the tree` }),
-    infoTip("The tree of the open flow with the deepest assets first: this is the order the commits run in. A row says why it needs a commit: changes of its own that are not committed yet, a dependency with a newer version than the one it uses, or a dependency that is committed before it. All rows that need one are ticked.")));
+    lfH("h2", { textContent: "Used by" }),
+    lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : `${ccPlural(items.length - 1, "asset uses", "assets use")} it · ${needing.length} to update` }),
+    infoTip("The open asset at the top and, indented below it, the flows that use it, and the flows that use those. Untick what should stay as it is. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. A row says why it is ticked: changes of its own, an older version of something it uses, or something it uses that is updated first.")));
   if (!needing.length) {
-    root.appendChild(lfH("div", { className: "banner banner-deployed", textContent: unknown ? "Nothing is marked as changed. Flow doesn't say which assets have uncommitted changes, so tick the ones you want committed below." : "Everything in this tree is committed and up to date." }));
+    root.appendChild(lfH("div", { className: "banner banner-deployed", textContent: unknown ? "Nothing is marked as changed. Flow doesn't say which assets have uncommitted changes, so tick the ones you want updated below." : "Everything in this tree is up to date." }));
   }
-  const toggle = lfH("label", { className: "api-check" });
-  const box = lfH("input", { type: "checkbox", checked: cc.showAll });
-  box.addEventListener("change", () => { cc.showAll = box.checked; ccRender(); });
-  toggle.append(box, lfH("span", { textContent: `Show ${ccPlural(items.length - needing.length, "asset", "assets")} that need nothing` }), infoTip("Assets that are committed and use the latest versions. Tick one to commit it anyway."));
-  if (items.length > needing.length) root.appendChild(toggle);
-
   const list = lfH("div", { className: "lf-diff cc-list" });
-  items.forEach((item, n) => {
-    if (!item.needs && !cc.showAll) return;
-    list.appendChild(ccRow(item, n + 1));
+  const order = new Map(items.map((i, n) => [i.id, n + 1]));
+  for (const { id, depth } of cc.plan.tree) {
+    const item = ccItem(id);
+    const wrap = ccRow(item, order.get(id));
+    wrap.style.marginLeft = `${Math.min(depth, 6) * 14}px`;
+    list.appendChild(wrap);
     if (cc.open.has(item.id)) list.appendChild(ccDeps(item));
-  });
+  }
   root.appendChild(list);
-  root.appendChild(ccRenderDeploy());
+  root.appendChild(ccRenderMode());
+  if (cc.mode === "commit") root.appendChild(ccRenderDeploy());
 
   const chosen = items.filter((i) => cc.selected.has(i.id));
-  const envCount = cc.deploy.size;
-  const blockedByProd = ccDeployProd().length > 0 && !cc.prodOk;
+  const envCount = cc.mode === "commit" ? cc.deploy.size : 0;
+  const blockedByProd = cc.mode === "commit" && ccDeployProd().length > 0 && !cc.prodOk;
   const busy = !!(cc.run && cc.run.running);
-  const verb = `Commit ${ccPlural(chosen.length, "asset", "assets")}`;
+  const verb = `${cc.mode === "save" ? "Save" : "Commit"} ${ccPlural(chosen.length, "asset", "assets")}`;
   const run = lfCta({
     icon: "push", label: envCount ? `${verb} & deploy` : verb, badge: envCount ? ccPlural(envCount, "environment", "environments") : null,
     disabled: !chosen.length || blockedByProd || busy,
-    title: blockedByProd ? "Confirm the production deploy first." : "Commits from the bottom of the list to the top and stops at the first error"
+    title: blockedByProd ? "Confirm the production deploy first." : "Runs from the open asset up through the flows that use it and stops at the first error"
   });
   if (busy) lfSetLabel(run, "Committing…");
   run.addEventListener("click", ccRun);
   root.appendChild(lfH("div", { className: "lf-cta-row" }, run,
-    infoTip("Commits the ticked assets one by one, bottom to top. Before a flow is committed it is pointed at the new versions of what it uses and saved with all its steps. The first error stops the run; what was committed stays committed and can be undone.")));
+    infoTip("Handles the ticked assets one by one, bottom to top. Before a flow is committed or saved it is pointed at the new versions of what it uses and saved with all its steps. The first error stops the run; what was done stays done and can be undone.")));
   if (busy) root.appendChild(ccProgress());
+}
+
+function ccRenderMode() {
+  const busy = !!(cc.run && cc.run.running);
+  const box = lfH("div", { className: "lf-deploy" });
+  box.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "What to do" }),
+    infoTip("Commit: the flows point at the new versions and get a new committed version (and can be deployed afterwards). Save: the flows point at the new versions and are saved, but no new version is committed, so you can check them in the Designer first. The open asset itself is only committed, never just saved.")));
+  const row = lfH("div", { className: "cc-mode" });
+  for (const [value, label] of [["commit", "Commit"], ["save", "Save only"]]) {
+    const input = lfH("input", { type: "radio", name: "ccMode", checked: cc.mode === value, disabled: busy });
+    input.addEventListener("change", () => { cc.mode = value; ccRender(); });
+    row.appendChild(lfH("label", { className: "api-check" }, input, lfH("span", { textContent: label })));
+  }
+  box.appendChild(row);
+  return box;
 }
 
 function ccRow(item, number) {
@@ -176,7 +189,7 @@ function ccDeps(item) {
 
 function ccProgress() {
   const chosen = cc.plan.items.filter((i) => cc.selected.has(i.id));
-  return lfH("span", { className: "ft-env-status", textContent: `Committed ${cc.run.done.size} of ${chosen.length}…` });
+  return lfH("span", { className: "ft-env-status", textContent: `${cc.run.commit ? "Committed" : "Saved"} ${cc.run.done.size} of ${chosen.length}…` });
 }
 
 const ccDeployProd = () => (cc.envs ? cc.envs.list.filter((e) => e.isProduction && cc.deploy.has(e.id)) : []);
@@ -228,8 +241,9 @@ function ccRenderDeploy() {
 
 async function ccRun() {
   if (cc.run && cc.run.running) return;
-  const items = cc.plan.items.filter((i) => cc.selected.has(i.id));
-  const run = { done: new Map(), failed: null, running: true, finished: false, deployRows: [] };
+  // A module has nothing to save without a commit, so a save-only run leaves it out.
+  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && (cc.mode === "commit" || i.type !== "module"));
+  const run = { done: new Map(), failed: null, running: true, finished: false, deployRows: [], commit: cc.mode === "commit" };
   cc.run = run;
   ccRender();
   const committedHere = new Set();
@@ -239,7 +253,7 @@ async function ccRun() {
     const bump = item.deps.map((d) => ccItem(d.id)).filter((dep) => dep && !dep.missing && (!dep.dirty || committedHere.has(dep.id)))
       .map((dep) => ({ assetId: dep.id, packageId: dep.packageId }));
     const asset = { id: item.id, name: item.name, type: item.type, packageId: item.packageId };
-    const response = await send({ type: "CC_COMMIT", orgId: cc.orgId, asset, bump });
+    const response = await send({ type: "CC_COMMIT", orgId: cc.orgId, asset, bump, commit: run.commit });
     if (!response || !response.ok) {
       run.failed = { id: item.id, error: (response && response.error) || "No response from the extension." };
       break;
@@ -249,7 +263,7 @@ async function ccRun() {
     ccRender();
   }
   try {
-    if (!run.failed && cc.deploy.size) await ccDeploy(run);
+    if (!run.failed && run.commit && cc.deploy.size) await ccDeploy(run);
   } catch (e) {
     run.deployRows.push({ ok: false, title: "Deploy", note: e.message });
   } finally {
@@ -284,7 +298,7 @@ function ccRenderResults(root) {
   const items = cc.plan.items.filter((i) => cc.selected.has(i.id));
   const failedItem = run.failed ? ccItem(run.failed.id) : null;
   root.appendChild(lfH("div", { className: run.failed ? "banner banner-warning" : "banner banner-deployed",
-    textContent: run.failed ? `Stopped at ${failedItem ? failedItem.name : "an asset"}: ${ccPlural(run.done.size, "asset", "assets")} committed, the rest untouched.` : `Committed ${ccPlural(run.done.size, "asset", "assets")}, bottom to top.` }));
+    textContent: run.failed ? `Stopped at ${failedItem ? failedItem.name : "an asset"}: ${ccPlural(run.done.size, "asset", "assets")} ${run.commit ? "committed" : "saved"}, the rest untouched.` : `${run.commit ? "Committed" : "Saved"} ${ccPlural(run.done.size, "asset", "assets")}, bottom to top.` }));
   const row = (mark, tone, title, note, actions) => lfH("div", { className: "lf-res" },
     lfH("span", { className: `lf-mark lf-mark-${tone}`, textContent: mark }),
     lfH("span", { className: "lf-res-text" }, lfH("strong", { textContent: title }), lfH("span", { className: "api-hint", textContent: note || "" })),
@@ -304,11 +318,11 @@ function ccRenderResults(root) {
         });
         actions.appendChild(undo);
       }
-      root.appendChild(row("✓", "ok", item.name, `${item.packageName || "App Library"} · committed`, actions));
+      root.appendChild(row("✓", "ok", item.name, `${item.packageName || "App Library"} · ${run.commit ? "committed" : "saved"}`, actions));
     } else if (failed) {
       root.appendChild(row("!", "fail", item.name, run.failed.error));
     } else {
-      root.appendChild(row("–", "skip", item.name, run.failed ? "not committed: the run stopped before it" : ""));
+      root.appendChild(row("–", "skip", item.name, run.failed ? "not done: the run stopped before it" : ""));
     }
   }
   for (const d of run.deployRows) root.appendChild(row(d.ok ? "✓" : "!", d.ok ? "ok" : "fail", d.title, d.note));
