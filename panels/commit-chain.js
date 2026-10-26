@@ -24,6 +24,8 @@ const cc = {
 
 const ccEl = (id) => document.getElementById(id);
 const ccVisible = () => !ccEl("panel-commit-chain").hidden;
+// Apps, pages and automations: committing them from here is switched off (their content is not stored like a flow's).
+const ccIsProduct = (i) => /^(application|page|automation)$/.test(i.type || "");
 const ccItem = (id) => (cc.plan ? cc.plan.items.find((i) => i.id === id) : null);
 
 function ccOnShow() {
@@ -67,7 +69,7 @@ async function ccLoad() {
   cc.collapsed = new Set();
   const { active } = ccStructure();
   // Everything with something to update; the branches that are already up to date are greyed and left unticked.
-  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId && active.get(i.id)).map((i) => i.id));
+  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId && !ccIsProduct(i) && active.get(i.id)).map((i) => i.id));
   cc.message = (ccItem(cc.plan.rootId) || {}).lastCommitMessage || "";
   cc.deploy = new Set();
   cc.prodOk = false;
@@ -119,7 +121,7 @@ function ccRender() {
   root.appendChild(lfH("div", { className: "lf-label" },
     lfH("h2", { textContent: "Used by" }),
     lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : ccPlural(items.length - 1, "asset uses it", "assets use it") }),
-    lfH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId).map((i) => i.id)); ccRender(); } }),
+    lfH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId && !ccIsProduct(i)).map((i) => i.id)); ccRender(); } }),
     lfH("button", { type: "button", className: "btn-ghost", textContent: "None", title: "Untick every asset", onclick: () => { cc.selected = new Set(); ccRender(); } }),
     infoTip("The open asset at the top and, branching below it, the flows that use it, and the flows that use those. All are ticked; unticking one leaves out its whole branch. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. Hover a row for details."),
     lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every asset, its package and whether it was read) to send to the developer",
@@ -215,7 +217,7 @@ function ccBranch(id) {
 function ccRow(item, number, guide, row) {
   const state = cc.run && cc.run.done.get(item.id);
   const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
-  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing });
+  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing || ccIsProduct(item), title: ccIsProduct(item) ? `Committing ${item.type}s from here is switched off: update it in the Designer.` : "" });
   input.addEventListener("change", () => {
     for (const id of [item.id, ...ccBranch(item.id)]) if (input.checked) cc.selected.add(id); else cc.selected.delete(id);
     ccRender();
@@ -287,7 +289,7 @@ function ccRenderDeploy() {
 async function ccRun() {
   if (cc.run && cc.run.running) return;
   // A module has nothing to save without a commit, so a save-only run leaves it out.
-  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && (cc.mode === "commit" || i.type !== "module"));
+  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && !ccIsProduct(i) && (cc.mode === "commit" || i.type !== "module"));
   const run = { done: new Map(), failed: null, running: true, finished: false, deployRows: [], commit: cc.mode === "commit" };
   cc.run = run;
   ccRender();
