@@ -233,7 +233,7 @@ function ccRow(item, number, guide, row) {
     lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
     ccIsProduct(item) ? lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy structure", title: "Copies how this item stores its content (field names, sizes, step types; no content) so committing it can be built safely. Read-only.",
       onclick: async (e) => { const res = await send({ type: "CC_SHAPE", orgId: cc.orgId, itemId: item.id }); try { await navigator.clipboard.writeText(res.ok ? res.text : `failed: ${res.error}`); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } })
-    : state ? ftChip("Committed", "ok") : failed ? ftChip("Failed", "warn", cc.run.failed.error) : lfH("span"));
+    : state ? (state.skipped ? ftChip("Up to date", "muted", "Already up to date: nothing was saved or committed") : ftChip(cc.run.commit ? "Committed" : "Saved", "ok")) : failed ? ftChip("Failed", "warn", cc.run.failed.error) : lfH("span"));
 }
 
 function ccProgress() {
@@ -297,6 +297,13 @@ async function ccRun() {
   ccRender();
   const committedHere = new Set();
   for (const item of items) {
+    // Nothing to do when it has no uncommitted changes of its own and every reference already points
+    // at its dependency's head: it is neither saved nor committed (no empty version).
+    if (!item.dirty && !item.deps.some((d) => d.outdated || committedHere.has(d.id))) {
+      run.done.set(item.id, { skipped: true });
+      ccRender();
+      continue;
+    }
     // A reference moves to its dependency's head version when that dependency is committed (before
     // or in this run); one that still has uncommitted changes and was not ticked is left alone.
     const bump = item.deps.map((d) => ccItem(d.id)).filter((dep) => dep && !dep.missing && (!dep.dirty || committedHere.has(dep.id)))
@@ -326,7 +333,7 @@ async function ccRun() {
 }
 
 async function ccDeploy(run) {
-  const committed = [...run.done.keys()];
+  const committed = [...run.done.keys()].filter((id) => !run.done.get(id).skipped);
   const flows = ccDeployables().filter((i) => committed.includes(i.id));
   const envs = cc.envs ? cc.envs.list.filter((e) => cc.deploy.has(e.id)) : [];
   if (!flows.length) { run.deployRows.push({ ok: true, title: "Nothing to deploy", note: "No flow or automation was committed in this run." }); return; }
@@ -351,7 +358,9 @@ function ccRenderResults(root) {
   const items = cc.plan.items.filter((i) => cc.selected.has(i.id));
   const failedItem = run.failed ? ccItem(run.failed.id) : null;
   root.appendChild(lfH("div", { className: run.failed ? "banner banner-warning" : "banner banner-deployed",
-    textContent: run.failed ? `Stopped at ${failedItem ? failedItem.name : "an asset"}: ${ccPlural(run.done.size, "asset", "assets")} ${run.commit ? "committed" : "saved"}, the rest untouched.` : `${run.commit ? "Committed" : "Saved"} ${ccPlural(run.done.size, "asset", "assets")}, bottom to top.` }));
+    textContent: (() => { const worked = [...run.done.values()].filter((d) => !d.skipped).length, skipped = run.done.size - worked;
+      const tail = skipped ? `, ${skipped} already up to date` : "";
+      return run.failed ? `Stopped at ${failedItem ? failedItem.name : "an asset"}: ${ccPlural(worked, "asset", "assets")} ${run.commit ? "committed" : "saved"}${tail}, the rest untouched.` : `${run.commit ? "Committed" : "Saved"} ${ccPlural(worked, "asset", "assets")}, bottom to top${tail}.`; })() }));
   const row = (mark, tone, title, note, actions) => lfH("div", { className: "lf-res" },
     lfH("span", { className: `lf-mark lf-mark-${tone}`, textContent: mark }),
     lfH("span", { className: "lf-res-text" }, lfH("strong", { textContent: title }), lfH("span", { className: "api-hint", textContent: note || "" })),
