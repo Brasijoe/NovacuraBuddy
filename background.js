@@ -854,6 +854,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const onProgress = (current, total, name) => chrome.runtime.sendMessage({ type: "CC_PROGRESS", orgId: message.orgId, current, total, name }).catch(() => {});
           return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log, onProgress }) });
         }
+        case "CC_SHAPE": { // read-only: how a designer item stores its content (key names, sizes, step types; no content)
+          const d = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          const describe = (v, depth) => {
+            if (Array.isArray(v)) {
+              const kinds = {};
+              for (const e of v) { const k = e && typeof e === "object" ? String(e.type || e.stepType || "object") : typeof e; kinds[k] = (kinds[k] || 0) + 1; }
+              return `array(${v.length}) ${JSON.stringify(kinds)}`;
+            }
+            if (v && typeof v === "object") return depth > 0 ? `{ ${Object.entries(v).map(([k, x]) => `${k}: ${describe(x, depth - 1)}`).join(", ")} }` : `object(${Object.keys(v).join(",")})`;
+            return typeof v === "string" ? `string(${v.length})` : String(v);
+          };
+          return sendResponse({ ok: true, text: Object.entries(d).map(([k, v]) => `${k}: ${describe(v, 1)}`).join("\n") });
+        }
         case "CC_COMMIT": // one asset per message, so a long chain never hits the message timeout
           try {
             log("CC_COMMIT:", message.asset.name, message.asset.type);
