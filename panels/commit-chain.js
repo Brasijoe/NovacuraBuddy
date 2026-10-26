@@ -296,8 +296,8 @@ async function ccRun() {
     // A reference moves to its dependency's head version when that dependency is committed (before
     // or in this run); one that still has uncommitted changes and was not ticked is left alone.
     const bump = item.deps.map((d) => ccItem(d.id)).filter((dep) => dep && !dep.missing && (!dep.dirty || committedHere.has(dep.id)))
-      .map((dep) => ({ assetId: dep.id, packageId: dep.packageId }));
-    const asset = { id: item.id, name: item.name, type: item.type, packageId: item.packageId };
+      .map((dep) => ({ assetId: dep.id, packageId: dep.packageId, headVersionId: dep.headVersionId }));
+    const asset = { id: item.id, name: item.name, type: item.type, packageId: item.packageId, mainBranch: item.branchId ? { id: item.branchId, headVersionId: item.headVersionId } : null };
     const rootItem = ccItem(cc.plan.rootId);
     const text = (cc.message || "").trim();
     const commitMessage = item.id === cc.plan.rootId ? (text || undefined) : `Commit from Asset ${rootItem ? rootItem.name : ""}: ${text || "Auto generated version."}`;
