@@ -18,6 +18,7 @@ const cc = {
   prodOk: false,
   loadSeq: 0,
   loading: false,
+  collapsed: new Set(), // nodes whose branch is folded away
   progress: null // { current, total, name } of the scan
 };
 
@@ -63,7 +64,10 @@ async function ccLoad() {
   if (seq !== cc.loadSeq) return;
   if (!response) return ccRender();
   cc.plan = response.plan;
-  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing).map((i) => i.id)); // everything, unticking leaves out a branch
+  cc.collapsed = new Set();
+  const { active } = ccStructure();
+  // Everything with something to update; the branches that are already up to date are greyed and left unticked.
+  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && active.get(i.id)).map((i) => i.id));
   cc.message = (ccItem(cc.plan.rootId) || {}).lastCommitMessage || "";
   cc.deploy = new Set();
   cc.prodOk = false;
@@ -121,7 +125,7 @@ function ccRender() {
   if (cc.plan.failedPackages && cc.plan.failedPackages.length) root.appendChild(lfH("div", { className: "banner banner-error", textContent: `The asset list of ${ccPlural(cc.plan.failedPackages.length, "package", "packages")} could not be read, so flows in them were not scanned: ${cc.plan.failedPackages.slice(0, 5).join("; ")}` }));
   const list = lfH("div", { className: "cc-tree" });
   const order = new Map(items.map((i, n) => [i.id, n + 1]));
-  for (const { id, guide } of ccTreeLayout()) list.appendChild(ccRow(ccItem(id), order.get(id), guide));
+  for (const row of ccTreeLayout()) list.appendChild(ccRow(ccItem(row.id), order.get(row.id), row.guide, row));
   root.appendChild(list);
   root.appendChild(ccRenderMode());
   if (cc.mode === "commit") root.appendChild(ccRenderDeploy());
@@ -164,31 +168,47 @@ function ccRenderMode() {
   return box;
 }
 
-/** The tree for display: each entry with its connector guide ("│  ├─ "), from the depth-first list. */
+/** The tree as parent/children (from the plan's depth-first list), the children of every node
+ *  with something to update first and the branches that are all up to date last. */
+function ccStructure() {
+  const kids = new Map(), stack = [];
+  for (const { id, depth } of cc.plan.tree) {
+    kids.set(id, []);
+    stack.length = depth;
+    if (depth) kids.get(stack[depth - 1]).push(id);
+    stack[depth] = id;
+  }
+  const active = new Map(); // branch has something to update
+  const mark = (id) => { const below = kids.get(id).map((k) => mark(k)).some(Boolean); const a = !!(ccItem(id) || {}).needs || below; active.set(id, a); return a; };
+  mark(cc.plan.rootId);
+  for (const list of kids.values()) list.sort((x, y) => Number(active.get(y)) - Number(active.get(x))); // stable: active first
+  return { kids, active };
+}
+
+/** The rows to draw, each with its connector guide ("│  ├─ "); collapsed nodes hide their branch. */
 function ccTreeLayout() {
-  const tree = cc.plan.tree;
-  const lastAt = (i) => { for (let j = i + 1; j < tree.length && tree[j].depth >= tree[i].depth; j++) if (tree[j].depth === tree[i].depth) return false; return true; };
-  const open = []; // per depth: does a sibling follow below (draw │)
-  return tree.map((node, i) => {
-    const last = lastAt(i);
-    open[node.depth] = !last;
-    let guide = "";
-    for (let d = 1; d < node.depth; d++) guide += open[d] ? "│  " : "   ";
-    if (node.depth) guide += last ? "└─ " : "├─ ";
-    return { id: node.id, guide };
-  });
+  const { kids, active } = ccStructure();
+  const rows = [];
+  const walk = (id, prefix, last, depth) => {
+    rows.push({ id, guide: depth ? prefix + (last ? "└─ " : "├─ ") : "", grey: !active.get(id), kids: kids.get(id).length });
+    if (cc.collapsed.has(id)) return;
+    const list = kids.get(id);
+    list.forEach((k, i) => walk(k, depth ? prefix + (last ? "   " : "│  ") : "", i === list.length - 1, depth + 1));
+  };
+  walk(cc.plan.rootId, "", true, 0);
+  return rows;
 }
 
 /** Ids of the branch below a node: every asset that uses it, directly or through others. */
 function ccBranch(id) {
-  const tree = cc.plan.tree;
-  const i = tree.findIndex((n) => n.id === id);
+  const { kids } = ccStructure();
   const out = [];
-  for (let j = i + 1; j < tree.length && tree[j].depth > tree[i].depth; j++) out.push(tree[j].id);
+  const walk = (n) => { for (const k of kids.get(n)) { out.push(k); walk(k); } };
+  walk(id);
   return out;
 }
 
-function ccRow(item, number, guide) {
+function ccRow(item, number, guide, row) {
   const state = cc.run && cc.run.done.get(item.id);
   const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
   const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing });
@@ -198,8 +218,12 @@ function ccRow(item, number, guide) {
   });
   const info = [`${item.type}${item.packageName ? ` · ${item.packageName}` : " · App Library"}`, ...item.reasons.map((r) => r.text), item.missing ? "Not found in this organisation" : null,
     ...(item.products || []).map((p) => `Runs as ${p.type} "${p.name}"`)].filter(Boolean).join("\n");
-  return lfH("div", { className: "cc-node", title: info },
-    lfH("span", { className: "cc-guide", textContent: guide }),
+  const fold = row.kids
+    ? lfH("button", { type: "button", className: "btn-ghost cc-fold", textContent: cc.collapsed.has(item.id) ? "▸" : "▾", title: cc.collapsed.has(item.id) ? `Show the ${ccPlural(ccBranch(item.id).length, "asset", "assets")} below` : "Hide the branch below",
+        onclick: () => { if (cc.collapsed.has(item.id)) cc.collapsed.delete(item.id); else cc.collapsed.add(item.id); ccRender(); } })
+    : lfH("span", { className: "cc-fold" });
+  return lfH("div", { className: `cc-node${row.grey ? " cc-grey" : ""}`, title: info },
+    lfH("span", { className: "cc-guide", textContent: guide }), fold,
     lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
     state ? ftChip("Committed", "ok") : failed ? ftChip("Failed", "warn", cc.run.failed.error) : lfH("span"));
 }

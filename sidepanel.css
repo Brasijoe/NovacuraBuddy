@@ -826,3 +826,4 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cc-mode { display: flex; gap: 16px; padding: 4px 0; }
 .cc-message-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; } .cc-message { flex: 1; min-width: 0; }
 .cc-tree { display: flex; flex-direction: column; font-size: 13px; } .cc-node { display: flex; align-items: center; gap: 4px; padding: 2px 0; } .cc-guide { font-family: ui-monospace, monospace; white-space: pre; color: var(--muted, #8a8fb0); flex: none; } .cc-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cc-grey { opacity: .45; } .cc-fold { flex: none; width: 18px; padding: 0; text-align: center; }
