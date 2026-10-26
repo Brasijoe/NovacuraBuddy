@@ -12,7 +12,6 @@ const cc = {
   selected: new Set(),
   message: "", // the open asset's last commit message, passed on to the flows above it
   mode: "commit", // "commit" or "save" (save only moves the references and saves, no new version)
-  open: new Set(), // rows with their dependency list unfolded
   run: null, // { done: Map id -> result, failed: { id, error } | null, running }
   envs: null,
   deploy: new Set(),
@@ -64,8 +63,7 @@ async function ccLoad() {
   if (seq !== cc.loadSeq) return;
   if (!response) return ccRender();
   cc.plan = response.plan;
-  // Apps, pages and automations are shown but not ticked: committing them is untested (only components and modules are).
-  cc.selected = new Set(cc.plan.items.filter((i) => i.needs && (i.type === "component" || i.type === "module")).map((i) => i.id));
+  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing).map((i) => i.id)); // everything, unticking leaves out a branch
   cc.message = (ccItem(cc.plan.rootId) || {}).lastCommitMessage || "";
   cc.deploy = new Set();
   cc.prodOk = false;
@@ -109,8 +107,6 @@ function ccRender() {
   if (cc.run && (cc.run.finished || cc.run.failed)) return ccRenderResults(root);
 
   const items = cc.plan.items;
-  const needing = items.filter((i) => i.needs);
-  const unknown = items.some((i) => !i.known && !i.missing);
   if (cc.plan.cycles.length) {
     root.appendChild(lfH("div", { className: "lf-strip lf-strip-warn" },
       lfH("strong", { textContent: "Flows that use each other" }),
@@ -118,24 +114,14 @@ function ccRender() {
   }
   root.appendChild(lfH("div", { className: "lf-label" },
     lfH("h2", { textContent: "Used by" }),
-    lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : `${ccPlural(items.length - 1, "asset uses", "assets use")} it · ${needing.length} to update` }),
-    infoTip("The open asset at the top and, indented below it, the flows that use it, and the flows that use those. Untick what should stay as it is. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. A row says why it is ticked: changes of its own, an older version of something it uses, or something it uses that is updated first.")));
-  root.appendChild(lfH("span", { className: "api-hint", textContent: `Scanned ${ccPlural(cc.plan.scanned, "flow", "flows")}${cc.plan.failed.length ? `; ${cc.plan.failed.length} could not be read (${cc.plan.failed.slice(0, 5).join(", ")}${cc.plan.failed.length > 5 ? ", …" : ""})` : ""}.` }));
+    lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : ccPlural(items.length - 1, "asset uses it", "assets use it") }),
+    infoTip("The open asset at the top and, branching below it, the flows that use it, and the flows that use those. All are ticked; unticking one leaves out its whole branch. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. Hover a row for details."),
+    lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every asset, its package and whether it was read) to send to the developer",
+      onclick: async (e) => { try { await navigator.clipboard.writeText(cc.plan.info); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } })));
   if (cc.plan.failedPackages && cc.plan.failedPackages.length) root.appendChild(lfH("div", { className: "banner banner-error", textContent: `The asset list of ${ccPlural(cc.plan.failedPackages.length, "package", "packages")} could not be read, so flows in them were not scanned: ${cc.plan.failedPackages.slice(0, 5).join("; ")}` }));
-  root.appendChild(lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every flow, its package and whether it was read) to send to the developer",
-    onclick: async (e) => { try { await navigator.clipboard.writeText(cc.plan.info); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } }));
-  if (!needing.length) {
-    root.appendChild(lfH("div", { className: "banner banner-deployed", textContent: unknown ? "Nothing is marked as changed. Flow doesn't say which assets have uncommitted changes, so tick the ones you want updated below." : "Everything in this tree is up to date." }));
-  }
-  const list = lfH("div", { className: "lf-diff cc-list" });
+  const list = lfH("div", { className: "cc-tree" });
   const order = new Map(items.map((i, n) => [i.id, n + 1]));
-  for (const { id, depth } of cc.plan.tree) {
-    const item = ccItem(id);
-    const wrap = ccRow(item, order.get(id));
-    wrap.style.marginLeft = `${Math.min(depth, 6) * 14}px`;
-    list.appendChild(wrap);
-    if (cc.open.has(item.id)) list.appendChild(ccDeps(item));
-  }
+  for (const { id, guide } of ccTreeLayout()) list.appendChild(ccRow(ccItem(id), order.get(id), guide));
   root.appendChild(list);
   root.appendChild(ccRenderMode());
   if (cc.mode === "commit") root.appendChild(ccRenderDeploy());
@@ -178,36 +164,44 @@ function ccRenderMode() {
   return box;
 }
 
-function ccRow(item, number) {
-  const checked = cc.selected.has(item.id);
-  const state = cc.run && cc.run.done.get(item.id);
-  const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
-  const input = lfH("input", { type: "checkbox", checked, disabled: !!(cc.run && cc.run.running) || item.missing });
-  input.addEventListener("change", () => { if (input.checked) cc.selected.add(item.id); else cc.selected.delete(item.id); ccRender(); });
-  const chips = ftChipRow(
-    ...item.reasons.map((r) => ftChip(r.kind === "dirty" ? "Uncommitted" : r.kind === "newer" ? "Older dependency" : "Dependency first", r.kind === "dirty" ? "warn" : "info", r.text)),
-    !item.needs ? ftChip(item.known ? "Up to date" : "Unknown state", item.known ? "ok" : "muted", item.known ? "Committed, and it uses the latest versions." : `Flow doesn't say whether this asset has uncommitted changes (branch fields: ${item.branchKeys.join(", ") || "none"}).`) : null,
-    item.missing ? ftChip("Not found", "warn", "Referenced, but not in this organisation's packages or App Library.") : null,
-    item.packageId ? null : ftChip("App Library", "muted", "Shared by all packages"),
-    ...(item.products || []).map((p) => ftChip(p.type, "info", `Runs as ${p.type} "${p.name}"`)));
-  const row = lfH("div", { className: "lf-diff-row cc-row" },
-    lfH("span", { className: "cc-n", textContent: String(number) }),
-    lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
-    state ? ftChip("Committed", "ok") : failed ? ftChip("Failed", "warn", cc.run.failed.error) : item.deps.length ? lfH("button", { type: "button", className: "btn-ghost cc-fold", textContent: cc.open.has(item.id) ? "Hide uses" : `Uses ${item.deps.length}`, title: "The assets this one references", onclick: () => { if (cc.open.has(item.id)) cc.open.delete(item.id); else cc.open.add(item.id); ccRender(); } }) : lfH("span"));
-  const wrap = lfH("div", { className: "cc-item" }, row, lfH("div", { className: "cc-chips" }, chips));
-  return wrap;
+/** The tree for display: each entry with its connector guide ("│  ├─ "), from the depth-first list. */
+function ccTreeLayout() {
+  const tree = cc.plan.tree;
+  const lastAt = (i) => { for (let j = i + 1; j < tree.length && tree[j].depth >= tree[i].depth; j++) if (tree[j].depth === tree[i].depth) return false; return true; };
+  const open = []; // per depth: does a sibling follow below (draw │)
+  return tree.map((node, i) => {
+    const last = lastAt(i);
+    open[node.depth] = !last;
+    let guide = "";
+    for (let d = 1; d < node.depth; d++) guide += open[d] ? "│  " : "   ";
+    if (node.depth) guide += last ? "└─ " : "├─ ";
+    return { id: node.id, guide };
+  });
 }
 
-function ccDeps(item) {
-  const box = lfH("div", { className: "cc-deps" });
-  const steps = item.steps !== null ? `${ccPlural(item.steps, "step", "steps")}` : "";
-  box.appendChild(lfH("span", { className: "api-hint", textContent: `${steps}${steps && item.deps.length ? " · " : ""}${item.deps.length ? "uses:" : ""}` }));
-  for (const d of item.deps) {
-    const dep = ccItem(d.id);
-    const note = d.outdated ? "newer version available" : dep && dep.needs ? "committed first" : "up to date";
-    box.appendChild(lfH("div", { className: "cc-dep" }, ftKindIcon(d.type), lfH("span", { className: "ft-name", textContent: d.name }), lfH("span", { className: "api-hint", textContent: note })));
-  }
-  return box;
+/** Ids of the branch below a node: every asset that uses it, directly or through others. */
+function ccBranch(id) {
+  const tree = cc.plan.tree;
+  const i = tree.findIndex((n) => n.id === id);
+  const out = [];
+  for (let j = i + 1; j < tree.length && tree[j].depth > tree[i].depth; j++) out.push(tree[j].id);
+  return out;
+}
+
+function ccRow(item, number, guide) {
+  const state = cc.run && cc.run.done.get(item.id);
+  const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
+  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing });
+  input.addEventListener("change", () => {
+    for (const id of [item.id, ...ccBranch(item.id)]) if (input.checked) cc.selected.add(id); else cc.selected.delete(id);
+    ccRender();
+  });
+  const info = [`${item.type}${item.packageName ? ` · ${item.packageName}` : " · App Library"}`, ...item.reasons.map((r) => r.text), item.missing ? "Not found in this organisation" : null,
+    ...(item.products || []).map((p) => `Runs as ${p.type} "${p.name}"`)].filter(Boolean).join("\n");
+  return lfH("div", { className: "cc-node", title: info },
+    lfH("span", { className: "cc-guide", textContent: guide }),
+    lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
+    state ? ftChip("Committed", "ok") : failed ? ftChip("Failed", "warn", cc.run.failed.error) : lfH("span"));
 }
 
 function ccProgress() {
