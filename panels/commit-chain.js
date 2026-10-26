@@ -217,7 +217,7 @@ function ccBranch(id) {
 function ccRow(item, number, guide, row) {
   const state = cc.run && cc.run.done.get(item.id);
   const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
-  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing });
+  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing, title: ccIsProduct(item) ? `An ${item.type} is only saved from here (Save only); commit it in the Designer.` : "" });
   input.addEventListener("change", () => {
     for (const id of [item.id, ...ccBranch(item.id)]) if (input.checked) cc.selected.add(id); else cc.selected.delete(id);
     ccRender();
@@ -291,7 +291,7 @@ function ccRenderDeploy() {
 async function ccRun() {
   if (cc.run && cc.run.running) return;
   // A module has nothing to save without a commit, so a save-only run leaves it out.
-  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && (cc.mode === "commit" || i.type !== "module"));
+  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && (cc.mode === "commit" ? !ccIsProduct(i) : i.type !== "module"));
   const run = { done: new Map(), failed: null, running: true, finished: false, deployRows: [], commit: cc.mode === "commit" };
   cc.run = run;
   ccRender();
