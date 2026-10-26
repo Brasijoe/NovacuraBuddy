@@ -118,6 +118,8 @@ function ccRender() {
     lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : `${ccPlural(items.length - 1, "asset uses", "assets use")} it · ${needing.length} to update` }),
     infoTip("The open asset at the top and, indented below it, the flows that use it, and the flows that use those. Untick what should stay as it is. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. A row says why it is ticked: changes of its own, an older version of something it uses, or something it uses that is updated first.")));
   root.appendChild(lfH("span", { className: "api-hint", textContent: `Scanned ${ccPlural(cc.plan.scanned, "flow", "flows")}${cc.plan.failed.length ? `; ${cc.plan.failed.length} could not be read (${cc.plan.failed.slice(0, 5).join(", ")}${cc.plan.failed.length > 5 ? ", …" : ""})` : ""}.` }));
+  root.appendChild(lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every flow, its package and whether it was read) to send to the developer",
+    onclick: async (e) => { try { await navigator.clipboard.writeText(cc.plan.info); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } }));
   if (!needing.length) {
     root.appendChild(lfH("div", { className: "banner banner-deployed", textContent: unknown ? "Nothing is marked as changed. Flow doesn't say which assets have uncommitted changes, so tick the ones you want updated below." : "Everything in this tree is up to date." }));
   }
@@ -176,7 +178,8 @@ function ccRow(item, number) {
     ...item.reasons.map((r) => ftChip(r.kind === "dirty" ? "Uncommitted" : r.kind === "newer" ? "Older dependency" : "Dependency first", r.kind === "dirty" ? "warn" : "info", r.text)),
     !item.needs ? ftChip(item.known ? "Up to date" : "Unknown state", item.known ? "ok" : "muted", item.known ? "Committed, and it uses the latest versions." : `Flow doesn't say whether this asset has uncommitted changes (branch fields: ${item.branchKeys.join(", ") || "none"}).`) : null,
     item.missing ? ftChip("Not found", "warn", "Referenced, but not in this organisation's packages or App Library.") : null,
-    item.packageId ? null : ftChip("App Library", "muted", "Shared by all packages"));
+    item.packageId ? null : ftChip("App Library", "muted", "Shared by all packages"),
+    ...(item.products || []).map((p) => ftChip(p.type, "info", `Runs as ${p.type} "${p.name}"`)));
   const row = lfH("div", { className: "lf-diff-row cc-row" },
     lfH("span", { className: "cc-n", textContent: String(number) }),
     lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
