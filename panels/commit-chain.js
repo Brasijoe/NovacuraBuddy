@@ -67,7 +67,7 @@ async function ccLoad() {
   cc.collapsed = new Set();
   const { active } = ccStructure();
   // Everything with something to update; the branches that are already up to date are greyed and left unticked.
-  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && active.get(i.id)).map((i) => i.id));
+  cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId && active.get(i.id)).map((i) => i.id));
   cc.message = (ccItem(cc.plan.rootId) || {}).lastCommitMessage || "";
   cc.deploy = new Set();
   cc.prodOk = false;
@@ -119,7 +119,7 @@ function ccRender() {
   root.appendChild(lfH("div", { className: "lf-label" },
     lfH("h2", { textContent: "Used by" }),
     lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : ccPlural(items.length - 1, "asset uses it", "assets use it") }),
-    lfH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing).map((i) => i.id)); ccRender(); } }),
+    lfH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId).map((i) => i.id)); ccRender(); } }),
     lfH("button", { type: "button", className: "btn-ghost", textContent: "None", title: "Untick every asset", onclick: () => { cc.selected = new Set(); ccRender(); } }),
     infoTip("The open asset at the top and, branching below it, the flows that use it, and the flows that use those. All are ticked; unticking one leaves out its whole branch. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. Hover a row for details."),
     lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every asset, its package and whether it was read) to send to the developer",
@@ -132,7 +132,7 @@ function ccRender() {
   root.appendChild(ccRenderMode());
   if (cc.mode === "commit") root.appendChild(ccRenderDeploy());
 
-  const chosen = items.filter((i) => cc.selected.has(i.id));
+  const chosen = items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId);
   const envCount = cc.mode === "commit" ? cc.deploy.size : 0;
   const blockedByProd = cc.mode === "commit" && ccDeployProd().length > 0 && !cc.prodOk;
   const busy = !!(cc.run && cc.run.running);
@@ -197,7 +197,9 @@ function ccTreeLayout() {
     const list = kids.get(id);
     list.forEach((k, i) => walk(k, depth ? prefix + (last ? "   " : "│  ") : "", i === list.length - 1, depth + 1));
   };
-  walk(cc.plan.rootId, "", true, 0);
+  // The open asset is the source and not part of the tree: what uses it are the top level entries.
+  const top = kids.get(cc.plan.rootId);
+  top.forEach((k, i) => walk(k, "", i === top.length - 1, 0));
   return rows;
 }
 
@@ -285,7 +287,7 @@ function ccRenderDeploy() {
 async function ccRun() {
   if (cc.run && cc.run.running) return;
   // A module has nothing to save without a commit, so a save-only run leaves it out.
-  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && (cc.mode === "commit" || i.type !== "module"));
+  const items = cc.plan.items.filter((i) => cc.selected.has(i.id) && i.id !== cc.plan.rootId && (cc.mode === "commit" || i.type !== "module"));
   const run = { done: new Map(), failed: null, running: true, finished: false, deployRows: [], commit: cc.mode === "commit" };
   cc.run = run;
   ccRender();
