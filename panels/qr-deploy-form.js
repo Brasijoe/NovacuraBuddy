@@ -52,7 +52,7 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
 
   async function deploy(forceQuickReportId, baseUrlOverride) {
     const report = getReport();
-    if (!report) return onError("Save your changes before deploying — Deploy sends the saved version.");
+    if (!report) return onError("Give the report a name and some SQL before deploying.");
     const baseUrl = baseUrlOverride || picker.baseUrl();
     const origin = new URL(baseUrl).origin;
     // Must run inside the click's user gesture, before any other await.
