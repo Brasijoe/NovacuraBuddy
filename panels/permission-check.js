@@ -254,26 +254,78 @@ function pcShowMapping(response) {
   pcRenderPreview(preview);
 }
 
-/** What the ticks would change: new grants and removed grants. A preview only: nothing is written to IFS. */
-function pcRenderPreview(box) {
-  box.innerHTML = "";
-  const lines = [];
+/** What the ticks would change, as the exact list that Apply sends: grants, removals (listed
+ *  separately) and permission sets given to the user. Not-found projections never appear. */
+let pcPlan = [];
+let pcConfirming = false;
+
+function pcBuildPlan() {
+  const plan = [];
   for (const row of pcMap.rows) {
+    if (row.state === "notfound") continue;
     const now = new Set(row.current), want = pcMap.selected.get(row.projection);
-    for (const role of want) if (!now.has(role)) lines.push(`Grant ${row.projection} to ${role} (${row.access === "write" ? "Full" : "ReadOnly"})`);
-    for (const role of now) if (!want.has(role)) lines.push(`Remove ${row.projection} from ${role}`);
+    for (const role of want) if (!now.has(role)) plan.push({ type: "grant", projection: row.projection, role, access: row.access });
+    for (const role of now) if (!want.has(role)) plan.push({ type: "revoke", projection: row.projection, role });
   }
   const given = new Set();
   for (const roles of pcMap.give.values()) for (const role of roles) given.add(role);
-  for (const role of given) lines.push(`Assign permission set ${role} to user ${pcMap.user}`);
-  const ul = document.createElement("ul");
-  ul.className = "pc-list";
-  for (const l of lines) { const li = document.createElement("li"); li.textContent = l; ul.appendChild(li); }
-  box.append(lines.length ? ul : document.createTextNode("No changes selected."));
-  const note = document.createElement("div");
-  note.className = "pc-sub";
-  note.textContent = "Preview only: applying changes to IFS is not enabled yet.";
-  box.appendChild(note);
+  for (const role of given) plan.push({ type: "assign", user: pcMap.user, role });
+  return plan;
+}
+
+function pcRenderPreview(box, results) {
+  pcConfirming = false;
+  box.innerHTML = "";
+  pcPlan = pcBuildPlan();
+  const label = (c) => c.type === "grant" ? `Grant ${c.projection} to ${c.role}`
+    : c.type === "revoke" ? `Remove ${c.projection} from ${c.role}` : `Give permission set ${c.role} to user ${c.user}`;
+  const groups = [["Grants", pcPlan.filter((c) => c.type === "grant")], ["Removals", pcPlan.filter((c) => c.type === "revoke")], ["Permission sets for the user", pcPlan.filter((c) => c.type === "assign")]];
+  const resultOf = new Map((results || []).map((r) => [r.change, r]));
+  for (const [title, list] of groups) {
+    if (!list.length) continue;
+    const h = document.createElement("div");
+    h.className = "pc-sub";
+    h.textContent = title;
+    const ul = document.createElement("ul");
+    ul.className = "pc-list";
+    for (const c of list) {
+      const li = document.createElement("li");
+      const r = resultOf.get(c);
+      li.textContent = `${r ? (r.ok ? "✓ " : "✗ ") : ""}${label(c)}${c.type === "grant" && c.access !== "write" ? " (needs read only; IFS grants Full for now)" : ""}${r && !r.ok ? ` — ${r.error}` : ""}`;
+      if (title === "Removals") li.className = "pc-missing";
+      ul.appendChild(li);
+    }
+    box.append(h, ul);
+  }
+  if (!pcPlan.length) box.appendChild(document.createTextNode("No changes selected."));
+  else {
+    const btn = document.createElement("button");
+    btn.className = "btn-primary";
+    btn.textContent = `Apply ${pcPlan.length} change(s) in IFS`;
+    btn.onclick = () => pcApply(btn, box);
+    box.appendChild(btn);
+  }
+}
+
+/** Two clicks: the first shows what will be written, the second writes it. */
+async function pcApply(btn, box) {
+  if (!pcConfirming) {
+    pcConfirming = true;
+    const removals = pcPlan.filter((c) => c.type === "revoke").length;
+    btn.textContent = `Click again to write ${pcPlan.length} change(s) to IFS${removals ? ` (${removals} removal(s))` : ""}`;
+    return;
+  }
+  const baseUrl = pcPicker.baseUrl();
+  btn.disabled = true;
+  btn.textContent = "Writing to IFS…";
+  const changes = pcPlan.map(({ access, ...c }) => c);
+  const response = await send({ type: "PC_APPLY", baseUrl, changes });
+  if (!response.ok) { pcRenderPreview(box); return pcHint(explainLocked(response)); }
+  const byChange = response.results.map((r, i) => ({ ...r, change: pcPlan[i] }));
+  const failed = byChange.find((r) => !r.ok);
+  pcRenderPreview(box, byChange);
+  pcHint(failed ? `Stopped at the first error: ${failed.error}` : `Applied ${byChange.length} change(s). Reloading the check…`);
+  if (!failed) document.getElementById("pcCompareBtn").click();
 }
 
 pcInitPicker();

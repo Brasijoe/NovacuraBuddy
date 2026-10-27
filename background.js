@@ -947,6 +947,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           }
           return sendResponse({ ok: true, assignable, rows, warning, user: message.user || null });
         }
+        case "PC_APPLY": { // permission check: the changes the user confirmed in the panel (writes to IFS)
+          const valid = Array.isArray(message.changes) && message.changes.length > 0 && message.changes.every((c) =>
+            ["grant", "revoke", "assign"].includes(c.type) && typeof c.role === "string" && c.role &&
+            (c.type === "assign" ? typeof c.user === "string" && c.user : typeof c.projection === "string" && c.projection));
+          if (!valid) return sendResponse({ ok: false, error: "No valid changes to apply — nothing was changed." });
+          log("PC_APPLY:", message.changes.length, "change(s) on", message.baseUrl);
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const sets = await IfsPermissions.entitySets(client);
+          const outcome = await IfsPermissions.applyChanges(client, sets, message.changes);
+          log("PC_APPLY done:", JSON.stringify(outcome.results.map((r) => [r.change.type, r.change.role, r.ok])));
+          return sendResponse({ ok: true, ...outcome });
+        }
         case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
