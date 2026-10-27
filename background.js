@@ -926,6 +926,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const missingSet = new Set(missing.map((r) => r.projection));
           const lowSet = new Set(PermissionCheck.tooLow(message.required, grants).map((r) => r.projection));
           const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
+          // The sets that give the projection, as IFS reports them for the user (a second source next to the
+          // ProjectionGrant list, which can lag behind a fresh grant).
+          const givenBy = new Map();
+          for (const g of grants) {
+            const key = g.projection.toLowerCase();
+            if (!givenBy.has(key)) givenBy.set(key, new Set());
+            const pick = [g.grantingSet, g.userSet].find((id) => id && allowed.has(id));
+            if (pick) givenBy.get(key).add(pick);
+          }
           const rows = [];
           let warning = null;
           const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
@@ -939,7 +948,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             rows.push({
               ...r,
               state: missingSet.has(r.projection) ? "missing" : lowSet.has(r.projection) ? "low" : "ok",
-              current: all.filter((p) => !p.managed && allowed.has(p.role)).map((p) => p.role), // editable sets of the user that grant it
+              current: [...new Set([...all.filter((p) => !p.managed && allowed.has(p.role)).map((p) => p.role), ...(givenBy.get(r.projection.toLowerCase()) || [])])], // editable sets of the user that grant it
               managed: all.filter((p) => p.managed).map((p) => p.role), // IFS-delivered sets that grant it
               others: all.filter((p) => !p.managed && !allowed.has(p.role)).map((p) => p.role), // customer sets that grant it but the user does not have
               via: viaOf.get(r.projection.toLowerCase()) || null
