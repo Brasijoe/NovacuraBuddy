@@ -112,7 +112,7 @@ document.getElementById("pcScanBtn").addEventListener("click", async () => {
 // Compare with IFS (read-only): the projections of the ticked connectors against one user's or some
 // permission sets' grants.
 let pcPicker = null;
-let pcUsersFor = null;
+const pcUsers = new Map(); // baseUrl -> users, so picking an instance again refills the list
 
 function pcMode() { return document.querySelector("input[name=pcMode]:checked").value; }
 
@@ -132,11 +132,14 @@ function pcInitPicker() {
       const baseUrl = pcPicker.baseUrl();
       const list = document.getElementById("pcUserList");
       list.innerHTML = "";
-      if (!ready || !baseUrl || pcUsersFor === baseUrl) return;
-      const response = await send({ type: "PC_TARGETS", baseUrl });
-      if (!response.ok) return pcHint(response.error);
-      pcUsersFor = baseUrl;
-      for (const u of response.users) list.append(new Option(u.name === u.id ? u.id : `${u.id} — ${u.name}`, u.id));
+      if (!ready || !baseUrl) return;
+      if (!pcUsers.has(baseUrl)) {
+        const response = await send({ type: "PC_TARGETS", baseUrl });
+        if (!response.ok) return pcHint(response.error);
+        pcUsers.set(baseUrl, response.users);
+      }
+      if (pcPicker.baseUrl() !== baseUrl) return; // another instance was picked meanwhile
+      for (const u of pcUsers.get(baseUrl)) list.append(new Option(u.name === u.id ? u.id : `${u.id} — ${u.name}`, u.id));
     }
   });
 }
