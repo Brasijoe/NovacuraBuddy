@@ -32,7 +32,7 @@
           IFS Functions<span class="tab-caret" aria-hidden="true"></span>
         </button>
         <div class="tab-menu">
-          <div class="tab-menu-row"><button id="tab-tracker" class="tab-item" role="tab">Novacura Buddy</button><span class="info-tip" data-tip="Lists the IFS projections your IFS pages call on the selected instance. Switch one on to create its Flow module (if needed) and add it to the flow open in the Designer tab."></span></div>
+          <div class="tab-menu-row"><button id="tab-tracker" class="tab-item" role="tab">Projection Tracker</button><span class="info-tip" data-tip="Lists the IFS projections your IFS pages call on the selected instance. Switch one on to create its Flow module (if needed) and add it to the flow open in the Designer tab."></span></div>
           <div class="tab-menu-row"><button id="tab-recorder" class="tab-item" role="tab">Traffic Recorder</button><span class="info-tip" data-tip="Records the IFS projection calls your browser tabs make, with requests and responses. Open a session in the viewer to filter the calls, drop redundant ones and create a Flow asset from them."></span></div>
           <div class="tab-menu-row"><button id="tab-quick-reports" class="tab-item" role="tab">Quick Reports</button><span class="info-tip" data-tip="SQL Quick Reports kept in your GitHub repo. Deploy one to an IFS instance with permission sets, then create its Flow module for the open flow."></span></div>
           <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
@@ -264,7 +264,7 @@
         <ul id="ftAssets" class="ft-tree"></ul>
         <div id="ftIfsBox" class="ft-ifs" hidden>
           <label class="api-field">IFS instance for "Generate from IFS" <select id="ftIfs"></select></label>
-          <span class="api-hint">IFS modules picked for "Generate from IFS" are generated fresh from this instance, exactly like Create module in the Novacura Buddy tab.</span>
+          <span class="api-hint">IFS modules picked for "Generate from IFS" are generated fresh from this instance, exactly like Create module in the Projection Tracker tab.</span>
         </div>
         <div id="ftConnectorsBox" hidden>
           <div class="section-head"><h2>Connectors</h2><span class="info-tip" data-tip="Connectors the flows' steps use, matched to the target's connectors by name and type. Steps whose connector has no match need it set in the Designer afterwards."></span></div>
@@ -320,15 +320,15 @@
     <section id="panel-commit-chain" role="tabpanel" hidden>
       <div class="lf-head">
         <span id="ccTitle" class="api-hint">Open a flow in the Flow Designer.</span>
-        <button id="ccRescanBtn" class="btn-ghost" title="Read the open flow and everything it uses again">Check again</button>
-        <span class="info-tip" data-tip="A flow uses its modules and sub-flows at one version each. When one of them changes, it has to be committed first, and the flow above it then has to point at the new version before it is committed itself. This tab does that for the whole tree of the open flow, leaves first. Only assets of the flow's own package and the App Library are involved. Nothing is deleted."></span>
+        <button id="ccRescanBtn" class="btn-ghost" title="Scan again where the open asset is used">Check again</button>
+        <span class="info-tip" data-tip="A flow uses its modules and sub-flows at one version each. When one of them changes, the flows that use it have to point at the new version. This tab scans where the open asset is used (the flows that use it, and the flows that use those) and shows them as a tree. Untick what should stay as it is, then commit (default) or only save, bottom to top. Only assets of the same package and the App Library are involved. Nothing is deleted."></span>
       </div>
       <p id="ccSessionHint" class="api-hint" hidden></p>
       <div id="ccRoot" class="lf-work"></div>
     </section>
 
     <section id="panel-basic-data" role="tabpanel" hidden>
-      <div class="section-head"><h2>IFS instances</h2><span class="info-tip" data-tip="The IFS environments Novacura Buddy works with. Click one to select it for the Novacura Buddy tab; Test asks IFS for a fresh token. Client secrets are encrypted with your master password and stay in this browser."></span></div>
+      <div class="section-head"><h2>IFS instances</h2><span class="info-tip" data-tip="The IFS environments Novacura Buddy works with. Click one to select it for the Projection Tracker tab; Test asks IFS for a fresh token. Client secrets are encrypted with your master password and stay in this browser."></span></div>
       <ul id="instanceList" class="instance-list"></ul>
       <form id="instanceForm" class="instance-form">
         <input id="instanceName" placeholder="Name" required />

@@ -833,16 +833,44 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const flowFetch = boundFlowFetch();
           linkScanDone(message.orgId);
           const index = new Map((await linkScan(message.orgId, true)).assets.map((a) => [a.id, a]));
-          const flows = message.assetIds.map((id) => index.get(id)).filter(Boolean).map((a) => ({ id: a.id, type: a.type, packageId: a.packageId, headVersionId: a.mainBranch && a.mainBranch.headVersionId }));
+          // Apps and automations are products and not in the asset scan: the panel passes what it knows of them.
+          const given = new Map((message.flows || []).map((f) => [f.id, f]));
+          const flows = [];
+          for (const id of message.assetIds) {
+            const a = index.get(id), g = given.get(id) || {};
+            let head = g.headVersionId || (a && a.mainBranch && a.mainBranch.headVersionId) || null;
+            const packageId = a ? a.packageId : g.packageId;
+            if (!head && packageId) { // the product's own record names its head version
+              const res = await flowFetch(`/admin/application/api/v2/organisations/${message.orgId}/packages/${packageId}/products/${id}`).catch(() => null);
+              const product = res && res.ok ? await res.json().catch(() => null) : null;
+              head = product && product.mainBranch ? product.mainBranch.headVersionId : null;
+            }
+            flows.push({ id, type: a ? a.type : g.type, packageId, headVersionId: head });
+          }
           log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
           return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }
-        case "CC_PLAN": // the open flow's dependency tree, bottom to top (read-only)
-          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log }) });
+        case "CC_PLAN": { // the tree of flows that use the open asset, bottom to top (read-only)
+          const onProgress = (current, total, name) => chrome.runtime.sendMessage({ type: "CC_PROGRESS", orgId: message.orgId, current, total, name }).catch(() => {});
+          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log, onProgress }) });
+        }
+        case "CC_SHAPE": { // read-only: how a designer item stores its content (key names, sizes, step types; no content)
+          const d = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          const describe = (v, depth) => {
+            if (Array.isArray(v)) {
+              const kinds = {};
+              for (const e of v) { const k = e && typeof e === "object" ? String(e.type || e.stepType || "object") : typeof e; kinds[k] = (kinds[k] || 0) + 1; }
+              return `array(${v.length}) ${JSON.stringify(kinds)}`;
+            }
+            if (v && typeof v === "object") return depth > 0 ? `{ ${Object.entries(v).map(([k, x]) => `${k}: ${describe(x, depth - 1)}`).join(", ")} }` : `object(${Object.keys(v).join(",")})`;
+            return typeof v === "string" ? `string(${v.length})` : String(v);
+          };
+          return sendResponse({ ok: true, text: Object.entries(d).map(([k, v]) => `${k}: ${describe(v, 1)}`).join("\n") });
+        }
         case "CC_COMMIT": // one asset per message, so a long chain never hits the message timeout
           try {
             log("CC_COMMIT:", message.asset.name, message.asset.type);
-            const out = await FlowCommitChain.commitOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, bump: message.bump, log });
+            const out = await FlowCommitChain.commitOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, bump: message.bump, log, commit: message.commit !== false, message: message.commitMessage });
             await refreshIfOpen(message.orgId, [message.asset.id]);
             return sendResponse({ ok: true, ...out });
           } finally { linkScanDone(message.orgId); }
