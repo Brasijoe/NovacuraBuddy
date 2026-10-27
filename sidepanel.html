@@ -326,11 +326,10 @@
       <button id="pcScanBtn" class="btn-primary fd-scan-btn">Scan open flow</button>
       <div id="pcHint" class="empty-state" hidden></div>
       <div id="pcResult" hidden>
-        <div class="section-head"><h3>Connectors</h3><span class="info-tip" data-tip="Connectors can run as the calling user or as the generic IAM client user, which need different permission sets, so choose which connectors to check. The steps' connectors are listed; IFS-looking ones are ticked. Projections from modules carry no connector and are listed as 'Modules (no connector)'."></span></div>
-        <div id="pcConnectors" class="checklist"></div>
+        <div class="section-head"><h3>Connectors</h3><span class="info-tip" data-tip="Connectors can run as the calling user or as the generic IAM client user, which need different permission sets, so choose which connectors to check. Each connector is a card with the projections its steps call, directly or through the modules the step opens (a module uses the connector of the step that opens it). IFS-looking connectors are ticked."></span></div>
+        <div id="pcConnectors"></div>
         <p id="pcSummary" class="list-count"></p>
-        <ul id="pcList" class="checklist"></ul>
-        <div class="section-head"><h3>Compare with IFS</h3><span class="info-tip" data-tip="Choose an IFS installation and either one IFS user (what the user can use in total, including through permission sets) or one or more permission sets. Shows which of the projections above are not granted. Read-only."></span></div>
+                <div class="section-head"><h3>Compare with IFS</h3><span class="info-tip" data-tip="Choose an IFS installation and either one IFS user (what the user can use in total, including through permission sets) or one or more permission sets. Shows which of the projections above are not granted. Read-only."></span></div>
         <div id="pcPicker"></div>
         <label class="fd-default"><input type="radio" name="pcMode" value="user" checked /> A user</label>
         <label class="fd-default"><input type="radio" name="pcMode" value="sets" /> Permission set(s) (tick above)</label>

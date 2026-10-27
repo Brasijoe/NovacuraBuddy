@@ -830,3 +830,12 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cc-node input[type="checkbox"] { flex: none; width: 14px; height: 14px; margin: 0; padding: 0; } .cc-node .ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .wip-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; margin-left: 4px; border-radius: 8px; background: var(--accent-orange); color: #fff; vertical-align: middle; }
+
+/* Permission Check: one card per connector */
+.pc-card { border: 1px solid var(--border, #8884); border-radius: 6px; margin: 6px 0; padding: 6px 8px; }
+.pc-card-head { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+.pc-list { list-style: none; margin: 4px 0 0 22px; padding: 0; }
+.pc-list li { padding: 1px 0; }
+.pc-sub { opacity: 0.65; font-size: 0.9em; }
+.pc-missing { color: #c0392b; }
+.pc-ok { color: #2e7d32; }

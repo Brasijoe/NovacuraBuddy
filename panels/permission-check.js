@@ -1,7 +1,7 @@
 // Permission Check tab. Step 1: scan the flow open in the Designer for the IFS projections it calls,
 // per connector (a connector can run as the calling user or as the generic IAM client user).
-let pcScan = null; // { flowName, projections, connectors, unassigned }
-const PC_MODULES = "__modules__";
+let pcScan = null; // { flowName, connectors: [{ id, name, type, projections: [{ projection, via }] }], noConnector }
+const PC_NONE = "__none__";
 
 function pcHint(text) {
   const el = document.getElementById("pcHint");
@@ -9,49 +9,90 @@ function pcHint(text) {
   el.hidden = !text;
 }
 
-/** The projections of the ticked connectors (and the modules entry), each with who uses it. */
+/** The overview groups: one per connector, plus the rows no connector step leads to. */
+function pcGroups() {
+  const groups = pcScan.connectors.map((c) => ({ id: c.id, title: c.name, subtitle: c.type || "", rows: c.projections }));
+  if (pcScan.noConnector.length) groups.push({ id: PC_NONE, title: "No connector", subtitle: "direct calls and modules no connector step opens", rows: pcScan.noConnector });
+  return groups;
+}
+
+const pcTicked = () => new Set([...document.querySelectorAll("#pcConnectors input[type=checkbox]:checked")].map((b) => b.value));
+
+/** The distinct projections of the ticked groups. */
 function pcSelectedProjections() {
-  const ticked = new Set([...document.querySelectorAll("#pcConnectors input:checked")].map((b) => b.value));
+  const ticked = pcTicked();
   const rows = new Map();
-  const add = (projection, assets) => {
-    if (!rows.has(projection)) rows.set(projection, new Set());
-    for (const a of assets) rows.get(projection).add(a);
-  };
-  for (const c of pcScan.connectors) if (ticked.has(c.id)) for (const p of c.projections) add(p, c.assets);
-  if (ticked.has(PC_MODULES)) for (const r of pcScan.unassigned) add(r.projection, r.assets);
+  for (const g of pcGroups()) if (ticked.has(g.id)) for (const r of g.rows) {
+    if (!rows.has(r.projection)) rows.set(r.projection, new Set());
+    for (const v of r.via) rows.get(r.projection).add(v);
+  }
   return [...rows].map(([projection, assets]) => ({ projection, assets: [...assets].sort() })).sort((a, b) => a.projection.localeCompare(b.projection));
 }
 
-function pcRenderList() {
-  const list = document.getElementById("pcList");
-  list.innerHTML = "";
-  const rows = pcSelectedProjections();
-  for (const { projection, assets } of rows) {
-    const li = document.createElement("li");
-    li.textContent = `${projection} — used by ${assets.join(", ")}`;
-    list.appendChild(li);
-  }
-  document.getElementById("pcSummary").textContent = `${pcScan.flowName || "Open flow"}: ${rows.length} projection(s) for the selected connectors.`;
+function pcSummary() {
+  const n = pcSelectedProjections().length;
+  document.getElementById("pcSummary").textContent = `${pcScan.flowName || "Open flow"}: ${n} projection(s) for the ticked connector(s).`;
 }
 
-function pcRenderConnectors() {
+/** One card per connector: tick box, name, and its projections with what leads to each one.
+ *  `result` ({ missing, granted }) from a compare adds a status and the suggested permission sets. */
+function pcRender(result) {
   const box = document.getElementById("pcConnectors");
+  const ticked = box.childElementCount ? pcTicked() : null;
   box.innerHTML = "";
-  const addRow = (value, text, checked) => {
-    const label = document.createElement("label");
+  const missing = result ? new Map(result.missing.map((r) => [r.projection, r])) : null;
+  const granted = result ? new Map(result.granted.map((r) => [r.projection, r])) : null;
+  const anyIfs = pcScan.connectors.some((c) => /ifs/i.test(`${c.name} ${c.type || ""}`));
+  for (const g of pcGroups()) {
+    const card = document.createElement("div");
+    card.className = "pc-card";
+    const head = document.createElement("label");
+    head.className = "pc-card-head";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.value = value;
-    input.checked = checked;
-    input.onchange = pcRenderList;
-    label.append(input, document.createTextNode(` ${text}`));
-    box.appendChild(label);
-  };
-  const looksIfs = (c) => /ifs/i.test(`${c.name} ${c.type || ""}`);
-  const anyIfs = pcScan.connectors.some(looksIfs);
-  for (const c of pcScan.connectors) addRow(c.id, `${c.name}${c.type ? ` (${c.type})` : ""} — ${c.projections.length} projection(s)`, !anyIfs || looksIfs(c));
-  if (pcScan.unassigned.length) addRow(PC_MODULES, `Modules (no connector) — ${pcScan.unassigned.length} projection(s)`, true);
-  if (!pcScan.connectors.length && !pcScan.unassigned.length) box.textContent = "No connectors or modules calling IFS found.";
+    input.value = g.id;
+    input.checked = ticked ? ticked.has(g.id) : g.id === PC_NONE || !anyIfs || /ifs/i.test(`${g.title} ${g.subtitle}`);
+    input.onchange = pcSummary;
+    const title = document.createElement("strong");
+    title.textContent = g.title;
+    const sub = document.createElement("span");
+    sub.className = "pc-sub";
+    sub.textContent = ` ${g.subtitle ? g.subtitle + " · " : ""}${g.rows.length} projection(s)`;
+    head.append(input, title, sub);
+    card.appendChild(head);
+    const ul = document.createElement("ul");
+    ul.className = "pc-list";
+    for (const r of g.rows) {
+      const li = document.createElement("li");
+      const miss = missing && missing.get(r.projection);
+      const ok = granted && granted.get(r.projection);
+      if (miss) li.className = "pc-missing";
+      if (ok) li.className = "pc-ok";
+      const name = document.createElement("span");
+      name.textContent = `${miss ? "✗ " : ok ? "✓ " : ""}${r.projection}`;
+      const via = document.createElement("span");
+      via.className = "pc-sub";
+      via.textContent = ` ${r.via.join(", ")}`;
+      li.append(name, via);
+      if (miss && miss.suggestions && miss.suggestions.length) {
+        const sug = document.createElement("div");
+        sug.className = "pc-sub";
+        sug.textContent = `granted by: ${miss.suggestions.join(", ")}`;
+        li.appendChild(sug);
+      }
+      if (ok && ok.via) {
+        const sub2 = document.createElement("div");
+        sub2.className = "pc-sub";
+        sub2.textContent = `via ${ok.via}`;
+        li.appendChild(sub2);
+      }
+      ul.appendChild(li);
+    }
+    card.appendChild(ul);
+    box.appendChild(card);
+  }
+  if (!pcScan.connectors.length && !pcScan.noConnector.length) box.textContent = "No IFS projection calls found.";
+  pcSummary();
 }
 
 document.getElementById("pcScanBtn").addEventListener("click", async () => {
@@ -64,8 +105,7 @@ document.getElementById("pcScanBtn").addEventListener("click", async () => {
   if (!response.ok) return pcHint(response.error);
   pcHint("");
   pcScan = response;
-  pcRenderConnectors();
-  pcRenderList();
+  pcRender(null);
   document.getElementById("pcResult").hidden = false;
 });
 
@@ -117,28 +157,12 @@ document.getElementById("pcCompareBtn").addEventListener("click", async () => {
   const response = await send({ type: "PC_COMPARE", baseUrl, required, ...(pcMode() === "user" ? { user } : { roles }) });
   if (!response.ok) return pcHint(explainLocked(response));
   pcHint("");
+  pcRender(response);
   const out = document.getElementById("pcCompareOut");
   out.hidden = false;
-  out.innerHTML = "";
-  const head = document.createElement("p");
-  head.className = "list-count";
-  head.textContent = response.missing.length
-    ? `${response.missing.length} of ${required.length} projection(s) not granted.`
+  out.textContent = response.missing.length
+    ? `${response.missing.length} of ${required.length} projection(s) are not granted (marked ✗ above).`
     : `All ${required.length} projection(s) are granted.`;
-  out.appendChild(head);
-  const ul = document.createElement("ul");
-  ul.className = "checklist";
-  for (const r of response.missing) {
-    const li = document.createElement("li");
-    li.textContent = `Missing: ${r.projection}${r.suggestions && r.suggestions.length ? ` — granted by ${r.suggestions.join(", ")}` : ""}`;
-    ul.appendChild(li);
-  }
-  for (const r of response.granted) {
-    const li = document.createElement("li");
-    li.textContent = `OK: ${r.projection}${r.via ? ` (via ${r.via})` : ""}`;
-    ul.appendChild(li);
-  }
-  out.appendChild(ul);
 });
 
 pcInitPicker();
