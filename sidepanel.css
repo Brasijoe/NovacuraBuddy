@@ -828,3 +828,5 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cc-tree { display: flex; flex-direction: column; font-size: 13px; } .cc-node { display: flex; align-items: center; gap: 4px; padding: 2px 0; } .cc-guide { font-family: ui-monospace, monospace; white-space: pre; color: var(--muted, #8a8fb0); flex: none; } .cc-main { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cc-grey { opacity: .45; } .cc-fold { flex: none; width: 18px; padding: 0; text-align: center; }
 .cc-node input[type="checkbox"] { flex: none; width: 14px; height: 14px; margin: 0; padding: 0; } .cc-node .ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wip-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; margin-left: 4px; border-radius: 8px; background: var(--accent-orange); color: #fff; vertical-align: middle; }
