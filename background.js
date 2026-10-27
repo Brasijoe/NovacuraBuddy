@@ -927,12 +927,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const lowSet = new Set(PermissionCheck.tooLow(message.required, grants).map((r) => r.projection));
           const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
           const rows = [];
+          let warning = null;
           for (const r of message.required) {
-            let current = [];
-            try { current = (await IfsPermissions.permissionSetsGranting(client, sets, r.projection)).filter((id) => allowed.has(id)); } catch { /* the grant list is a hint only */ }
-            rows.push({ ...r, state: missingSet.has(r.projection) ? "missing" : lowSet.has(r.projection) ? "low" : "ok", current, via: viaOf.get(r.projection.toLowerCase()) || null });
+            let all = [];
+            try { all = await IfsPermissions.permissionSetsGranting(client, sets, r.projection); } catch (e) { warning = warning || `Could not read which permission sets grant ${r.projection}: ${e.message}`; }
+            rows.push({
+              ...r,
+              state: missingSet.has(r.projection) ? "missing" : lowSet.has(r.projection) ? "low" : "ok",
+              current: all.filter((p) => !p.managed && allowed.has(p.role)).map((p) => p.role), // editable sets of the user that grant it
+              managed: all.filter((p) => p.managed).map((p) => p.role), // IFS-delivered sets that grant it
+              others: all.filter((p) => !p.managed && !allowed.has(p.role)).map((p) => p.role), // customer sets that grant it but the user does not have
+              via: viaOf.get(r.projection.toLowerCase()) || null
+            });
           }
-          return sendResponse({ ok: true, assignable, rows });
+          return sendResponse({ ok: true, assignable, rows, warning, user: message.user || null });
         }
         case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only
           const tab = captureDesignerTab();

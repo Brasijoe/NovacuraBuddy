@@ -156,21 +156,22 @@ document.getElementById("pcCompareBtn").addEventListener("click", async () => {
 // now are pre-selected; ticking more adds a grant, unticking removes one. Only a preview for now.
 let pcMap = null; // { rows, assignable, selected: Map(projection -> Set(role)) }
 
-function pcDropdown(row, assignable, onChange) {
+function pcDropdown(row, assignable, onChange, store = "selected", label = "permission set(s)") {
   const details = document.createElement("details");
   details.className = "pc-dd";
   const summary = document.createElement("summary");
   details.appendChild(summary);
   const list = document.createElement("div");
   list.className = "pc-dd-list";
-  const refresh = () => { summary.textContent = pcMap.selected.get(row.projection).size ? `${pcMap.selected.get(row.projection).size} permission set(s)` : "none selected"; };
+  const chosen = () => pcMap[store].get(row.projection);
+  const refresh = () => { summary.textContent = chosen().size ? `${chosen().size} ${label}` : "none selected"; };
   for (const p of assignable) {
     const label = document.createElement("label");
     const box = document.createElement("input");
     box.type = "checkbox";
-    box.checked = pcMap.selected.get(row.projection).has(p.id);
+    box.checked = chosen().has(p.id);
     box.onchange = () => {
-      const set = pcMap.selected.get(row.projection);
+      const set = chosen();
       if (box.checked) set.add(p.id); else set.delete(p.id);
       refresh();
       onChange();
@@ -185,7 +186,8 @@ function pcDropdown(row, assignable, onChange) {
 }
 
 function pcShowMapping(response) {
-  pcMap = { rows: response.rows, assignable: response.assignable, selected: new Map(response.rows.map((r) => [r.projection, new Set(r.current)])) };
+  pcMap = { rows: response.rows, assignable: response.assignable, user: response.user, selected: new Map(response.rows.map((r) => [r.projection, new Set(r.current)])), give: new Map(response.rows.map((r) => [r.projection, new Set()])) };
+  if (response.warning) pcHint(response.warning);
   const out = document.getElementById("pcCompareOut");
   out.hidden = false;
   out.innerHTML = "";
@@ -216,7 +218,27 @@ function pcShowMapping(response) {
       note.textContent = `needs ${row.access === "write" ? "write (Full)" : "read (ReadOnly)"}` +
         (row.state === "low" ? " · granted read-only now" : "") + (row.state === "ok" && row.via ? ` · via ${row.via}` : "");
       name.appendChild(note);
-      grid.append(name, pcDropdown(row, response.assignable, pcRenderPreview.bind(null, preview)));
+      if (row.managed.length) {
+        const m = document.createElement("div");
+        m.className = "pc-sub";
+        m.textContent = `Also granted by IFS-delivered: ${row.managed.join(", ")}`;
+        name.appendChild(m);
+      }
+      const cell = document.createElement("div");
+      cell.appendChild(pcDropdown(row, response.assignable, pcRenderPreview.bind(null, preview)));
+      if (row.others.length) {
+        const o = document.createElement("div");
+        o.className = "pc-sub";
+        o.textContent = `Other permission sets with this projection: ${row.others.join(", ")}`;
+        name.appendChild(o);
+        if (response.user) { // sets the user does not have yet can be given to the user
+          const give = pcDropdown(row, row.others.map((id) => ({ id, name: id })), pcRenderPreview.bind(null, preview), "give", "to give to user");
+          give.classList.add("pc-dd-give");
+          give.querySelector("summary").title = "Give the user these permission sets";
+          cell.appendChild(give);
+        }
+      }
+      grid.append(name, cell);
     }
     out.appendChild(grid);
   };
@@ -237,6 +259,9 @@ function pcRenderPreview(box) {
     for (const role of want) if (!now.has(role)) lines.push(`Grant ${row.projection} to ${role} (${row.access === "write" ? "Full" : "ReadOnly"})`);
     for (const role of now) if (!want.has(role)) lines.push(`Remove ${row.projection} from ${role}`);
   }
+  const given = new Set();
+  for (const roles of pcMap.give.values()) for (const role of roles) given.add(role);
+  for (const role of given) lines.push(`Assign permission set ${role} to user ${pcMap.user}`);
   const ul = document.createElement("ul");
   ul.className = "pc-list";
   for (const l of lines) { const li = document.createElement("li"); li.textContent = l; ul.appendChild(li); }

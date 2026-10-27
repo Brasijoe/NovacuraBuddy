@@ -850,3 +850,4 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .pc-dd summary { cursor: pointer; }
 .pc-dd-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; max-height: 180px; overflow: auto; }
 .pc-preview { margin: 4px 0 8px; }
+.pc-dd-give { margin-top: 4px; border-style: dashed; }
