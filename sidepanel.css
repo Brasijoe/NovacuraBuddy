@@ -842,3 +842,11 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 
 /* Which tab is open */
 .tab-subheader { font-size: 0.9em; opacity: 0.75; padding: 4px 2px 2px; }
+
+/* Permission Check mapping: fixed two columns, the dropdown stays where it is whatever the projection name */
+.pc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 4px 8px; align-items: start; margin-bottom: 8px; }
+.pc-proj { overflow-wrap: anywhere; }
+.pc-dd { position: relative; border: 1px solid var(--border, #8884); border-radius: 4px; padding: 2px 6px; }
+.pc-dd summary { cursor: pointer; }
+.pc-dd-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; max-height: 180px; overflow: auto; }
+.pc-preview { margin: 4px 0 8px; }

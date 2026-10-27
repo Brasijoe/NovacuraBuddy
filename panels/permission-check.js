@@ -23,10 +23,12 @@ function pcSelectedProjections() {
   const ticked = pcTicked();
   const rows = new Map();
   for (const g of pcGroups()) if (ticked.has(g.id)) for (const r of g.rows) {
-    if (!rows.has(r.projection)) rows.set(r.projection, new Set());
-    for (const v of r.via) rows.get(r.projection).add(v);
+    if (!rows.has(r.projection)) rows.set(r.projection, { assets: new Set(), access: "read" });
+    const row = rows.get(r.projection);
+    for (const v of r.via) row.assets.add(v);
+    if (r.access === "write") row.access = "write";
   }
-  return [...rows].map(([projection, assets]) => ({ projection, assets: [...assets].sort() })).sort((a, b) => a.projection.localeCompare(b.projection));
+  return [...rows].map(([projection, r]) => ({ projection, assets: [...r.assets].sort(), access: r.access })).sort((a, b) => a.projection.localeCompare(b.projection));
 }
 
 function pcSummary() {
@@ -40,8 +42,7 @@ function pcRender(result) {
   const box = document.getElementById("pcConnectors");
   const ticked = box.childElementCount ? pcTicked() : null;
   box.innerHTML = "";
-  const missing = result ? new Map(result.missing.map((r) => [r.projection, r])) : null;
-  const granted = result ? new Map(result.granted.map((r) => [r.projection, r])) : null;
+  const state = result ? new Map(result.rows.map((r) => [r.projection, r])) : null;
   const anyIfs = pcScan.connectors.some((c) => /ifs/i.test(`${c.name} ${c.type || ""}`));
   for (const g of pcGroups()) {
     const card = document.createElement("div");
@@ -64,28 +65,14 @@ function pcRender(result) {
     ul.className = "pc-list";
     for (const r of g.rows) {
       const li = document.createElement("li");
-      const miss = missing && missing.get(r.projection);
-      const ok = granted && granted.get(r.projection);
-      if (miss) li.className = "pc-missing";
-      if (ok) li.className = "pc-ok";
+      const st = state && state.get(r.projection);
+      if (st) li.className = st.state === "ok" ? "pc-ok" : "pc-missing";
       const name = document.createElement("span");
-      name.textContent = `${miss ? "✗ " : ok ? "✓ " : ""}${r.projection}`;
+      name.textContent = `${st ? (st.state === "ok" ? "✓ " : st.state === "low" ? "⚠ " : "✗ ") : ""}${r.projection} (${r.access === "write" ? "write" : "read"})`;
       const via = document.createElement("span");
       via.className = "pc-sub";
       via.textContent = ` ${r.via.join(", ")}`;
       li.append(name, via);
-      if (miss && miss.suggestions && miss.suggestions.length) {
-        const sug = document.createElement("div");
-        sug.className = "pc-sub";
-        sug.textContent = `granted by: ${miss.suggestions.join(", ")}`;
-        li.appendChild(sug);
-      }
-      if (ok && ok.via) {
-        const sub2 = document.createElement("div");
-        sub2.className = "pc-sub";
-        sub2.textContent = `via ${ok.via}`;
-        li.appendChild(sub2);
-      }
       ul.appendChild(li);
     }
     card.appendChild(ul);
@@ -162,11 +149,102 @@ document.getElementById("pcCompareBtn").addEventListener("click", async () => {
   if (!response.ok) return pcHint(explainLocked(response));
   pcHint("");
   pcRender(response);
+  pcShowMapping(response);
+});
+
+// Mapping: per projection a dropdown of the permission sets it may sit in. The ones that grant it
+// now are pre-selected; ticking more adds a grant, unticking removes one. Only a preview for now.
+let pcMap = null; // { rows, assignable, selected: Map(projection -> Set(role)) }
+
+function pcDropdown(row, assignable, onChange) {
+  const details = document.createElement("details");
+  details.className = "pc-dd";
+  const summary = document.createElement("summary");
+  details.appendChild(summary);
+  const list = document.createElement("div");
+  list.className = "pc-dd-list";
+  const refresh = () => { summary.textContent = pcMap.selected.get(row.projection).size ? `${pcMap.selected.get(row.projection).size} permission set(s)` : "none selected"; };
+  for (const p of assignable) {
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = pcMap.selected.get(row.projection).has(p.id);
+    box.onchange = () => {
+      const set = pcMap.selected.get(row.projection);
+      if (box.checked) set.add(p.id); else set.delete(p.id);
+      refresh();
+      onChange();
+    };
+    label.append(box, document.createTextNode(` ${p.name === p.id ? p.id : `${p.id} — ${p.name}`}`));
+    list.appendChild(label);
+  }
+  if (!assignable.length) list.textContent = "No permission sets available.";
+  details.appendChild(list);
+  refresh();
+  return details;
+}
+
+function pcShowMapping(response) {
+  pcMap = { rows: response.rows, assignable: response.assignable, selected: new Map(response.rows.map((r) => [r.projection, new Set(r.current)])) };
   const out = document.getElementById("pcCompareOut");
   out.hidden = false;
-  out.textContent = response.missing.length
-    ? `${response.missing.length} of ${required.length} projection(s) are not granted (marked ✗ above).`
-    : `All ${required.length} projection(s) are granted.`;
-});
+  out.innerHTML = "";
+  const open = response.rows.filter((r) => r.state !== "ok");
+  const done = response.rows.filter((r) => r.state === "ok");
+  const head = document.createElement("p");
+  head.className = "list-count";
+  head.textContent = open.length
+    ? `${open.length} of ${response.rows.length} projection(s) need a grant or a higher access level.`
+    : `All ${response.rows.length} projection(s) are granted.`;
+  out.appendChild(head);
+  const preview = document.createElement("div");
+  preview.className = "pc-preview";
+  const section = (title, hint, rows) => {
+    if (!rows.length) return;
+    const h = document.createElement("h4");
+    h.textContent = `${title} (${rows.length})`;
+    h.title = hint;
+    out.appendChild(h);
+    const grid = document.createElement("div");
+    grid.className = "pc-grid";
+    for (const row of rows) {
+      const name = document.createElement("div");
+      name.className = "pc-proj" + (row.state === "ok" ? "" : " pc-missing");
+      name.textContent = row.projection;
+      const note = document.createElement("div");
+      note.className = "pc-sub";
+      note.textContent = `needs ${row.access === "write" ? "write (Full)" : "read (ReadOnly)"}` +
+        (row.state === "low" ? " · granted read-only now" : "") + (row.state === "ok" && row.via ? ` · via ${row.via}` : "");
+      name.appendChild(note);
+      grid.append(name, pcDropdown(row, response.assignable, pcRenderPreview.bind(null, preview)));
+    }
+    out.appendChild(grid);
+  };
+  section("Not granted", "Missing, or granted read-only while the flow writes", open);
+  section("Already granted", "Pre-selected are the permission sets that grant the projection now; untick to remove a grant", done);
+  const ph = document.createElement("h4");
+  ph.textContent = "Planned changes";
+  out.append(ph, preview);
+  pcRenderPreview(preview);
+}
+
+/** What the ticks would change: new grants and removed grants. A preview only: nothing is written to IFS. */
+function pcRenderPreview(box) {
+  box.innerHTML = "";
+  const lines = [];
+  for (const row of pcMap.rows) {
+    const now = new Set(row.current), want = pcMap.selected.get(row.projection);
+    for (const role of want) if (!now.has(role)) lines.push(`Grant ${row.projection} to ${role} (${row.access === "write" ? "Full" : "ReadOnly"})`);
+    for (const role of now) if (!want.has(role)) lines.push(`Remove ${row.projection} from ${role}`);
+  }
+  const ul = document.createElement("ul");
+  ul.className = "pc-list";
+  for (const l of lines) { const li = document.createElement("li"); li.textContent = l; ul.appendChild(li); }
+  box.append(lines.length ? ul : document.createTextNode("No changes selected."));
+  const note = document.createElement("div");
+  note.className = "pc-sub";
+  note.textContent = "Preview only: applying changes to IFS is not enabled yet.";
+  box.appendChild(note);
+}
 
 pcInitPicker();

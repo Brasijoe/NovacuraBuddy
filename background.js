@@ -914,18 +914,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const sets = await IfsPermissions.entitySets(client);
           const grants = message.user ? await IfsPermissions.userProjections(client, sets, message.user)
             : await IfsPermissions.permissionSetProjections(client, sets, message.roles || []);
-          const { missing, granted } = PermissionCheck.compare(message.required, grants.map((g) => g.projection));
-          const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
-          for (const row of missing) {
-            try { row.suggestions = await IfsPermissions.permissionSetsGranting(client, sets, row.projection); } catch { row.suggestions = []; }
+          // The permission sets a projection may be put into: the user's own customer sets, or the chosen ones.
+          let assignable;
+          if (message.user) assignable = await IfsPermissions.userPermissionSets(client, sets, message.user);
+          else {
+            const names = new Map((await IfsPermissions.listPermissionSets(client)).map((p) => [p.id, p.name]));
+            assignable = message.roles.map((id) => ({ id, name: names.get(id) || id }));
           }
-          return sendResponse({ ok: true, missing, granted: granted.map((r) => ({ ...r, via: viaOf.get(r.projection.toLowerCase()) || null })) });
+          const allowed = new Set(assignable.map((p) => p.id));
+          const { missing } = PermissionCheck.compare(message.required, grants.map((g) => g.projection));
+          const missingSet = new Set(missing.map((r) => r.projection));
+          const lowSet = new Set(PermissionCheck.tooLow(message.required, grants).map((r) => r.projection));
+          const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
+          const rows = [];
+          for (const r of message.required) {
+            let current = [];
+            try { current = (await IfsPermissions.permissionSetsGranting(client, sets, r.projection)).filter((id) => allowed.has(id)); } catch { /* the grant list is a hint only */ }
+            rows.push({ ...r, state: missingSet.has(r.projection) ? "missing" : lowSet.has(r.projection) ? "low" : "ok", current, via: viaOf.get(r.projection.toLowerCase()) || null });
+          }
+          return sendResponse({ ok: true, assignable, rows });
         }
         case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
           const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
-          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn) });
+          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
         }
         case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
           const tab = captureDesignerTab();
