@@ -29,6 +29,7 @@ importScripts(
   "lib/update-check.js",
   "lib/flow-deps.js",
   "lib/flow-documentation.js",
+  "lib/permission-check.js",
   "lib/module-compare.js",
   "apimodule/api-module-service.js"
 );
@@ -903,6 +904,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
           return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+        }
+        case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
+          const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
+          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn) });
         }
         case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
           const tab = captureDesignerTab();

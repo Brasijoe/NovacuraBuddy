@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "module-compare", "linked-flows", "commit-chain", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "module-compare", "linked-flows", "commit-chain", "permission-check", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {

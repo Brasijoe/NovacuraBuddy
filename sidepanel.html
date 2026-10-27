@@ -49,6 +49,7 @@
           <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
+          <div class="tab-menu-row"><button id="tab-permission-check" class="tab-item" role="tab">Permission Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds every IFS projection the flow open in the Designer calls and compares them with what an IFS user is allowed to use. Step 1 (listing the projections) is read-only; comparing with a user and adding permissions comes next."></span></div>
           <div class="tab-menu-row"><button id="tab-commit-chain" class="tab-item" role="tab">Commit Dependencies</button><span class="info-tip" data-tip="Commits the open flow and everything it uses, bottom to top: modules and sub-flows first, then the flows that use them, each pointing at the new versions below. You see what needs a commit first and can undo every commit. Optionally deploys afterwards."></span></div>
         </div>
       </div>
@@ -319,6 +320,17 @@
       <div id="lfWork" class="lf-work" hidden></div>
     </section>
 
+    <section id="panel-permission-check" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> the user comparison and adding permissions are not built yet.</span></div>
+      <div class="section-head"><h2>Projections the open flow calls</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every module and sub-flow it uses, and lists the IFS projections they call. Nothing is changed in Flow or IFS."></span></div>
+      <button id="pcScanBtn" class="btn-primary fd-scan-btn">Scan open flow</button>
+      <div id="pcHint" class="empty-state" hidden></div>
+      <div id="pcResult" hidden>
+        <p id="pcSummary" class="list-count"></p>
+        <ul id="pcList" class="checklist"></ul>
+      </div>
+    </section>
+
     <section id="panel-commit-chain" role="tabpanel" hidden>
       <div class="banner banner-warning"><span><strong>Not fully tested.</strong> Commit Dependencies changes Flow assets. Apps, pages and automations are save-only. Try it on a copy of a flow first and check the result in the Designer.</span></div>
       <div class="lf-head">
@@ -387,6 +399,7 @@
     <script src="panels/commit-chain.js"></script>
     <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
+    <script src="panels/permission-check.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>
