@@ -905,11 +905,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
           return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
         }
+        case "PC_TARGETS": { // permission check: the IFS users (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, users: await IfsPermissions.listUsers(client, await IfsPermissions.entitySets(client)) });
+        }
+        case "PC_COMPARE": { // permission check: required projections against a user's or permission sets' grants (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const sets = await IfsPermissions.entitySets(client);
+          const grants = message.user ? await IfsPermissions.userProjections(client, sets, message.user)
+            : await IfsPermissions.permissionSetProjections(client, sets, message.roles || []);
+          const { missing, granted } = PermissionCheck.compare(message.required, grants.map((g) => g.projection));
+          const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
+          for (const row of missing) {
+            try { row.suggestions = await IfsPermissions.permissionSetsGranting(client, sets, row.projection); } catch { row.suggestions = []; }
+          }
+          return sendResponse({ ok: true, missing, granted: granted.map((r) => ({ ...r, via: viaOf.get(r.projection.toLowerCase()) || null })) });
+        }
         case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
           const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
-          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn) });
+          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn) });
         }
         case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
           const tab = captureDesignerTab();
