@@ -44,6 +44,10 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
     onChange(true);
   };
 
+  // Loading the sets (and the user list of the Permission Check tab) fails while the saved
+  // credentials are locked; after unlocking, load again for the instance that is picked.
+  document.addEventListener("ifs-unlocked", () => { if (select.value) select.onchange(); });
+
   return {
     baseUrl: () => select.value,
     selectedIds: () => [...sets.querySelectorAll("input:checked")].map((b) => b.value),

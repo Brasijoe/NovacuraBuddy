@@ -86,7 +86,10 @@ async function unlock() {
   if (!field.value) return;
   const response = await actionOrShowError({ type: "UNLOCK", masterPassword: field.value });
   field.value = "";
-  if (response) refreshLockStatus();
+  if (response) {
+    refreshLockStatus();
+    document.dispatchEvent(new Event("ifs-unlocked")); // panels that failed while locked reload themselves
+  }
 }
 
 const unlockBtnEl = document.getElementById("unlockBtn");

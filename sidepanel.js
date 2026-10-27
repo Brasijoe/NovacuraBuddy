@@ -27,6 +27,14 @@ function showTab(name) {
   if (name === "commit-chain") ccOnShow();
 }
 
+// After unlocking the saved credentials, reload what the open tab could not read while locked.
+document.addEventListener("ifs-unlocked", () => {
+  const name = TABS.find((t) => !document.getElementById(`panel-${t}`).hidden);
+  if (name === "flow-deps") fdOnShow();
+  if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
+  if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
+});
+
 for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => { showTab(tab); closeTabMenus(); });
 
 // Tab group menus: hover opens them through CSS; click, Enter/Space and the arrow keys open them
