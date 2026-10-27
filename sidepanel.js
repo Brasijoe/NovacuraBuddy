@@ -12,6 +12,11 @@ function showTab(name) {
     btn.classList.toggle("is-active", !!active);
     btn.title = active ? active.textContent : "";
   }
+  // Subheader under the tab bar: which tab is open (and the menu group it sits in).
+  const openItem = document.getElementById(`tab-${name}`);
+  const openGroup = openItem.closest(".tab-group");
+  const itemLabel = openItem.firstChild.textContent.trim();
+  document.getElementById("tabSubheader").textContent = openGroup ? `${openGroup.querySelector(".tab-group-btn").firstChild.textContent.trim()} › ${itemLabel}` : itemLabel;
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();

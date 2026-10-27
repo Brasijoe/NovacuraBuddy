@@ -839,3 +839,6 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .pc-sub { opacity: 0.65; font-size: 0.9em; }
 .pc-missing { color: #c0392b; }
 .pc-ok { color: #2e7d32; }
+
+/* Which tab is open */
+.tab-subheader { font-size: 0.9em; opacity: 0.75; padding: 4px 2px 2px; }
