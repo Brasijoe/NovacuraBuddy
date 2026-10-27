@@ -928,7 +928,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
           const rows = [];
           let warning = null;
+          const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
           for (const r of message.required) {
+            // A projection IFS does not know cannot be granted (name typo, other IFS version, removed).
+            let found = true;
+            try { found = !!(await ProjectionSearch.queryProjectionMeta(message.baseUrl, ifsToken, r.projection)); } catch (e) { warning = warning || `Could not check whether ${r.projection} exists: ${e.message}`; }
+            if (!found) { rows.push({ ...r, state: "notfound", current: [], managed: [], others: [], via: null }); continue; }
             let all = [];
             try { all = await IfsPermissions.permissionSetsGranting(client, sets, r.projection); } catch (e) { warning = warning || `Could not read which permission sets grant ${r.projection}: ${e.message}`; }
             rows.push({

@@ -191,13 +191,15 @@ function pcShowMapping(response) {
   const out = document.getElementById("pcCompareOut");
   out.hidden = false;
   out.innerHTML = "";
-  const open = response.rows.filter((r) => r.state !== "ok");
+  const open = response.rows.filter((r) => r.state === "missing" || r.state === "low");
+  const notFound = response.rows.filter((r) => r.state === "notfound");
   const done = response.rows.filter((r) => r.state === "ok");
+  const countable = response.rows.length - notFound.length;
   const head = document.createElement("p");
   head.className = "list-count";
   head.textContent = open.length
-    ? `${open.length} of ${response.rows.length} projection(s) need a grant or a higher access level.`
-    : `All ${response.rows.length} projection(s) are granted.`;
+    ? `${open.length} of ${countable} projection(s) need a grant or a higher access level.`
+    : `All ${countable} existing projection(s) are granted.`;
   out.appendChild(head);
   const preview = document.createElement("div");
   preview.className = "pc-preview";
@@ -216,8 +218,9 @@ function pcShowMapping(response) {
       const note = document.createElement("div");
       note.className = "pc-sub";
       note.textContent = `needs ${row.access === "write" ? "write (Full)" : "read (ReadOnly)"}` +
-        (row.state === "low" ? " · granted read-only now" : "") + (row.state === "ok" && row.via ? ` · via ${row.via}` : "");
+        (row.state === "low" ? " · granted read-only now" : "") + (row.state === "notfound" ? " · not found in IFS, cannot be granted" : "") + (row.state === "ok" && row.via ? ` · via ${row.via}` : "");
       name.appendChild(note);
+      if (row.state === "notfound") { name.classList.add("pc-missing"); grid.append(name, document.createElement("div")); continue; }
       if (row.managed.length) {
         const m = document.createElement("div");
         m.className = "pc-sub";
@@ -243,6 +246,7 @@ function pcShowMapping(response) {
     out.appendChild(grid);
   };
   section("Not granted", "Missing, or granted read-only while the flow writes", open);
+  section("Not found in IFS", "These projections do not exist on the selected instance (typo, other IFS version or removed), so nothing can be granted", notFound);
   section("Already granted", "Pre-selected are the permission sets that grant the projection now; untick to remove a grant", done);
   const ph = document.createElement("h4");
   ph.textContent = "Planned changes";
