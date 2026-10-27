@@ -352,6 +352,13 @@
         <button type="submit" class="btn-primary">Save GitHub settings</button>
       </form>
       <button id="githubMoveBtn" class="btn-ghost" hidden title="One-time: move reports saved before per-user folders into your own folder">Move unowned reports into my folder</button>
+      <hr class="section-divider" />
+      <div class="section-head"><h2>Backup &amp; restore</h2><span class="info-tip" data-tip="Saves your Basic Data (IFS instances, GitHub settings, master password check) and small settings to a file, and loads them back. Secrets stay encrypted with your master password in the file, so you need the same password after restoring. Make a backup before removing the extension or moving it to another folder or PC. Restoring replaces the matching settings on this browser."></span></div>
+      <div class="search-row">
+        <button id="backupExportBtn" class="btn-ghost">Export settings</button>
+        <button id="backupImportBtn" class="btn-ghost">Restore from file…</button>
+        <input id="backupImportFile" type="file" accept=".json,application/json" hidden />
+      </div>
     </section>
 
     <script src="lib/vendor/fuse.min.js"></script>
@@ -362,6 +369,7 @@
     <script src="panels/common.js"></script>
     <script src="panels/info-tip.js"></script>
     <script src="panels/tracker.js"></script>
+    <script src="lib/settings-backup.js"></script>
     <script src="panels/basic-data.js"></script>
     <script src="panels/recorder.js"></script>
     <script src="panels/permission-picker.js"></script>

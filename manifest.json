@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Novacura Buddy",
-  "version": "0.4.1",
-  "version_name": "0.4.1 beta",
+  "version": "0.4.2",
+  "version_name": "0.4.2 beta",
   "description": "Traces IFS Cloud projection calls and turns them into Novacura Flow Connect modules.",
   "permissions": ["storage", "sidePanel", "webRequest", "debugger", "alarms", "unlimitedStorage", "tabs", "downloads", "scripting"],
   "host_permissions": ["https://build.novacura.com/*", "https://api.github.com/*"],
