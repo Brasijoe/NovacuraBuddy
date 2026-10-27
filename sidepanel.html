@@ -46,7 +46,7 @@
         <div class="tab-menu">
           <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
           <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported flows and modules are committed as a new version."></span></div>
-          <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation</button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
+          <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
           <div class="tab-menu-row"><button id="tab-commit-chain" class="tab-item" role="tab">Commit Dependencies</button><span class="info-tip" data-tip="Commits the open flow and everything it uses, bottom to top: modules and sub-flows first, then the flows that use them, each pointing at the new versions below. You see what needs a commit first and can undo every commit. Optionally deploys afterwards."></span></div>
@@ -134,6 +134,7 @@
     </section>
 
     <section id="panel-flow-deps" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>Built for one specific customer.</strong> The scan only looks at the sources that customer needed (routing addresses, active workflows, event actions, page commands). Other IFS sources may need to be added for your setup.</span></div>
       <div class="section-head"><h2>Select IFS instance</h2><span class="info-tip" data-tip="Choose the IFS instance (from Basic Data) and hit Scan. The scan reads routing addresses, active workflows (their BPMN diagrams), event actions and published page commands and finds every call to the addresses under Search for. The results open in a new tab, grouped per Flow endpoint. Large instances take a minute, since every active workflow diagram is downloaded. Read-only."></span></div>
       <select id="fdInstanceSelect"></select>
       <div class="section-head"><h2>Search for</h2><span class="info-tip" data-tip="The addresses the scan looks for. Each entry matches anywhere inside a URL or text, so a part of an address works too (e.g. novacura.com or 10.49.101). Add as many as you need; untick the Novacura hosts to search only your own."></span></div>
@@ -149,6 +150,7 @@
     </section>
 
     <section id="panel-flow-docs" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> this tab is still work in progress. The documentation structure and the LLM instructions will change.</span></div>
       <div class="section-head"><h2>Document the open flow</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every asset it uses, then finds which other flows use it (this reads all flows of the organisation, so it can take a moment). Nothing is changed in Flow or IFS."></span></div>
       <label class="fd-default"><input type="checkbox" id="fdocIfs" /> Include IFS dependencies</label>
       <select id="fdocInstance" hidden></select>
@@ -318,6 +320,7 @@
     </section>
 
     <section id="panel-commit-chain" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>Not fully tested.</strong> Commit Dependencies changes Flow assets. Apps, pages and automations are save-only. Try it on a copy of a flow first and check the result in the Designer.</span></div>
       <div class="lf-head">
         <span id="ccTitle" class="api-hint">Open a flow in the Flow Designer.</span>
         <button id="ccRescanBtn" class="btn-ghost" title="Scan again where the open asset is used">Check again</button>
