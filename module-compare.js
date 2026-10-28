@@ -238,7 +238,7 @@ async function recheckFlow(m, f, btn) {
     const response = await call({ type: "MC_FLOW", orgId: sel.orgId, itemId: f.flowId, moduleIds: [m.id] });
     const re = ModuleCompare.recheckFlow({ module: m, flowId: f.flowId, steps: response.steps || [] });
     if (re) f.recheck = re;
-    const saved = await send({ type: "MC_SAVE_RESULT", orgId: sel.orgId, packageId: sel.packageId, baseUrl: sel.baseUrl, result });
+    const saved = await saveResult(sel, result);
     if (!saved.ok) showError(`The recheck could not be saved: ${saved.error}`);
     showNotice(re && re.status === "fixed" ? `${f.flowName}: all affected steps are fixed.` : `${f.flowName}: rechecked — see the steps for what is still open.`);
   } catch (e) {
@@ -477,6 +477,29 @@ const ifsProjectionOf = (source) => {
 };
 
 /** A background call that throws on failure (the scan's per-item errors are collected by runScan). */
+// The result (with the old and new source of every changed module) can pass 64 MiB, the limit of one
+// runtime message, so this page reads and writes chrome.storage.local itself (the same keys the
+// background and the side panel use) instead of sending the result around.
+const MC_RESULT_PREFIX = "moduleCompare:";
+const MC_MARKS_KEY = "moduleCompareMarks";
+// Same key as the background's moduleCompareKey (origin of the base URL).
+const mcKey = (o) => `${MC_RESULT_PREFIX}${o.orgId}|${o.packageId || ""}|${new URL(String(o.baseUrl).trim()).origin}`;
+
+async function loadResult(o) {
+  const key = mcKey(o);
+  return (await chrome.storage.local.get(key))[key] || null;
+}
+
+async function saveResult(o, res) {
+  try {
+    const key = mcKey(o);
+    const { [MC_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MC_MARKS_KEY);
+    index[key] = { orgId: o.orgId, packageId: o.packageId || null, baseUrl: o.baseUrl, scannedAt: res.scannedAt, flows: ModuleCompare.flowMarks(res) };
+    await chrome.storage.local.set({ [key]: res, [MC_MARKS_KEY]: index });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
 async function call(message) {
   const response = await send({ ...message, masterPassword: "" });
   if (!response.ok) throw new Error(explainLocked(response));
@@ -542,7 +565,7 @@ async function scan() {
       onProgress: onStep
     });
     const full = { ...r, orgId, packageId: packageId || null, baseUrl };
-    const saved = await send({ type: "MC_SAVE_RESULT", orgId, packageId, baseUrl, result: full });
+    const saved = await saveResult({ orgId, packageId, baseUrl }, full);
     if (!saved.ok) showError(`The result could not be saved for later: ${saved.error}`);
     el("mcProgress").hidden = true;
     showResult(full);
@@ -587,7 +610,7 @@ async function main() {
   el("mcRescanBtn").onclick = scan;
   el("mcFilter").addEventListener("input", () => result && renderList());
   el("mcOnlyChanged").addEventListener("change", () => result && renderList());
-  const last = await send({ type: "MC_LAST_RESULT", ...sel });
+  const last = await loadResult(sel).then((r) => ({ ok: true, result: r }), (e) => ({ ok: false, error: e.message }));
   if (last.ok && last.result) showResult(last.result);
   if (params.get("scan") === "1") {
     params.delete("scan");
