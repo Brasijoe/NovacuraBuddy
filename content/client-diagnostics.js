@@ -123,7 +123,8 @@ async function cdTick() {
     const vars = cdVariables(p) || {};
     const envLiteral = vars.environment__environmentName || vars.environment__environmentType || "";
     const envName = envLiteral.replace(/^"([\s\S]*)"$/, "$1");
-    res = await chrome.runtime.sendMessage({ type: "STEP_SQL", flowName: crumb.flow, stepName: crumb.step, versions: cdVersions(), envName }).catch((e) => ({ ok: false, error: e.message }));
+    const envType = (vars.environment__environmentType || "").replace(/^"([\s\S]*)"$/, "$1");
+    res = await chrome.runtime.sendMessage({ type: "STEP_SQL", flowName: crumb.flow, stepName: crumb.step, versions: cdVersions(), envName, envType }).catch((e) => ({ ok: false, error: e.message }));
     if (res && res.ok) CD.cache.set(key, res);
   }
   if (CD.key !== key) return;
