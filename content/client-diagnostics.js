@@ -120,7 +120,10 @@ async function cdTick() {
   cdRender();
   let res = CD.cache.get(key);
   if (!res) {
-    res = await chrome.runtime.sendMessage({ type: "STEP_SQL", flowName: crumb.flow, stepName: crumb.step, versions: cdVersions() }).catch((e) => ({ ok: false, error: e.message }));
+    const vars = cdVariables(p) || {};
+    const envLiteral = vars.environment__environmentName || vars.environment__environmentType || "";
+    const envName = envLiteral.replace(/^"([\s\S]*)"$/, "$1");
+    res = await chrome.runtime.sendMessage({ type: "STEP_SQL", flowName: crumb.flow, stepName: crumb.step, versions: cdVersions(), envName }).catch((e) => ({ ok: false, error: e.message }));
     if (res && res.ok) CD.cache.set(key, res);
   }
   if (CD.key !== key) return;

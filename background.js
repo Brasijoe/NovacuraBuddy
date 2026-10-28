@@ -1121,7 +1121,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "STEP_SQL": { // the web client's content script: the SQL of the Database step shown in the Diagnostic panel
           if (!flowToken.get()) return sendResponse({ ok: false, error: "Open a Flow Designer tab (build.novacura.com) once so the extension can read the flow." });
-          const r = await FlowStepSql.resolveStepSql({ flowFetch: boundFlowFetch(), flowName: message.flowName, stepName: message.stepName, versions: message.versions || [] });
+          const r = await FlowStepSql.resolveStepSql({ flowFetch: boundFlowFetch(), flowName: message.flowName, stepName: message.stepName, versions: message.versions || [], envName: message.envName || "" });
           return sendResponse(r.sql !== undefined ? { ok: true, sql: r.sql, source: r.source } : { ok: false, ...r });
         }
         case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
