@@ -3,10 +3,43 @@
 // Trace Logs toolbar. Once it is pressed, the logged steps are looked up in the flow's designer data
 // (see lib/flow-step-sql.js) and every Database step's log row gets a "Copy with values" button: the
 // step's PL/SQL with the variables from the panel's Variables tab written in as literals. Read-only.
-const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, active: false };
+const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, trail: [], active: false };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
 const CD_LABEL = "Add PL/SQL info";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Writes text to the clipboard: the Clipboard API, else a hidden textarea + execCommand. Returns true on success. */
+async function cdCopy(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* falls back below */ }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/** What "Copy details" copies: the status, what the page shows and what the lookup tried (names and ids, no values). */
+function cdReport() {
+  const p = cdPanel();
+  const crumb = p && cdBreadcrumb(p);
+  const rows = cdStepRows();
+  return [
+    "Novacura Buddy - PL/SQL info details",
+    "Status: " + CD.status.text,
+    "Diagnostic panel: " + (p ? "found" : "not found"),
+    "Flow / step: " + (crumb ? JSON.stringify(crumb) : "not found"),
+    "Logged steps: " + (rows.length ? [...new Set(rows.map((r) => r.name))].join(", ") : "none"),
+    "Database steps found: " + ([...CD.cache].filter(([, v]) => v).map(([k]) => k).join(", ") || "none"),
+    "Flow versions loaded: " + (cdVersions().map((v) => v.app + "@" + v.version).join(", ") || "none"),
+    "Lookup:",
+    ...(CD.trail.length ? CD.trail : ["(not run yet)"]),
+    CD.status.title && CD.status.title !== CD.trail.join("\n") ? "Message: " + CD.status.title : ""
+  ].filter(Boolean).join("\n");
+}
 
 function cdPanel() {
   const heading = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6,div,span,p")].find((e) => e.children.length === 0 && e.textContent.trim() === "Diagnostic panel");
@@ -91,7 +124,9 @@ function cdStepRows() {
   for (const row of document.querySelectorAll(".diagnosticLogTableRow")) {
     const type = (row.children[1] && row.children[1].textContent.trim()) || "";
     const source = row.querySelector(".sourceCell");
-    if (type === "Step" && source) out.push({ row, name: source.textContent.trim(), source });
+    // The name without the button this script adds to the cell.
+    const name = source && [...source.childNodes].filter((n) => !(n.classList && n.classList.contains("nb-copy"))).map((n) => n.textContent).join("").trim();
+    if (type === "Step" && name) out.push({ row, name, source });
   }
   return out;
 }
@@ -115,7 +150,7 @@ function cdMarkRows() {
       b.textContent = "Reading variables…";
       const vars = await cdReadVariables();
       if (!vars) { b.textContent = "Open the Diagnostic panel"; setTimeout(() => { b.textContent = "Copy with values"; }, 2500); return; }
-      try { await navigator.clipboard.writeText(PlsqlTestScript.inlineBinds(hit.sql, vars)); b.textContent = "Copied"; } catch { b.textContent = "Copy failed"; }
+      b.textContent = (await cdCopy(PlsqlTestScript.inlineBinds(hit.sql, vars))) ? "Copied" : "Copy failed";
       setTimeout(() => { b.textContent = "Copy with values"; }, 2000);
     };
     source.appendChild(b);
@@ -134,7 +169,6 @@ function cdApplyStatus() {
   const set = (el, prop, value) => { if (el && el[prop] !== value) el[prop] = value; };
   set(CD.button, "textContent", CD.status.text);
   set(CD.button, "title", CD.status.title || (CD.button && CD.button.dataset.help) || "");
-  if (CD.detailsButton) set(CD.detailsButton.style, "display", CD.status.title ? "" : "none");
 }
 
 async function cdScan() {
@@ -158,8 +192,9 @@ async function cdScan() {
         type: "STEP_SQL_MANY", flowName: crumb.flow, stepNames: missing, versions: cdVersions(),
         envName: lit("environment__environmentName"), envType: lit("environment__environmentType")
       }).catch((e) => ({ ok: false, error: e.message }));
-      if (!res || !res.ok) { say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)", (res && res.error) || ""); return; }
+      if (!res || !res.ok) { CD.trail = ["Error: " + ((res && res.error) || "no answer from the extension")]; say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)", (res && res.error) || ""); return; }
       tried = res.tried || [];
+      CD.trail = tried.length ? tried : ["The lookup returned no details."];
       for (const n of missing) CD.cache.set(n, res.steps[n] || false); // false: not a Database step, not asked again
     }
     const found = cdMarkRows();
@@ -210,9 +245,9 @@ function cdDock() {
   const d = document.createElement("button");
   d.className = "nb-details";
   d.textContent = "Copy details";
-  d.title = "Copies what the lookup tried (calls and results, no values) so it can be sent to the developer.";
-  d.style.cssText = "display:none;margin-left:6px;padding:6px 10px;border:1px solid #9ca3af;border-radius:6px;background:#fff;color:#4b5563;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
-  d.onclick = async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(CD.status.title || ""); d.textContent = "Copied"; } catch { d.textContent = "Copy failed"; } setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
+  d.title = "Copies what the page shows and what the lookup tried (names and ids, no variable values) so it can be sent to the developer.";
+  d.style.cssText = "margin-left:6px;padding:6px 10px;border:1px solid #9ca3af;border-radius:6px;background:#fff;color:#4b5563;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
+  d.onclick = async (e) => { e.stopPropagation(); d.textContent = (await cdCopy(cdReport())) ? "Copied" : "Copy failed"; setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
   CD.detailsButton = d;
   toolbar.append(b, d);
   cdApplyStatus();
