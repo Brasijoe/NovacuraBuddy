@@ -136,9 +136,18 @@ function srRenderSessions(sessions) {
 async function srEdit(edit) { await send({ type: "STEPREC_EDIT", edit }); srLast = ""; srRefresh(); }
 
 srEl("srStart").onclick = async () => {
+  // Chrome only lets an extension take screenshots of a tab with "all sites" access or activeTab, and a request
+  // must come straight from the click, so it is the first thing Start does.
+  let shots = true;
+  try {
+    if (!(await chrome.permissions.contains({ origins: ["<all_urls>"] }))) shots = await chrome.permissions.request({ origins: ["<all_urls>"] });
+  } catch { shots = false; }
   const res = await send({ type: "STEPREC_START", lang: srEl("srLang").value });
   if (!res.ok) srEl("srStatusText").textContent = res.error || "Could not start.";
-  else { srLast = ""; srRefresh(); }
+  else {
+    srLast = ""; srRefresh();
+    if (!shots) srEl("srStatusText").textContent = "Recording without screenshot permission: screenshots may be missing. Allow access to all sites for Novacura Buddy to get them.";
+  }
 };
 srEl("srPause").onclick = async () => {
   const cur = await send({ type: "STEPREC_GET" });
