@@ -9,6 +9,7 @@
   window.__nbStepRecorder = SR;
   const onDown = (ev) => { if (ev.button === 0) report(ev, "click"); };
   const onChange = (ev) => report(ev, "change");
+  SR.resetGeneric = () => { GENERIC.counts = {}; GENERIC.ids = new WeakMap(); };
   SR.dispose = () => { SR.armed = false; removeEventListener("pointerdown", onDown, true); removeEventListener("change", onChange, true); };
 
   const text = (el) => (el && (el.getAttribute("aria-label") || el.innerText || el.textContent || "") || "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -91,6 +92,17 @@
     return pretty(el.getAttribute("data-testid") || el.getAttribute("data-name") || el.getAttribute("name") || "");
   }
 
+  // Controls that have no name anywhere get a generic one with a counter per object: "Pinned Step 1", "Pinned Step 2", ...
+  // (the same element clicked again keeps its number). The counters restart with every recording.
+  const GENERIC = { counts: {}, ids: new WeakMap() };
+  function genericName(el) {
+    let hint = "";
+    for (let n = el, i = 0; n && i < 4; n = n.parentElement, i++) hint += " " + (n.getAttribute("class") || "") + " " + (n.id || "") + " " + (n.getAttribute("title") || "") + " " + (n.getAttribute("data-testid") || "") + " " + (n.getAttribute("aria-label") || "");
+    const kind = /pin/i.test(hint) ? "Pinned Step" : "Object";
+    if (!GENERIC.ids.has(el)) { GENERIC.counts[kind] = (GENERIC.counts[kind] || 0) + 1; GENERIC.ids.set(el, GENERIC.counts[kind]); }
+    return kind + " " + GENERIC.ids.get(el);
+  }
+
   function describe(ev, kind) {
     const raw = ev.target instanceof Element ? ev.target : null;
     if (!raw) return { ignored: "no element" };
@@ -132,11 +144,8 @@
       const tip = el.querySelector("[title], [aria-label], img[alt]");
       const name = (first && first.length <= 80 ? first : first ? first.slice(0, 80) : "") || (tip && (tip.getAttribute("title") || tip.getAttribute("aria-label") || tip.getAttribute("alt"))) || "";
       const named = name || iconName(el) || labelOf(el);
-      if (!named) {
-        // A real button with no name at all is still a step the user can rename; a bare clickable div is probably noise.
-        if (tag === "button" || el.getAttribute("role") === "button") { info.label = "(unnamed button)"; info.review = true; }
-        else return { ignored: "clickable " + tag + " without any text, title, alt or icon name" };
-      } else info.label = named.trim();
+      if (!named) { info.label = genericName(el); info.review = true; }
+      else info.label = named.trim();
     }
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
     return { info, screen: screenTitle(), page: location.pathname + location.hash, sig: layoutSig(), rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
@@ -160,7 +169,7 @@
   addEventListener("change", onChange, true);
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg && msg.type === "STEPREC_ARM") { SR.armed = !!msg.armed; SR.any = !!msg.any; sendResponse({ ok: true, top: window === window.top }); }
+    if (msg && msg.type === "STEPREC_ARM") { if (msg.armed && !SR.armed) SR.resetGeneric(); SR.armed = !!msg.armed; SR.any = !!msg.any; sendResponse({ ok: true, top: window === window.top }); }
   });
   chrome.runtime.sendMessage({ type: "STEPREC_QUERY" }).then((res) => { if (res && res.armed) { SR.armed = true; SR.any = !!res.any; } }).catch(() => {});
 })();
