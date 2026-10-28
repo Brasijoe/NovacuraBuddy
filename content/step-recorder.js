@@ -70,8 +70,8 @@
   addEventListener("pointerdown", (ev) => { if (ev.button === 0) report(ev, "click"); }, true);
   addEventListener("change", (ev) => report(ev, "change"), true);
 
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg && msg.type === "STEPREC_ARM") SR.armed = !!msg.armed;
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg && msg.type === "STEPREC_ARM") { SR.armed = !!msg.armed; sendResponse({ ok: true, top: window === window.top }); }
   });
   chrome.runtime.sendMessage({ type: "STEPREC_QUERY" }).then((res) => { if (res && res.armed) SR.armed = true; }).catch(() => {});
 })();

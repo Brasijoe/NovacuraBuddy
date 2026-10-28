@@ -24,7 +24,7 @@ async function srRefresh() {
   const bar = srEl("srStatusBar");
   bar.className = "status-bar" + (state === "recording" ? " recording" : "");
   srEl("srStatusText").textContent = !rec ? "Open the Flow web client in the active tab, then press Start."
-    : state === "paused" ? `Paused (${rec.steps.length} steps) - nothing is captured` : `Recording (${rec.steps.length} steps)`;
+    : state === "paused" ? `Paused (${rec.steps.length} steps) - nothing is captured` : `Recording (${rec.steps.length} steps, ${rec.events || 0} clicks/inputs seen, ${rec.skipped || 0} ignored)`;
 
   // Do not rebuild the list while the user types in it.
   const sig = JSON.stringify([rec && rec.steps.map((s) => [s.id, s.number, s.text, s.note]), sessions.map((s) => s.id)]);
