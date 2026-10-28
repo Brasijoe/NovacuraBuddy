@@ -161,6 +161,7 @@ function render() {
       if (s.screen) { const sc = document.createElement("div"); sc.className = "se-hint"; sc.textContent = s.screen; card.appendChild(sc); }
       if (s.review) { const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "⚠ Names were read from the page layout and not yet verified for this control type. Please check the sentence."; card.appendChild(w); }
       if (s.screenshot) card.appendChild(figure(s, save));
+      else { const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "No screenshot" + (s.shotError ? ": " + s.shotError : ""); card.appendChild(w); }
       const note = document.createElement("textarea");
       note.rows = 2; note.placeholder = "Note (optional)"; note.value = s.note || "";
       note.oninput = () => { s.note = note.value; save(); };

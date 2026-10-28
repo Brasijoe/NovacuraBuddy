@@ -40,7 +40,7 @@ async function srRefresh() {
 function srThumb(step) {
   const wrap = document.createElement("div");
   wrap.className = "sr-thumb";
-  if (!step.screenshot) { wrap.textContent = "No screenshot"; return wrap; }
+  if (!step.screenshot) { wrap.textContent = "No screenshot" + (step.shotError ? ": " + step.shotError : ""); wrap.style.padding = "6px"; return wrap; }
   const img = document.createElement("img");
   img.src = step.screenshot;
   wrap.appendChild(img);
