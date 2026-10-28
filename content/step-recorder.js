@@ -57,6 +57,19 @@
     return null;
   }
 
+  /** A fingerprint of what is on screen: the visible labels of controls and headings (no typed values), to tell pages apart. */
+  function layoutSig() {
+    const out = new Set();
+    for (const e of document.querySelectorAll("button, a[href], [role='button'], [role='tab'], [role='menuitem'], label, h1, h2, h3, [role='heading'], th, [role='columnheader']")) {
+      if (out.size >= 80) break;
+      const r = e.getBoundingClientRect();
+      if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
+      const t = text(e).toLowerCase();
+      if (t && t.length <= 40) out.add(t);
+    }
+    return [...out];
+  }
+
   function describe(ev, kind) {
     const raw = ev.target instanceof Element ? ev.target : null;
     if (!raw) return null;
@@ -87,7 +100,7 @@
     }
     if (kind === "click" && !info.readonly && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return null; // a container, not a labelled control
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
-    return { info, screen: screenTitle(), page: location.pathname + location.hash, rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
+    return { info, screen: screenTitle(), page: location.pathname + location.hash, sig: layoutSig(), rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
   }
 
   function report(ev, kind) {
