@@ -60,7 +60,7 @@ function srPageThumb(run) {
   return wrap;
 }
 
-function srStepRow(s) {
+function srStepRow(s, lead) {
   const card = document.createElement("div");
   card.className = "sr-step" + (s.sub ? " sr-substep" : "");
   const head = document.createElement("div");
@@ -73,6 +73,7 @@ function srStepRow(s) {
   text.value = s.text;
   text.onchange = () => srEdit({ op: "text", id: s.id, value: text.value });
   head.append(num, text);
+  if (s.icon) StepIcon.stepIcon(s, lead).then((ic) => { if (ic) { const im = document.createElement("img"); im.className = "sr-icon"; im.src = ic.url; im.title = "The control you clicked"; text.after(im); } });
   if (s.review) {
     const w = document.createElement("span");
     w.className = "sr-flag";
@@ -119,7 +120,7 @@ function srRenderSteps(rec) {
     key.title = "A new screenshot is taken when this key changes (screen title, URL, LoV dialog open/closed) or when most of the visible buttons, labels and headings on screen have changed.";
     page.appendChild(key);
     page.appendChild(srPageThumb(run));
-    for (const s of run.steps) page.appendChild(srStepRow(s));
+    for (const s of run.steps) page.appendChild(srStepRow(s, run.lead));
     box.appendChild(page);
   }
   box.scrollTop = box.scrollHeight;

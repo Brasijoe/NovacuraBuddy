@@ -144,7 +144,7 @@
       const tip = el.querySelector("[title], [aria-label], img[alt]");
       const name = (first && first.length <= 80 ? first : first ? first.slice(0, 80) : "") || (tip && (tip.getAttribute("title") || tip.getAttribute("aria-label") || tip.getAttribute("alt"))) || "";
       const named = name || iconName(el) || labelOf(el);
-      if (!named) { info.label = genericName(el); info.review = true; }
+      if (!named) { info.label = genericName(el); info.review = true; info.generic = true; }
       else info.label = named.trim();
     }
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();

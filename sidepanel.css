@@ -877,3 +877,4 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .sr-key { font-size: 10px; color: var(--ink-muted); word-break: break-all; }
 .sr-log { font-size: 11px; margin: var(--space-2) 0; color: var(--ink-muted); }
 .sr-log #srLog { white-space: pre-wrap; font-family: var(--font-mono); font-size: 10px; max-height: 140px; overflow: auto; }
+.sr-icon { height: 22px; width: auto; border: 1px solid var(--surface-raised); border-radius: 4px; background: #fff; flex: none; }

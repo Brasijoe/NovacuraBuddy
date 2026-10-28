@@ -41,7 +41,7 @@ for (const [id, key] of [["mTitle", "title"], ["mWorkflow", "workflow"], ["mVers
 $("mLang").onchange = () => { rec.lang = $("mLang").value; SR.relanguage(rec.steps, rec.lang); save(); render(); };
 $("seAddSection").onclick = () => { SR.addSection(rec.steps, null, "Introduction"); save(); render(); };
 $("sePdf").onclick = async () => {
-  buildPrint();
+  await buildPrint();
   // Freshly created data-URL images may not be decoded yet; printing before that leaves them blank.
   await Promise.all([...document.querySelectorAll("#print img")].map((i) => i.decode().catch(() => {})));
   window.print();
@@ -147,7 +147,7 @@ function render() {
   const refresh = () => { save(); render(); };
   const runs = SR.pageRuns(rec.steps);
 
-  const stepRow = (s, withMarkerTool) => {
+  const stepRow = (s, withMarkerTool, lead) => {
     const card = document.createElement("div");
     card.className = "se-step-row";
     const head = document.createElement("div");
@@ -159,6 +159,7 @@ function render() {
     text.rows = 1; text.value = s.text;
     text.oninput = () => { s.text = text.value; s.edited = true; save(); };
     head.append(num, text);
+    if (s.icon) StepIcon.stepIcon(s, lead).then((ic) => { if (ic) { const im = document.createElement("img"); im.className = "se-icon"; im.src = ic.url; im.title = "The control you clicked"; text.after(im); } });
     card.appendChild(head);
     if (s.review) { const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "⚠ Names were read from the page layout and not yet verified for this control type. Please check the sentence."; card.appendChild(w); }
     const note = document.createElement("textarea");
@@ -222,7 +223,7 @@ function render() {
     } else if (run.lead && run.lead.shotError) {
       const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "No screenshot: " + run.lead.shotError; card.appendChild(w);
     }
-    for (const s of run.steps) card.appendChild(stepRow(s, !!(run.lead && run.lead.screenshot)));
+    for (const s of run.steps) card.appendChild(stepRow(s, !!(run.lead && run.lead.screenshot), run.lead));
     box.appendChild(card);
   }
   document.title = (rec.meta.title || L.untitled) + " - Step Recorder";
@@ -239,7 +240,8 @@ function printFig(run) {
 }
 
 /** The print view: cover, contents, then the steps grouped under their screen headings. */
-function buildPrint() {
+async function buildPrint() {
+  const icons = await stepIcons();
   const L = SR.DOC_LABELS[rec.lang] || SR.DOC_LABELS.en;
   const m = rec.meta;
   const root = $("print");
@@ -276,6 +278,7 @@ function buildPrint() {
       const line = el("div", "p-line");
       line.append(el("span", "p-num", s.number), el("span", "", s.text));
       st.append(line);
+      if (s.icon) { const ic = icons.get(s.id); if (ic) { const im = document.createElement("img"); im.className = "p-icon"; im.src = ic.url; line.append(im); } }
       if (s.note) st.append(el("div", "p-note", s.note));
       page.append(st);
     }
@@ -320,7 +323,21 @@ async function flattenedPage(run) {
   return { bytes, w: c.width, h: c.height };
 }
 
+/** Map of step id -> cropped icon, for the steps of unnamed controls. */
+async function stepIcons() {
+  const m = new Map();
+  for (const run of SR.pageRuns(rec.steps)) if (run.type === "page") for (const s of run.steps) if (s.icon) { const ic = await StepIcon.stepIcon(s, run.lead); if (ic) m.set(s.id, ic); }
+  return m;
+}
+
+function dataUrlBytes(url) {
+  const bin = atob(url.split(",")[1]), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
 async function exportDocx() {
+  const icons = await stepIcons();
   const L = SR.DOC_LABELS[rec.lang] || SR.DOC_LABELS.en;
   const m = rec.meta;
   const blocks = [];
@@ -328,7 +345,7 @@ async function exportDocx() {
   for (const run of SR.pageRuns(rec.steps)) {
     if (run.type === "section") { blocks.push({ type: "section", heading: run.step.text, text: run.step.note || "" }); continue; }
     const title = (run.lead && run.lead.screen) || run.steps[0].screen;
-    blocks.push({ type: "page", screen: title && title !== screen ? title : "", image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note })) });
+    blocks.push({ type: "page", screen: title && title !== screen ? title : "", image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note, icon: icons.get(s.id) ? { bytes: dataUrlBytes(icons.get(s.id).url), w: icons.get(s.id).w, h: icons.get(s.id).h } : null })) });
     screen = title;
   }
   const bytes = DocxWriter.buildDocx({
