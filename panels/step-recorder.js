@@ -49,7 +49,7 @@ function srPageThumb(run) {
   wrap.appendChild(img);
   for (const s of run.steps) {
     const m = s.marker;
-    if (!m || !m.vw || !m.vh) continue;
+    if (!m || !m.vw || !m.vh || s.markerHidden) continue;
     const el = document.createElement("span");
     el.className = "sr-marker sr-" + m.shape;
     el.style.left = (m.x / m.vw) * 100 + "%"; el.style.top = (m.y / m.vh) * 100 + "%";

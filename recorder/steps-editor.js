@@ -56,7 +56,7 @@ function figure(run, onChange) {
   const img = document.createElement("img");
   img.src = run.lead.screenshot;
   fig.appendChild(img);
-  for (const st of run.steps) if (st.marker && st.marker.vw) fig.appendChild(markerEl(st, fig, onChange));
+  for (const st of run.steps) if (markerShown(st)) fig.appendChild(markerEl(st, fig, onChange));
   return fig;
 }
 
@@ -104,6 +104,32 @@ function drawRect(fig) {
     };
   });
 }
+
+/** A marker is drawn unless the user switched it off (the data stays, so it can be switched back on). */
+const markerShown = (st) => !!(st.marker && st.marker.vw && !st.markerHidden);
+
+// ---- undo for crop / blur: snapshots of the page's screenshot and markers (in memory), plus the untouched original (saved) ----
+const undoStack = [];
+const snapshot = (run) => ({ leadId: run.lead.id, screenshot: run.lead.screenshot, markers: run.steps.map((st) => [st.id, st.marker ? { ...st.marker } : null]) });
+function pushUndo(run) {
+  const snap = snapshot(run);
+  if (!run.lead.orig) run.lead.orig = { screenshot: snap.screenshot, markers: snap.markers }; // first edit of this page: remember the original
+  undoStack.push(snap);
+  if (undoStack.length > 15) undoStack.shift();
+}
+function restoreSnapshot(snap) {
+  const lead = rec.steps.find((st) => st.id === snap.leadId);
+  if (!lead) return;
+  lead.screenshot = snap.screenshot;
+  for (const [id, m] of snap.markers) { const st = rec.steps.find((x) => x.id === id); if (st) st.marker = m ? { ...m } : null; }
+}
+function undoFor(leadId) {
+  for (let i = undoStack.length - 1; i >= 0; i--) if (!leadId || undoStack[i].leadId === leadId) { restoreSnapshot(undoStack.splice(i, 1)[0]); save(); render(); return true; }
+  return false;
+}
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !/^(INPUT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName)) { if (undoFor(null)) e.preventDefault(); }
+});
 
 const loadImage = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
@@ -172,7 +198,17 @@ function render() {
     tools.className = "se-tools";
     tools.append(btn("↑", "Move up", () => { SR.moveStep(rec.steps, s.id, -1); refresh(); }), btn("↓", "Move down", () => { SR.moveStep(rec.steps, s.id, 1); refresh(); }),
       btn("Merge with previous", "Join this step into the one before it", () => { SR.mergeWithPrevious(rec.steps, s.id); refresh(); }));
-    if (withMarkerTool && s.marker) tools.append(btn("Remove marker", "Remove this step's marker from the screenshot", () => { s.marker = null; refresh(); }));
+    if (withMarkerTool) {
+      const on = markerShown(s);
+      tools.append(btn(on ? "Remove marker" : "Add marker", on ? "Hide this step's marker on the screenshot (it can be added back)" : "Show this step's marker on the screenshot; drag it into place", async () => {
+        if (on) s.markerHidden = true;
+        else {
+          s.markerHidden = false;
+          if (!s.marker || !s.marker.vw) { const img = await loadImage(lead.screenshot); s.marker = { shape: "circle", x: img.naturalWidth / 2, y: img.naturalHeight / 2, vw: img.naturalWidth, vh: img.naturalHeight }; }
+        }
+        refresh();
+      }));
+    }
     tools.append(btn("+ Text section", "Add a free text section after this step", () => { SR.addSection(rec.steps, s.id, "Note"); refresh(); }), btn("Delete", "Delete this step", () => { SR.removeStep(rec.steps, s.id); refresh(); }));
     card.appendChild(tools);
     return card;
@@ -220,12 +256,14 @@ function render() {
         const b = e.currentTarget; b.classList.add("on"); hint.textContent = "Draw a rectangle on the screenshot…";
         const f = await drawRect(card.querySelector(".se-fig"));
         hint.textContent = "";
-        if (f) { await fn(f); refresh(); } else b.classList.remove("on");
+        if (f) { pushUndo(run); await fn(f); refresh(); } else b.classList.remove("on");
       });
       ptools.append(tool("Crop", "Keep only the area you draw", (f) => crop(run, f)), tool("Blur", "Blur the area you draw (private data)", (f) => blur(run, f)),
         btn("↑ Page", "Move this page (screenshot and its steps) up", () => { SR.movePage(rec.steps, run.lead.id, -1); refresh(); }),
         btn("↓ Page", "Move this page down", () => { SR.movePage(rec.steps, run.lead.id, 1); refresh(); }));
       if (rec.steps.indexOf(run.lead) > 0) ptools.append(btn("Join previous page", "Treat this page as part of the page before it (this screenshot is dropped)", () => { SR.joinPreviousPage(rec.steps, run.lead.id); refresh(); }));
+      ptools.append(btn("↶ Undo", "Undo the last crop or blur on this page (Ctrl+Z)", () => { if (!undoFor(run.lead.id)) hint.textContent = "Nothing to undo on this page."; }));
+      if (run.lead.orig && run.lead.orig.screenshot !== run.lead.screenshot) ptools.append(btn("Restore original", "Bring back the screenshot and markers as recorded", () => { pushUndo(run); restoreSnapshot({ leadId: run.lead.id, screenshot: run.lead.orig.screenshot, markers: run.lead.orig.markers }); refresh(); }));
       ptools.append(hint);
       card.appendChild(ptools);
     } else if (run.lead && run.lead.shotError) {
@@ -243,7 +281,7 @@ function printFig(run) {
   const img = document.createElement("img");
   img.src = run.lead.screenshot;
   fig.appendChild(img);
-  for (const st of run.steps) if (st.marker && st.marker.vw) fig.appendChild(markerEl(st, fig, null));
+  for (const st of run.steps) if (markerShown(st)) fig.appendChild(markerEl(st, fig, null));
   return fig;
 }
 
@@ -313,7 +351,7 @@ async function flattenedPage(run) {
   };
   for (const st of run.steps) {
     const m = st.marker;
-    if (!m || !m.vw) continue;
+    if (!markerShown(st)) continue;
     const sx = c.width / m.vw, sy = c.height / m.vh;
     ctx.lineWidth = 4 * unit; ctx.strokeStyle = "#0C65F4";
     if (m.shape === "circle") {
