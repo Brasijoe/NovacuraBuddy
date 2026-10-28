@@ -3,7 +3,7 @@
 // Trace Logs toolbar. Once it is pressed, the logged steps are looked up in the flow's designer data
 // (see lib/flow-step-sql.js) and every Database step's log row gets a "Copy with values" button: the
 // step's PL/SQL with the variables from the panel's Variables tab written in as literals. Read-only.
-const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, trail: [], active: false };
+const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, trail: [], copied: new Map(), active: false };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
 const CD_TOKEN_RE = /\/token\/organization\/([^/]+)\/environments\/([^/]+)\/package\/([^/?#]+)/;
 const CD_LABEL = "Add PL/SQL info";
@@ -112,8 +112,16 @@ function cdVariablesNow(p) {
   return values;
 }
 
+/** The scrolling box of the Trace Logs table, if it scrolls. */
+function cdLogScrollBox() {
+  for (let el = document.querySelector(".diagnosticLogTableRow"); el; el = el.parentElement) {
+    if (el.scrollHeight > el.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return el;
+  }
+  return null;
+}
+
 /** The current variables. While the Trace Logs tab is open the Variables tab is not drawn, so it is
- *  opened for a moment and the log tab is restored. */
+ *  opened for a moment and the log tab is restored: hidden while it switches, at the same scroll position. */
 async function cdReadVariables() {
   let p = cdPanel();
   if (!p) return null;
@@ -123,11 +131,42 @@ async function cdReadVariables() {
   const varTab = tabs.find((t) => t.textContent.trim() === "Variables");
   const back = tabs.find((t) => t.classList.contains("mud-tab-active"));
   if (!varTab) return null;
-  varTab.click();
-  let values = null;
-  for (let i = 0; i < 20 && !values; i++) { await sleep(100); p = cdPanel(); values = p && cdVariablesNow(p); }
-  if (back && back !== varTab) back.click();
-  return values;
+  const box = cdLogScrollBox();
+  const scroll = box ? box.scrollTop : 0;
+  const content = p.panel.querySelector(".mud-tabs-panels") || p.panel;
+  const height = content.offsetHeight;
+  content.style.visibility = "hidden";
+  content.style.minHeight = height + "px"; // no jump while the other tab is drawn
+  try {
+    varTab.click();
+    let values = null;
+    for (let i = 0; i < 40 && !values; i++) { await sleep(50); p = cdPanel(); values = p && cdVariablesNow(p); }
+    if (back && back !== varTab) {
+      back.click();
+      for (let i = 0; i < 40 && !document.querySelector(".diagnosticLogTableRow"); i++) await sleep(50);
+      cdMarkRows(); // the redrawn rows get their buttons back at once
+      const again = cdLogScrollBox();
+      if (again) again.scrollTop = scroll;
+    }
+    return values;
+  } finally {
+    content.style.visibility = "";
+    content.style.minHeight = "";
+  }
+}
+
+/** A short notice at the bottom of the page; it is not part of the panel, so a redraw does not remove it. */
+function cdToast(text, ok = true) {
+  let t = document.getElementById("nb-toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "nb-toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = text;
+  t.style.cssText = `position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;padding:8px 16px;border-radius:8px;background:${ok ? "#166534" : "#b91c1c"};color:#fff;font:13px system-ui,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);pointer-events:none;`;
+  clearTimeout(cdToast.timer);
+  cdToast.timer = setTimeout(() => t.remove(), 2500);
 }
 
 /** Logged steps: [{ row, name }] from the Trace Logs table (rows of type "Step"). */
@@ -154,16 +193,23 @@ function cdMarkRows() {
     if (source.querySelector(".nb-copy")) continue;
     const b = document.createElement("button");
     b.className = "nb-copy";
+    b.dataset.step = name;
     b.textContent = "Copy with values";
     b.style.cssText = CD_BTN_STYLE;
     b.title = `Copies this Database step's code with the variables as they are now (Variables tab) written in as PL/SQL literals. Code from: ${hit.source}`;
+    // The row may be redrawn while copying: the outcome is kept by step name and shown on whichever button is there.
+    const copied = CD.copied.get(name);
+    if (copied && Date.now() - copied < 2500) b.textContent = "Copied ✓";
     b.onclick = async (e) => {
       e.stopPropagation(); e.preventDefault();
-      b.textContent = "Reading variables…";
+      b.textContent = "Copying…";
       const vars = await cdReadVariables();
-      if (!vars) { b.textContent = "Open the Diagnostic panel"; setTimeout(() => { b.textContent = "Copy with values"; }, 2500); return; }
-      b.textContent = (await cdCopy(PlsqlTestScript.inlineBinds(hit.sql, vars))) ? "Copied" : "Copy failed";
-      setTimeout(() => { b.textContent = "Copy with values"; }, 2000);
+      if (!vars) { cdToast("Could not read the Variables tab", false); b.textContent = "Copy with values"; return; }
+      const ok = await cdCopy(PlsqlTestScript.inlineBinds(hit.sql, vars));
+      if (ok) CD.copied.set(name, Date.now());
+      cdToast(ok ? `Copied: PL/SQL of "${name}" with values` : "Copy failed", ok);
+      for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === name) btn.textContent = ok ? "Copied ✓" : "Copy failed";
+      setTimeout(() => { for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === name) btn.textContent = "Copy with values"; }, 2500);
     };
     source.appendChild(b);
   }
