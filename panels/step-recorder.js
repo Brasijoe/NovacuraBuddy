@@ -121,6 +121,8 @@ function srRenderSessions(sessions) {
     info.innerHTML = '<div class="sess-title"></div><div class="sess-meta"></div>';
     info.querySelector(".sess-title").textContent = s.name;
     info.querySelector(".sess-meta").textContent = `${s.steps.length} steps · ${new Date(s.createdAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}`;
+    info.onclick = () => srOpenEditor(s.id);
+    info.style.cursor = "pointer";
     const del = document.createElement("button");
     del.className = "icon-btn";
     del.textContent = "✕";
@@ -143,7 +145,12 @@ srEl("srPause").onclick = async () => {
   await send({ type: cur.rec && cur.rec.state === "paused" ? "STEPREC_RESUME" : "STEPREC_PAUSE" });
   srRefresh();
 };
-srEl("srStop").onclick = async () => { await send({ type: "STEPREC_STOP" }); srLast = ""; srRefresh(); };
+srEl("srStop").onclick = async () => {
+  const res = await send({ type: "STEPREC_STOP" });
+  srLast = ""; srRefresh();
+  if (res.ok && res.session) srOpenEditor(res.session.id);
+};
+const srOpenEditor = (id) => chrome.tabs.create({ url: chrome.runtime.getURL("recorder/steps-editor.html?id=" + encodeURIComponent(id)) });
 srEl("srLang").onchange = async () => { const cur = await send({ type: "STEPREC_GET" }); if (cur.rec) await srEdit({ op: "lang", value: srEl("srLang").value }); };
 srEl("srSubStart").onclick = async () => {
   const res = await send({ type: "STEPREC_SUB", action: "start", workflow: "" });
