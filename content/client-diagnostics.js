@@ -19,10 +19,13 @@ function cdPanel() {
   return { heading, panel };
 }
 
-/** "Flow / Step" shown under the panel title. */
+/** The running flow: "Flow / Step" shown under the panel title, else the flow name in the client's top bar. */
 function cdBreadcrumb(p) {
-  const el = [...p.panel.querySelectorAll("*")].find((e) => e.children.length === 0 && / \/ /.test(e.textContent) && e.textContent.length < 200);
-  return el ? FlowStepSql.parseBreadcrumb(el.textContent) : null;
+  const el = p && [...p.panel.querySelectorAll("*")].find((e) => e.children.length === 0 && / \/ /.test(e.textContent) && e.textContent.length < 200);
+  if (el) return FlowStepSql.parseBreadcrumb(el.textContent);
+  const bar = document.querySelector(".mud-appbar, header");
+  const title = bar && [...bar.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent.trim() && !/^(Diagnostic panel)$/.test(e.textContent.trim()));
+  return title ? FlowStepSql.parseBreadcrumb(title.textContent) : null;
 }
 
 /** The versions of flows the client has loaded, newest first: [{ app, version }]. */
@@ -129,7 +132,8 @@ async function cdScan() {
     const p = cdPanel();
     const crumb = p && cdBreadcrumb(p);
     const rows = cdStepRows();
-    if (!crumb || !rows.length) { say(CD_LABEL, "No logged steps yet: run the flow with tracing on, then press again."); return; }
+    if (!crumb) { say("Flow name not found (click to retry)", "The Diagnostic panel shows no flow name."); return; }
+    if (!rows.length) { say("No logged steps yet (click to retry)", "Run the flow with tracing on (Trace steps), then press again."); return; }
     const missing = [...new Set(rows.map((r) => r.name))].filter((n) => !CD.cache.has(n));
     let tried = [];
     if (missing.length) {
@@ -140,13 +144,15 @@ async function cdScan() {
         type: "STEP_SQL_MANY", flowName: crumb.flow, stepNames: missing, versions: cdVersions(),
         envName: lit("environment__environmentName"), envType: lit("environment__environmentType")
       }).catch((e) => ({ ok: false, error: e.message }));
-      if (!res || !res.ok) { say(CD_LABEL, ""); say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)"); return; }
+      if (!res || !res.ok) { say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)", (res && res.error) || ""); return; }
       tried = res.tried || [];
       for (const n of missing) CD.cache.set(n, res.steps[n] || false); // false: not a Database step, not asked again
     }
     const found = cdMarkRows();
     say(found ? `PL/SQL info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database steps found", tried.join("\n"));
     cdWatch();
+  } catch (e) {
+    say("PL/SQL info failed (click to retry)", String(e && e.message || e));
   } finally {
     CD.scanning = false;
   }
@@ -177,7 +183,7 @@ function cdDock() {
   b.textContent = CD_LABEL;
   b.title = "Finds the Database steps in this log, reads their PL/SQL from the flow's designer data and adds a Copy with values button to their rows. Nothing is looked up before you press this.";
   b.style.cssText = "margin-left:8px;padding:6px 12px;border:1px solid #0c65f4;border-radius:6px;background:#0c65f4;color:#fff;font:13px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
-  b.onclick = (e) => { e.stopPropagation(); cdScan(); };
+  b.onclick = (e) => { e.stopPropagation(); b.textContent = "Searching PL/SQL steps…"; cdScan(); };
   CD.button = b;
   toolbar.appendChild(b);
 }
