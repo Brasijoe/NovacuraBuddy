@@ -212,7 +212,7 @@ function cdDock() {
   d.textContent = "Copy details";
   d.title = "Copies what the lookup tried (calls and results, no values) so it can be sent to the developer.";
   d.style.cssText = "display:none;margin-left:6px;padding:6px 10px;border:1px solid #9ca3af;border-radius:6px;background:#fff;color:#4b5563;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
-  d.onclick = async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(CD.details || ""); d.textContent = "Copied"; } catch { d.textContent = "Copy failed"; } setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
+  d.onclick = async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(CD.status.title || ""); d.textContent = "Copied"; } catch { d.textContent = "Copy failed"; } setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
   CD.detailsButton = d;
   toolbar.append(b, d);
   cdApplyStatus();
