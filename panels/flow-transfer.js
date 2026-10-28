@@ -880,7 +880,7 @@ function ftShowResult(outcome, links) {
   }
   const note = document.createElement("p");
   note.className = "ft-note";
-  note.textContent = "Modules and flows are committed as a new version.";
+  note.textContent = "Modules are committed. Flows are saved with all their steps but not committed: commit them in the Designer.";
   box.appendChild(note);
   box.hidden = false;
   ftPkg = null;

@@ -38,8 +38,13 @@ The side panel groups its tabs into three menus. Hover the ⓘ icons in the pane
 ## Updating
 
 When a newer release exists, the side panel shows an update banner. Download the zip it links to, unzip it
-over the same folder (keeping the folder keeps your saved instances and settings) and click reload on
-`chrome://extensions`. If you installed from a git clone, `git pull` and reload instead.
+over the **same folder** (replace the files, don't pick a new folder) and click reload on
+`chrome://extensions`. Your saved instances and settings are kept: Chrome stores them in its own profile, not in the
+extension folder. If you installed from a git clone, `git pull` and reload instead.
+
+The settings are lost only if you remove the extension or load it from a different folder (an unpacked
+extension's ID comes from its folder path). Before doing either, use **Basic Data → Backup & restore → Export
+settings** and restore the file afterwards. Secrets in the file stay encrypted with your master password.
 
 ## Releases
 
