@@ -198,6 +198,7 @@ function render() {
     tools.className = "se-tools";
     tools.append(btn("↑", "Move up", () => { SR.moveStep(rec.steps, s.id, -1); refresh(); }), btn("↓", "Move down", () => { SR.moveStep(rec.steps, s.id, 1); refresh(); }),
       btn("Merge with previous", "Join this step into the one before it", () => { SR.mergeWithPrevious(rec.steps, s.id); refresh(); }));
+    if (s.joined && !s.leads) tools.append(btn("Split page here", "Undo the join: this step starts its own page again with its screenshot", () => { SR.splitPage(rec.steps, s.id); refresh(); }));
     if (withMarkerTool) {
       const on = markerShown(s);
       tools.append(btn(on ? "Remove marker" : "Add marker", on ? "Hide this step's marker on the screenshot (it can be added back)" : "Show this step's marker on the screenshot; drag it into place", async () => {
@@ -247,7 +248,14 @@ function render() {
     titleIn.oninput = () => { holder.title = titleIn.value; save(); };
     card.appendChild(titleIn);
     if (run.lead && run.lead.screenshot) {
-      card.appendChild(figure(run, save));
+      const exBar = document.createElement("div");
+      exBar.className = "se-tools";
+      exBar.append(btn(run.lead.excluded ? "Include screenshot" : "Exclude screenshot", "Leave this screenshot out of the PDF and Word export (the steps stay; you can include it again)", () => { run.lead.excluded = !run.lead.excluded; refresh(); }));
+      if (run.lead.excluded) { const note = document.createElement("span"); note.className = "se-hint"; note.textContent = "Not in the exports"; exBar.append(note); }
+      card.appendChild(exBar);
+      const fig = figure(run, save);
+      if (run.lead.excluded) fig.style.opacity = "0.35";
+      card.appendChild(fig);
       const ptools = document.createElement("div");
       ptools.className = "se-tools";
       const hint = document.createElement("span");
@@ -261,7 +269,7 @@ function render() {
       ptools.append(tool("Crop", "Keep only the area you draw", (f) => crop(run, f)), tool("Blur", "Blur the area you draw (private data)", (f) => blur(run, f)),
         btn("↑ Page", "Move this page (screenshot and its steps) up", () => { SR.movePage(rec.steps, run.lead.id, -1); refresh(); }),
         btn("↓ Page", "Move this page down", () => { SR.movePage(rec.steps, run.lead.id, 1); refresh(); }));
-      if (rec.steps.indexOf(run.lead) > 0) ptools.append(btn("Join previous page", "Treat this page as part of the page before it (this screenshot is dropped)", () => { SR.joinPreviousPage(rec.steps, run.lead.id); refresh(); }));
+      if (rec.steps.indexOf(run.lead) > 0) ptools.append(btn("Join previous page", "Treat this page as part of the page before it (its screenshot is kept; use Split page here to bring it back)", () => { SR.joinPreviousPage(rec.steps, run.lead.id); refresh(); }));
       ptools.append(btn("↶ Undo", "Undo the last crop or blur on this page (Ctrl+Z)", () => { if (!undoFor(run.lead.id)) hint.textContent = "Nothing to undo on this page."; }));
       if (run.lead.orig && run.lead.orig.screenshot !== run.lead.screenshot) ptools.append(btn("Restore original", "Bring back the screenshot and markers as recorded", () => { pushUndo(run); restoreSnapshot({ leadId: run.lead.id, screenshot: run.lead.orig.screenshot, markers: run.lead.orig.markers }); refresh(); }));
       ptools.append(hint);
@@ -318,7 +326,7 @@ async function buildPrint() {
     const page = el("section", "p-page");
     if (title) page.append(el("h2", "p-screen", title));
     screen = title;
-    if (run.lead && run.lead.screenshot) page.append(printFig(run));
+    if (run.lead && run.lead.screenshot && !run.lead.excluded) page.append(printFig(run));
     for (const s of run.steps) {
       const st = el("div", "p-step");
       const line = el("div", "p-line");
@@ -391,7 +399,7 @@ async function exportDocx() {
   for (const run of SR.pageRuns(rec.steps)) {
     if (run.type === "section") { blocks.push({ type: "section", heading: run.step.text, text: run.step.note || "" }); continue; }
     const title = SR.pageTitle(run, rec.meta.headings !== false);
-    blocks.push({ type: "page", screen: title, image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note, icon: icons.get(s.id) ? { bytes: dataUrlBytes(icons.get(s.id).url), w: icons.get(s.id).w, h: icons.get(s.id).h } : null })) });
+    blocks.push({ type: "page", screen: title, image: run.lead && run.lead.screenshot && !run.lead.excluded ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note, icon: icons.get(s.id) ? { bytes: dataUrlBytes(icons.get(s.id).url), w: icons.get(s.id).w, h: icons.get(s.id).h } : null })) });
     screen = title;
   }
   const bytes = DocxWriter.buildDocx({
