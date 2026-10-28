@@ -2,8 +2,8 @@
 // listeners are a click handler that places ONE button, "Add PL/SQL & REST info", in the Diagnostic panel's
 // Trace Logs toolbar. Once it is pressed, the logged steps are looked up in the flow's designer data
 // (see lib/flow-step-sql.js) and every Database step's log row gets a "Copy with values" button: the
-// step's PL/SQL with the variables from the panel's Variables tab written in as literals; every REST step's row gets "Copy Postman"
-// (lib/rest-postman.js). Read-only.
+// step's PL/SQL with the variables from the panel's Variables tab written in as literals; every logged HTTP call gets "Copy Postman"
+// (lib/rest-postman.js, from the call's own details in the log). Read-only.
 const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL & REST info", title: "" }, trail: [], copied: new Map(), active: false };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
 const CD_TOKEN_RE = /\/token\/organization\/([^/]+)\/environments\/([^/]+)\/package\/([^/?#]+)/;
@@ -183,25 +183,74 @@ function cdStepRows() {
   return out;
 }
 
+/** Shows the outcome of a copy on every button for this key, as a notice, and resets the buttons after a moment. */
+function cdDone(key, ok, label, message) {
+  if (ok) CD.copied.set(key, Date.now());
+  cdToast(ok ? message : "Copy failed", ok);
+  const each = (fn) => { for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === key) fn(btn); };
+  each((btn) => { btn.textContent = ok ? "Copied ✓" : "Copy failed"; });
+  setTimeout(() => each((btn) => { btn.textContent = label; }), 2500);
+}
+
+/** Logged HTTP calls: [{ key, cell, panel }]. Each row is an expansion panel whose details (General, Request,
+ *  Response) are in the page already, also while it is closed. */
+function cdHttpRows() {
+  const out = [];
+  document.querySelectorAll(".diagnosticLogTable .mud-expand-panel").forEach((panel, i) => {
+    const type = panel.querySelector(".typeCell");
+    const cell = panel.querySelector(".resultCell");
+    if (type && cell && type.textContent.trim() === "HTTP") out.push({ key: `http:${i}`, cell, panel });
+  });
+  return out;
+}
+
+/** The text of the section under the heading "Request" of a logged HTTP call. */
+function cdRequestText(panel) {
+  const h = [...panel.querySelectorAll("h6")].find((e) => e.textContent.trim() === "Request");
+  const sec = h && h.nextElementSibling;
+  return sec ? sec.innerText : "";
+}
+
+function cdMarkHttp() {
+  let marked = 0;
+  for (const { key, cell, panel } of cdHttpRows()) {
+    marked++;
+    if (cell.querySelector(".nb-copy")) continue;
+    const b = document.createElement("button");
+    b.className = "nb-copy";
+    b.dataset.step = key;
+    b.textContent = "Copy Postman";
+    b.style.cssText = CD_BTN_STYLE;
+    b.title = "Copies this logged call (method, URL, headers, body) as a Postman collection. In Postman: Import > Raw text. A masked header such as the token becomes a Postman variable.";
+    b.onclick = async (e) => {
+      e.stopPropagation(); e.preventDefault();
+      const req = RestPostman.parseLoggedRequest(cdRequestText(panel));
+      if (!req.url) { cdToast("The call's details could not be read", false); return; }
+      let host = req.url; try { host = new URL(req.url).pathname.split("/").filter(Boolean).pop() || new URL(req.url).host; } catch { /* keep the url */ }
+      const ok = await cdCopy(JSON.stringify(RestPostman.collectionFromLog(`${req.method} ${host}`, req), null, 2));
+      cdDone(key, ok, "Copy Postman", `Copied: Postman request ${req.method} ${host} (Postman: Import > Raw text)`);
+    };
+    cell.appendChild(b);
+  }
+  return marked;
+}
+
 const CD_BTN_STYLE = "margin-left:8px;padding:1px 8px;border:1px solid #0c65f4;border-radius:6px;background:#fff;color:#0c65f4;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
 
 function cdMarkRows() {
-  let marked = 0;
+  let marked = cdMarkHttp();
   for (const { source, name } of cdStepRows()) {
     const hit = CD.cache.get(name);
     if (!hit) continue;
     marked++;
     if (source.querySelector(".nb-copy")) continue;
-    const rest = hit.kind === "rest";
-    const label = rest ? "Copy Postman" : "Copy with values";
+    const label = "Copy with values";
     const b = document.createElement("button");
     b.className = "nb-copy";
     b.dataset.step = name;
     b.textContent = label;
     b.style.cssText = CD_BTN_STYLE;
-    b.title = rest
-      ? `Copies a Postman collection with this REST call (method, URL, headers, body) and the variables as they are now (Variables tab). In Postman: Import > Raw text. Set the connector's base URL and auth there. From: ${hit.source}`
-      : `Copies this Database step's code with the variables as they are now (Variables tab) written in as PL/SQL literals. Code from: ${hit.source}`;
+    b.title = `Copies this Database step's code with the variables as they are now (Variables tab) written in as PL/SQL literals. Code from: ${hit.source}`;
     // The row may be redrawn while copying: the outcome is kept by step name and shown on whichever button is there.
     const copied = CD.copied.get(name);
     if (copied && Date.now() - copied < 2500) b.textContent = "Copied ✓";
@@ -210,13 +259,8 @@ function cdMarkRows() {
       b.textContent = "Copying…";
       const vars = await cdReadVariables();
       if (!vars) { cdToast("Could not read the Variables tab", false); b.textContent = label; return; }
-      const text = rest ? JSON.stringify(RestPostman.buildCollection(name, [{ label: name, command: hit.command }], vars), null, 2) : PlsqlTestScript.inlineBinds(hit.sql, vars);
-      const ok = await cdCopy(text);
-      if (ok) CD.copied.set(name, Date.now());
-      cdToast(!ok ? "Copy failed" : rest ? `Copied: Postman collection for "${name}" (Postman: Import > Raw text)` : `Copied: PL/SQL of "${name}" with values`, ok);
-      const each = (fn) => { for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === name) fn(btn); };
-      each((btn) => { btn.textContent = ok ? "Copied ✓" : "Copy failed"; });
-      setTimeout(() => each((btn) => { btn.textContent = label; }), 2500);
+      const ok = await cdCopy(PlsqlTestScript.inlineBinds(hit.sql, vars));
+      cdDone(name, ok, label, `Copied: PL/SQL of "${name}" with values`);
     };
     source.appendChild(b);
   }
@@ -243,7 +287,8 @@ async function cdScan() {
   const say = (text, title) => cdStatus(text, title);
   try {
     const rows = cdStepRows();
-    if (!rows.length) { say("No logged steps yet (click to retry)", "Run the flow with tracing on (Trace steps), then press again."); return; }
+    cdMarkHttp(); // logged HTTP calls need no lookup: their details are in the log
+    if (!rows.length && !cdHttpRows().length) { say("No logged steps yet (click to retry)", "Run the flow with tracing on (Trace steps), then press again."); return; }
     const missing = [...new Set(rows.map((r) => r.name))].filter((n) => !CD.cache.has(n));
     let tried = [];
     if (missing.length) {
@@ -258,7 +303,7 @@ async function cdScan() {
       for (const n of missing) CD.cache.set(n, res.steps[n] || false); // false: not a Database step, not asked again
     }
     const found = cdMarkRows();
-    say(found ? `PL/SQL & REST info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database or REST steps found", tried.length ? tried.join("\n") : CD.status.title);
+    say(found ? `PL/SQL & REST info added (${found})` : "No Database or REST steps found", tried.length ? tried.join("\n") : CD.status.title);
     cdWatch();
   } catch (e) {
     say("PL/SQL info failed (click to retry)", String(e && e.message || e));
