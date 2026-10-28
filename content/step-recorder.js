@@ -30,9 +30,34 @@
     return "";
   }
 
+  const GENERIC_TITLE = /^(info|information|informationen)$/i;
+
+  /**
+   * The page's header: the largest text near the top of the page. In the Flow client it is a read-only control (or plain text)
+   * in a bigger font, not necessarily a heading element, so every visible, short text is scored by font size and weight.
+   * Heading elements are only the fallback.
+   */
   function screenTitle() {
-    const h = [...document.querySelectorAll("h1, h2, [role='heading']")].find((e) => e.offsetParent !== null && text(e) && !/^(info|information|informationen)$/i.test(text(e)));
-    return h ? text(h) : "";
+    const base = parseFloat(getComputedStyle(document.body).fontSize) || 14;
+    let best = null;
+    let n = 0;
+    for (const e of document.querySelectorAll("h1, h2, h3, [role='heading'], input, textarea, div, span, p, label")) {
+      if (++n > 900) break;
+      const r = e.getBoundingClientRect();
+      if (!r.width || !r.height || r.top < 0 || r.top > innerHeight * 0.45 || r.height > 120) continue;
+      const isField = e.tagName === "INPUT" || e.tagName === "TEXTAREA";
+      if (isField && e.type === "password") continue;
+      // Own text only (leaf elements), or the value of a read-only field; a container's text would be its children's.
+      const t = (isField ? (e.readOnly || e.disabled ? e.value : "") : (e.children.length === 0 || /^H[1-3]$/.test(e.tagName) || e.getAttribute("role") === "heading" ? text(e) : "")).replace(/\s+/g, " ").trim();
+      if (!t || t.length > 80 || GENERIC_TITLE.test(t)) continue;
+      if (e.closest("button, a[href], [role='button'], [role='tab'], [role='menuitem'], nav, th")) continue; // controls and tab labels are not the header
+      const cs = getComputedStyle(e);
+      const size = parseFloat(cs.fontSize) || base;
+      if (size < base * 1.25) continue;
+      const score = size + (parseInt(cs.fontWeight, 10) >= 600 ? 2 : 0) - r.top / 1000; // bigger and bolder wins, higher up breaks ties
+      if (!best || score > best.score) best = { t, score };
+    }
+    return best ? best.t : "";
   }
 
   const INTERACTIVE = "button, a[href], [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option'], [role='switch'], [role='checkbox'], [role='radio'], input, textarea, select, summary";
