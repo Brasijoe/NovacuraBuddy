@@ -127,7 +127,12 @@ async function cdScan() {
   if (CD.scanning) return;
   CD.scanning = true;
   const btn = CD.button;
-  const say = (text, title) => { if (btn) { btn.textContent = text; btn.title = title || ""; } };
+  const say = (text, title) => {
+    if (!btn) return;
+    btn.textContent = text; btn.title = title || "";
+    CD.details = title || "";
+    if (CD.detailsButton) CD.detailsButton.style.display = title ? "" : "none";
+  };
   try {
     const p = cdPanel();
     const crumb = p && cdBreadcrumb(p);
@@ -185,7 +190,13 @@ function cdDock() {
   b.style.cssText = "margin-left:8px;padding:6px 12px;border:1px solid #0c65f4;border-radius:6px;background:#0c65f4;color:#fff;font:13px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
   b.onclick = (e) => { e.stopPropagation(); b.textContent = "Searching PL/SQL steps…"; cdScan(); };
   CD.button = b;
-  toolbar.appendChild(b);
+  const d = document.createElement("button");
+  d.textContent = "Copy details";
+  d.title = "Copies what the lookup tried (calls and results, no values) so it can be sent to the developer.";
+  d.style.cssText = "display:none;margin-left:6px;padding:6px 10px;border:1px solid #9ca3af;border-radius:6px;background:#fff;color:#4b5563;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
+  d.onclick = async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(CD.details || ""); d.textContent = "Copied"; } catch { d.textContent = "Copy failed"; } setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
+  CD.detailsButton = d;
+  toolbar.append(b, d);
 }
 
 // No polling: the button is placed after a click anywhere (opening the panel or its tab is a click)
