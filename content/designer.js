@@ -599,7 +599,7 @@ function ptRender() {
   const bar = PT.root.querySelector(".bar");
   const info = ptRead();
   PT.info = info;
-  const sig = info ? `${info.sql.length}|${info.binds.length}|${info.found}|${Object.values(info.raw).join("\u0001")}` : "";
+  const sig = info ? `${info.sql.length}|${info.binds.length}` : "";
   if (bar.dataset.sig === sig) return;
   bar.dataset.sig = sig;
   bar.hidden = !info;
@@ -618,12 +618,7 @@ function ptRender() {
     try { await navigator.clipboard.writeText(PlsqlTestScript.inlineBinds(cur.sql, cur.raw)); copy.textContent = "Copied"; } catch { copy.textContent = "Copy failed"; }
     setTimeout(() => { copy.textContent = "Copy with values"; }, 2000);
   };
-  const note = document.createElement("span");
-  note.className = "note";
-  note.textContent = info.binds.length ? `${info.found} of ${info.binds.length} variables filled` : "no variables";
-  const missing = info.binds.filter((b) => !(b in info.values));
-  note.title = missing.length ? `No test value in the window for: ${missing.join(", ")} (left empty in the script)` : "All variables have a test value";
-  bar.append(go, copy, note);
+  bar.append(go, copy);
 }
 
 setInterval(() => { try { ptRender(); } catch { /* never disturb the Designer */ } }, 700);
