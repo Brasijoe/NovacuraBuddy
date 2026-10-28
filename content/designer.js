@@ -520,55 +520,52 @@ function ptDialogs() {
   return out;
 }
 
-/** The controls inside a window: elements with a value or text, and the code editors' visible lines. */
-function ptControls(win) {
-  const controls = [];
-  const nodes = [win, ...win.querySelectorAll("*")];
-  for (const el of nodes) {
-    if (el.shadowRoot) nodes.push(...el.shadowRoot.querySelectorAll("*"));
-  }
-  for (const el of nodes) {
-    const tag = el.tagName;
-    if (tag === "TEXTAREA" || (tag === "INPUT" && !/^(checkbox|radio|button|submit|hidden|file)$/i.test(el.type))) controls.push({ el, kind: "field", text: el.value || "" });
-    else if (el.isContentEditable && el.getAttribute("contenteditable") !== "inherit" && !el.parentElement?.isContentEditable) controls.push({ el, kind: "editable", text: el.innerText || "" });
-    else if (el.matches && el.matches(".view-lines, .cm-content, .CodeMirror-code")) controls.push({ el, kind: "editor", text: [...el.querySelectorAll(".view-line, .cm-line, .CodeMirror-line")].map((l) => l.textContent).join("\n").replace(/ /g, " ") || el.textContent });
-  }
-  return controls;
+// The code editors' full text comes from content/monaco-hook.js (page world).
+let ptEditors = [];
+addEventListener("novacura-buddy-code-texts", (e) => { try { ptEditors = JSON.parse(e.detail); } catch { ptEditors = []; } });
+
+/** A value as the test panel writes it ("12", null, 0, Date("2020-01-31T00:00:00...")) as plain text for the script. */
+function ptPlain(text) {
+  const t = String(text).replace(/\u00a0/g, " ").trim();
+  if (t === "null") return "";
+  let m = /^"([\s\S]*)"$/.exec(t);
+  if (m) return m[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  m = /^Date\("([^"]*)"\)$/.exec(t);
+  if (m) return m[1].replace(/T00:00:00(\.0+)?(\+00:00|Z)?$/, "").replace(/T(\d\d:\d\d:\d\d)(\.\d+)?(\+00:00|Z)?$/, " $1");
+  return t;
 }
 
-/** The text that labels a control: its <label>, aria-label, placeholder, or the text just before it. */
-function ptLabelOf(el) {
-  const names = [el.getAttribute("aria-label"), el.getAttribute("placeholder"), el.getAttribute("name"), el.getAttribute("title")];
-  if (el.id) { const l = (el.getRootNode().querySelector ? el.getRootNode() : document).querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l) names.push(l.textContent); }
-  const wrap = el.closest("label"); if (wrap) names.push(wrap.textContent);
-  for (let node = el, i = 0; node && i < 4; node = node.parentElement, i++) {
-    const prev = node.previousElementSibling;
-    if (prev && !prev.querySelector("input, textarea") && prev.textContent.trim().length <= 80) { names.push(prev.textContent); break; }
+/** The test panel's variables as { "Record__field": value }. The panel lists records and their fields
+ *  as rows one after the other, a field indented under its record; a row without a value box is a record. */
+function ptTestValues(win) {
+  const values = {};
+  const stack = []; // { left, name } of the open records
+  for (const node of win.querySelectorAll("app-lowcode-expression-node")) {
+    const row = node.querySelector(":scope > div > div.group");
+    const nameEl = row && row.querySelector("p.truncate");
+    if (!nameEl) continue;
+    const name = nameEl.textContent.trim();
+    const left = nameEl.getBoundingClientRect().left;
+    while (stack.length && stack[stack.length - 1].left >= left - 1) stack.pop();
+    const input = row.querySelector("app-single-line-code-input");
+    if (!input) { stack.push({ left, name }); continue; } // a record
+    values[[...stack.map((s) => s.name), name].join("__")] = ptPlain(input.textContent);
   }
-  return names.filter(Boolean).map((n) => n.replace(/\s+/g, " ").trim());
+  return values;
 }
 
-/** What the open window offers: { sql, values, found, binds, label } or null when there is no PL/SQL in it. */
+/** What the open window offers: { sql, values, binds, found, label } or null when it holds no PL/SQL. */
 function ptRead() {
   for (const win of ptDialogs()) {
-    const controls = ptControls(win);
-    let best = null;
-    for (const c of controls) {
-      const binds = PlsqlTestScript.extractBinds(c.text);
-      if (!PT_CODE_RE.test(c.text) || c.text.length < 20) continue;
-      const score = binds.length * 1000 + c.text.length;
-      if (!best || score > best.score) best = { c, score, binds };
-    }
-    if (!best) continue;
+    dispatchEvent(new CustomEvent("novacura-buddy-code-ask")); // answered at once by monaco-hook.js
+    const code = ptEditors.filter((e) => e.language === "sql" && PT_CODE_RE.test(e.text)).sort((x, y) => y.text.length - x.text.length)[0];
+    if (!code) continue;
+    const binds = PlsqlTestScript.extractBinds(code.text);
+    const all = new Map(Object.entries(ptTestValues(win)).map(([k, v]) => [k.toLowerCase(), v]));
     const values = {};
-    for (const c of controls) {
-      if (c === best.c || c.kind !== "field") continue;
-      const labels = ptLabelOf(c.el).map((n) => n.toLowerCase());
-      const bind = best.binds.find((b) => labels.some((n) => n === b.toLowerCase() || n === `:${b.toLowerCase()}` || n.split(/[\s:]+/).includes(b.toLowerCase()) && n.length <= b.length + 12));
-      if (bind && !(bind in values)) values[bind] = c.text;
-    }
+    for (const b of binds) if (all.has(b.toLowerCase())) values[b] = all.get(b.toLowerCase());
     const heading = win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
-    return { sql: best.c.text, values, binds: best.binds, found: Object.keys(values).length, label: heading ? heading.textContent.trim().slice(0, 60) : "", controls };
+    return { sql: code.text, values, binds, found: Object.keys(values).length, label: heading ? heading.textContent.trim().slice(0, 60) : "" };
   }
   return null;
 }
@@ -602,7 +599,7 @@ function ptRender() {
   const bar = PT.root.querySelector(".bar");
   const info = ptRead();
   PT.info = info;
-  const sig = info ? `${info.sql.length}|${info.binds.length}|${info.found}` : "";
+  const sig = info ? `${info.sql.length}|${info.binds.length}|${info.found}|${Object.values(info.values).join("\u0001")}` : "";
   if (bar.dataset.sig === sig) return;
   bar.dataset.sig = sig;
   bar.hidden = !info;
@@ -616,14 +613,9 @@ function ptRender() {
   const note = document.createElement("span");
   note.className = "note";
   note.textContent = info.binds.length ? `${info.found} of ${info.binds.length} variables filled` : "no variables";
-  const diag = document.createElement("button");
-  diag.className = "ghost"; diag.textContent = "Copy page info";
-  diag.title = "Copies how this window is built (fields and their labels, no values) so the matching can be fixed if values are missed";
-  diag.onclick = async () => {
-    const text = info.controls.map((c) => `${c.kind} <${c.el.tagName.toLowerCase()}${c.el.id ? "#" + c.el.id : ""}> labels=${JSON.stringify(ptLabelOf(c.el))} length=${c.text.length}`).join("\n") + `\nbinds: ${info.binds.join(", ")}`;
-    try { await navigator.clipboard.writeText(text); diag.textContent = "Copied"; } catch { diag.textContent = "Copy failed"; }
-  };
-  bar.append(go, note, diag);
+  const missing = info.binds.filter((b) => !(b in info.values));
+  note.title = missing.length ? `No test value in the window for: ${missing.join(", ")} (left empty in the script)` : "All variables have a test value";
+  bar.append(go, note);
 }
 
 setInterval(() => { try { ptRender(); } catch { /* never disturb the Designer */ } }, 700);
