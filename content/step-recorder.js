@@ -32,7 +32,7 @@
   }
 
   function screenTitle() {
-    const h = [...document.querySelectorAll("h1, h2, [role='heading']")].find((e) => e.offsetParent !== null && text(e));
+    const h = [...document.querySelectorAll("h1, h2, [role='heading']")].find((e) => e.offsetParent !== null && text(e) && !/^(info|information|informationen)$/i.test(text(e)));
     return h ? text(h) : "";
   }
 

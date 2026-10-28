@@ -15,6 +15,7 @@ async function load() {
   if (!rec) { document.body.textContent = "Recording not found."; return; }
   rec.meta = rec.meta || { title: rec.name || "", workflow: "", version: "", author: "", date: new Date().toISOString().slice(0, 10) };
   rec.recordedLang = rec.recordedLang || rec.lang;
+  $("mHeadings").checked = rec.meta.headings !== false;
   $("mTitle").value = rec.meta.title; $("mWorkflow").value = rec.meta.workflow; $("mVersion").value = rec.meta.version;
   $("mAuthor").value = rec.meta.author; $("mDate").value = rec.meta.date; $("mLang").value = rec.lang;
   render();
@@ -38,6 +39,7 @@ function save() {
 for (const [id, key] of [["mTitle", "title"], ["mWorkflow", "workflow"], ["mVersion", "version"], ["mAuthor", "author"], ["mDate", "date"]]) {
   $(id).oninput = () => { rec.meta[key] = $(id).value; if (key === "title") rec.name = $(id).value || rec.name; save(); };
 }
+$("mHeadings").onchange = () => { rec.meta.headings = $("mHeadings").checked; save(); };
 $("mLang").onchange = () => { rec.lang = $("mLang").value; SR.relanguage(rec.steps, rec.lang); save(); render(); };
 $("seAddSection").onclick = () => { SR.addSection(rec.steps, null, "Introduction"); save(); render(); };
 $("sePdf").onclick = async () => {
@@ -200,7 +202,7 @@ function render() {
       continue;
     }
     card.className = "se-step";
-    const screen = (run.lead && run.lead.screen) || run.steps[0].screen;
+    const screen = SR.pageTitle(run);
     if (screen) { const sc = document.createElement("div"); sc.className = "se-hint"; sc.textContent = screen; card.appendChild(sc); }
     if (run.lead && run.lead.screenshot) {
       card.appendChild(figure(run, save));
@@ -268,7 +270,7 @@ async function buildPrint() {
       root.append(sec);
       continue;
     }
-    const title = (run.lead && run.lead.screen) || run.steps[0].screen;
+    const title = SR.pageTitle(run, rec.meta.headings !== false);
     const page = el("section", "p-page");
     if (title && title !== screen) page.append(el("h2", "p-screen", title));
     screen = title;
@@ -344,7 +346,7 @@ async function exportDocx() {
   let screen = null;
   for (const run of SR.pageRuns(rec.steps)) {
     if (run.type === "section") { blocks.push({ type: "section", heading: run.step.text, text: run.step.note || "" }); continue; }
-    const title = (run.lead && run.lead.screen) || run.steps[0].screen;
+    const title = SR.pageTitle(run, rec.meta.headings !== false);
     blocks.push({ type: "page", screen: title && title !== screen ? title : "", image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note, icon: icons.get(s.id) ? { bytes: dataUrlBytes(icons.get(s.id).url), w: icons.get(s.id).w, h: icons.get(s.id).h } : null })) });
     screen = title;
   }
