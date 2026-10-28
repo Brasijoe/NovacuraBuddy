@@ -74,6 +74,23 @@
     return [...out];
   }
 
+  /** A readable name for an icon-only control: svg title, the icon's name from its <use> link or class, data-testid/name/id. */
+  function iconName(el) {
+    const t = el.querySelector("svg title");
+    if (t && t.textContent.trim()) return t.textContent.trim();
+    const use = el.querySelector("use");
+    const href = use && (use.getAttribute("href") || use.getAttribute("xlink:href"));
+    const pretty = (x) => String(x || "").split(/[#/]/).pop().replace(/^(icon|ic|fa|mdi|ms)[-_]/i, "").replace(/[-_]+/g, " ").trim();
+    if (href && pretty(href)) return pretty(href);
+    for (const n of [el, ...el.querySelectorAll("[class]")].slice(0, 6)) {
+      for (const c of String(n.getAttribute("class") || "").split(/\s+/)) {
+        const m = /^(?:icon|ic|fa|mdi|ms|material-icons?)[-_]([a-z][a-z0-9-_]+)$/i.exec(c);
+        if (m && !/^(button|btn|small|large|medium|regular|solid|outline|fw|lg|sm)$/i.test(m[1])) return pretty(m[1]);
+      }
+    }
+    return pretty(el.getAttribute("data-testid") || el.getAttribute("data-name") || el.getAttribute("name") || "");
+  }
+
   function describe(ev, kind) {
     const raw = ev.target instanceof Element ? ev.target : null;
     if (!raw) return { ignored: "no element" };
@@ -114,8 +131,12 @@
       const first = String(el.innerText || "").split("\n").map((l) => l.replace(/\s+/g, " ").trim()).find(Boolean);
       const tip = el.querySelector("[title], [aria-label], img[alt]");
       const name = (first && first.length <= 80 ? first : first ? first.slice(0, 80) : "") || (tip && (tip.getAttribute("title") || tip.getAttribute("aria-label") || tip.getAttribute("alt"))) || "";
-      if (!name) return { ignored: "clickable " + tag + " without any text, title or alt" };
-      info.label = name.trim();
+      const named = name || iconName(el) || labelOf(el);
+      if (!named) {
+        // A real button with no name at all is still a step the user can rename; a bare clickable div is probably noise.
+        if (tag === "button" || el.getAttribute("role") === "button") { info.label = "(unnamed button)"; info.review = true; }
+        else return { ignored: "clickable " + tag + " without any text, title, alt or icon name" };
+      } else info.label = named.trim();
     }
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
     return { info, screen: screenTitle(), page: location.pathname + location.hash, sig: layoutSig(), rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
