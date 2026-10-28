@@ -202,8 +202,14 @@ function render() {
       continue;
     }
     card.className = "se-step";
-    const screen = SR.pageTitle(run);
-    if (screen) { const sc = document.createElement("div"); sc.className = "se-hint"; sc.textContent = screen; card.appendChild(sc); }
+    // The page heading: the page's header element as recorded, editable (it is stored apart from how pages are told apart).
+    const holder = run.lead || run.steps[0];
+    const titleIn = document.createElement("input");
+    titleIn.className = "se-page-title";
+    titleIn.placeholder = "Page heading (optional)";
+    titleIn.value = SR.pageTitle(run);
+    titleIn.oninput = () => { holder.title = titleIn.value; save(); };
+    card.appendChild(titleIn);
     if (run.lead && run.lead.screenshot) {
       card.appendChild(figure(run, save));
       const ptools = document.createElement("div");
@@ -272,7 +278,7 @@ async function buildPrint() {
     }
     const title = SR.pageTitle(run, rec.meta.headings !== false);
     const page = el("section", "p-page");
-    if (title && title !== screen) page.append(el("h2", "p-screen", title));
+    if (title) page.append(el("h2", "p-screen", title));
     screen = title;
     if (run.lead && run.lead.screenshot) page.append(printFig(run));
     for (const s of run.steps) {
@@ -347,7 +353,7 @@ async function exportDocx() {
   for (const run of SR.pageRuns(rec.steps)) {
     if (run.type === "section") { blocks.push({ type: "section", heading: run.step.text, text: run.step.note || "" }); continue; }
     const title = SR.pageTitle(run, rec.meta.headings !== false);
-    blocks.push({ type: "page", screen: title && title !== screen ? title : "", image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note, icon: icons.get(s.id) ? { bytes: dataUrlBytes(icons.get(s.id).url), w: icons.get(s.id).w, h: icons.get(s.id).h } : null })) });
+    blocks.push({ type: "page", screen: title, image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note, icon: icons.get(s.id) ? { bytes: dataUrlBytes(icons.get(s.id).url), w: icons.get(s.id).w, h: icons.get(s.id).h } : null })) });
     screen = title;
   }
   const bytes = DocxWriter.buildDocx({
