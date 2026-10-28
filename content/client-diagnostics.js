@@ -5,6 +5,7 @@
 // step's PL/SQL with the variables from the panel's Variables tab written in as literals. Read-only.
 const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, trail: [], active: false };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
+const CD_TOKEN_RE = /\/token\/organization\/([^/]+)\/environments\/([^/]+)\/package\/([^/?#]+)/;
 const CD_LABEL = "Add PL/SQL info";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -35,6 +36,7 @@ function cdReport() {
     "Logged steps: " + (rows.length ? [...new Set(rows.map((r) => r.name))].join(", ") : "none"),
     "Database steps found: " + ([...CD.cache].filter(([, v]) => v).map(([k]) => k).join(", ") || "none"),
     "Flow versions loaded: " + (cdVersions().map((v) => v.app + "@" + v.version).join(", ") || "none"),
+    "Org / environment / package: " + (cdIds() ? Object.values(cdIds()).join(" / ") : "not found"),
     "Lookup:",
     ...(CD.trail.length ? CD.trail : ["(not run yet)"]),
     CD.status.title && CD.status.title !== CD.trail.join("\n") ? "Message: " + CD.status.title : ""
@@ -69,6 +71,16 @@ function cdVersions() {
     if (m && !out.some((o) => o.app === m[1] && o.version === m[2])) out.unshift({ app: m[1], version: m[2] });
   }
   return out;
+}
+
+/** The org, environment and package the client runs in, from its token request: { orgId, envId, packageId } or null. */
+function cdIds() {
+  let ids = null;
+  for (const e of performance.getEntriesByType("resource")) {
+    const m = CD_TOKEN_RE.exec(e.name);
+    if (m) ids = { orgId: m[1], envId: m[2], packageId: m[3] };
+  }
+  return ids;
 }
 
 /** A value as the Variables tab shows it, as the Designer test panel would write it (see PlsqlTestScript.toLiteral). */
@@ -177,20 +189,15 @@ async function cdScan() {
   CD.active = true;
   const say = (text, title) => cdStatus(text, title);
   try {
-    const p = cdPanel();
-    const crumb = p && cdBreadcrumb(p);
     const rows = cdStepRows();
-    if (!crumb) { say("Flow name not found (click to retry)", "The Diagnostic panel shows no flow name."); return; }
     if (!rows.length) { say("No logged steps yet (click to retry)", "Run the flow with tracing on (Trace steps), then press again."); return; }
     const missing = [...new Set(rows.map((r) => r.name))].filter((n) => !CD.cache.has(n));
     let tried = [];
     if (missing.length) {
       say("Searching PL/SQL steps…");
-      const vars = (await cdReadVariables()) || {};
-      const lit = (k) => (vars[k] || "").replace(/^"([\s\S]*)"$/, "$1");
+      const ids = cdIds() || {};
       const res = await chrome.runtime.sendMessage({
-        type: "STEP_SQL_MANY", flowName: crumb.flow, stepNames: missing, versions: cdVersions(),
-        envName: lit("environment__environmentName"), envType: lit("environment__environmentType")
+        type: "STEP_SQL_MANY", orgId: ids.orgId, packageId: ids.packageId, stepNames: missing, versions: cdVersions()
       }).catch((e) => ({ ok: false, error: e.message }));
       if (!res || !res.ok) { CD.trail = ["Error: " + ((res && res.error) || "no answer from the extension")]; say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)", (res && res.error) || ""); return; }
       tried = res.tried || [];
