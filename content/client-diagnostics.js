@@ -182,7 +182,11 @@ function cdWatch() {
 /** Places the one button in the Trace Logs toolbar (next to "Clear logs"). */
 function cdDock() {
   const toolbar = document.querySelector(".diagnosticLogTraceToolbar");
-  if (!toolbar || toolbar.querySelector("#nb-plsql")) return;
+  if (!toolbar) return;
+  // A button left behind by an older copy of this script (extension reloaded, page not) is replaced.
+  const old = toolbar.querySelector("#nb-plsql");
+  if (old && old === CD.button) return;
+  toolbar.querySelectorAll("#nb-plsql, .nb-details").forEach((el) => el.remove());
   const b = document.createElement("button");
   b.id = "nb-plsql";
   b.textContent = CD_LABEL;
@@ -191,6 +195,7 @@ function cdDock() {
   b.onclick = (e) => { e.stopPropagation(); b.textContent = "Searching PL/SQL steps…"; cdScan(); };
   CD.button = b;
   const d = document.createElement("button");
+  d.className = "nb-details";
   d.textContent = "Copy details";
   d.title = "Copies what the lookup tried (calls and results, no values) so it can be sent to the developer.";
   d.style.cssText = "display:none;margin-left:6px;padding:6px 10px;border:1px solid #9ca3af;border-radius:6px;background:#fff;color:#4b5563;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
