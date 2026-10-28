@@ -40,17 +40,21 @@ for (const [id, key] of [["mTitle", "title"], ["mWorkflow", "workflow"], ["mVers
 }
 $("mLang").onchange = () => { rec.lang = $("mLang").value; SR.relanguage(rec.steps, rec.lang); save(); render(); };
 $("seAddSection").onclick = () => { SR.addSection(rec.steps, null, "Introduction"); save(); render(); };
-$("sePdf").onclick = () => { buildPrint(); window.print(); };
+$("sePdf").onclick = async () => {
+  buildPrint();
+  // Freshly created data-URL images may not be decoded yet; printing before that leaves them blank.
+  await Promise.all([...document.querySelectorAll("#print img")].map((i) => i.decode().catch(() => {})));
+  window.print();
+};
 
-function figure(step, onChange) {
+/** The page screenshot with a marker for every step of the page; markers can be dragged. */
+function figure(run, onChange) {
   const fig = document.createElement("div");
   fig.className = "se-fig";
   const img = document.createElement("img");
-  img.src = step.screenshot;
+  img.src = run.lead.screenshot;
   fig.appendChild(img);
-  if (step.marker && step.marker.vw) {
-    fig.appendChild(markerEl(step, fig, onChange));
-  }
+  for (const st of run.steps) if (st.marker && st.marker.vw) fig.appendChild(markerEl(st, fig, onChange));
   return fig;
 }
 
@@ -63,7 +67,7 @@ function markerEl(step, fig, onChange) {
     if (m.shape === "frame") { el.style.width = (m.w / m.vw) * 100 + "%"; el.style.height = (m.h / m.vh) * 100 + "%"; }
   };
   place();
-  if (m.shape === "circle") el.textContent = step.number;
+  if (m.shape === "circle") el.textContent = step.number; else el.dataset.n = step.number;
   if (onChange) {
     el.onpointerdown = (e) => {
       e.preventDefault();
@@ -101,16 +105,18 @@ function drawRect(fig) {
 
 const loadImage = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
-async function crop(step, f) {
+async function crop(run, f) {
+  const step = run.lead;
   const img = await loadImage(step.screenshot);
   const c = document.createElement("canvas");
   c.width = Math.round(img.naturalWidth * f.fw); c.height = Math.round(img.naturalHeight * f.fh);
   c.getContext("2d").drawImage(img, f.fx * img.naturalWidth, f.fy * img.naturalHeight, c.width, c.height, 0, 0, c.width, c.height);
   step.screenshot = c.toDataURL("image/jpeg", 0.85);
-  step.marker = SR.cropMarker(step.marker, f);
+  SR.cropPage(run, f);
 }
 
-async function blur(step, f) {
+async function blur(run, f) {
+  const step = run.lead;
   const img = await loadImage(step.screenshot);
   const c = document.createElement("canvas");
   c.width = img.naturalWidth; c.height = img.naturalHeight;
@@ -125,6 +131,7 @@ async function blur(step, f) {
   step.screenshot = c.toDataURL("image/jpeg", 0.85);
 }
 
+
 function btn(label, title, fn, cls) {
   const b = document.createElement("button");
   b.className = "icon" + (cls ? " " + cls : "");
@@ -138,69 +145,96 @@ function render() {
   const box = $("seSteps");
   box.innerHTML = "";
   const refresh = () => { save(); render(); };
-  rec.steps.forEach((s) => {
+  const runs = SR.pageRuns(rec.steps);
+
+  const stepRow = (s, withMarkerTool) => {
     const card = document.createElement("div");
-    card.className = "se-step" + (s.kind === "section" ? " se-section" : "");
+    card.className = "se-step-row";
     const head = document.createElement("div");
     head.className = "se-head";
     const num = document.createElement("span");
     num.className = "se-num";
-    num.textContent = s.kind === "section" ? "¶" : s.number;
+    num.textContent = s.number;
     const text = document.createElement("textarea");
     text.rows = 1; text.value = s.text;
-    text.placeholder = s.kind === "section" ? "Heading" : "";
-    text.oninput = () => { s.text = text.value; if (s.kind !== "section") s.edited = true; save(); };
+    text.oninput = () => { s.text = text.value; s.edited = true; save(); };
     head.append(num, text);
     card.appendChild(head);
-    if (s.kind === "section") {
+    if (s.review) { const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "⚠ Names were read from the page layout and not yet verified for this control type. Please check the sentence."; card.appendChild(w); }
+    const note = document.createElement("textarea");
+    note.rows = 1; note.placeholder = "Note (optional)"; note.value = s.note || "";
+    note.oninput = () => { s.note = note.value; save(); };
+    card.appendChild(note);
+    const tools = document.createElement("div");
+    tools.className = "se-tools";
+    tools.append(btn("↑", "Move up", () => { SR.moveStep(rec.steps, s.id, -1); refresh(); }), btn("↓", "Move down", () => { SR.moveStep(rec.steps, s.id, 1); refresh(); }),
+      btn("Merge with previous", "Join this step into the one before it", () => { SR.mergeWithPrevious(rec.steps, s.id); refresh(); }));
+    if (withMarkerTool && s.marker) tools.append(btn("Remove marker", "Remove this step's marker from the screenshot", () => { s.marker = null; refresh(); }));
+    tools.append(btn("+ Text section", "Add a free text section after this step", () => { SR.addSection(rec.steps, s.id, "Note"); refresh(); }), btn("Delete", "Delete this step", () => { SR.removeStep(rec.steps, s.id); refresh(); }));
+    card.appendChild(tools);
+    return card;
+  };
+
+  for (const run of runs) {
+    const card = document.createElement("div");
+    if (run.type === "section") {
+      const s = run.step;
+      card.className = "se-step se-section";
+      const head = document.createElement("div");
+      head.className = "se-head";
+      const num = document.createElement("span");
+      num.className = "se-num"; num.textContent = "¶";
+      const text = document.createElement("textarea");
+      text.rows = 1; text.placeholder = "Heading"; text.value = s.text;
+      text.oninput = () => { s.text = text.value; save(); };
+      head.append(num, text);
       const body = document.createElement("textarea");
       body.className = "body"; body.placeholder = "Text"; body.value = s.note || "";
       body.oninput = () => { s.note = body.value; save(); };
-      card.appendChild(body);
-    } else {
-      if (s.screen) { const sc = document.createElement("div"); sc.className = "se-hint"; sc.textContent = s.screen; card.appendChild(sc); }
-      if (s.review) { const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "⚠ Names were read from the page layout and not yet verified for this control type. Please check the sentence."; card.appendChild(w); }
-      if (s.screenshot) card.appendChild(figure(s, save));
-      else { const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "No screenshot" + (s.shotError ? ": " + s.shotError : ""); card.appendChild(w); }
-      const note = document.createElement("textarea");
-      note.rows = 2; note.placeholder = "Note (optional)"; note.value = s.note || "";
-      note.oninput = () => { s.note = note.value; save(); };
-      card.appendChild(note);
+      const tools = document.createElement("div");
+      tools.className = "se-tools";
+      tools.append(btn("↑", "Move up", () => { SR.moveStep(rec.steps, s.id, -1); refresh(); }), btn("↓", "Move down", () => { SR.moveStep(rec.steps, s.id, 1); refresh(); }), btn("Delete", "Delete", () => { SR.removeStep(rec.steps, s.id); refresh(); }));
+      card.append(head, body, tools);
+      box.appendChild(card);
+      continue;
     }
-    const tools = document.createElement("div");
-    tools.className = "se-tools";
-    tools.append(btn("↑", "Move up", () => { SR.moveStep(rec.steps, s.id, -1); refresh(); }), btn("↓", "Move down", () => { SR.moveStep(rec.steps, s.id, 1); refresh(); }));
-    if (s.kind !== "section") {
-      tools.append(btn("Merge with previous", "Join this step into the one before it", () => { SR.mergeWithPrevious(rec.steps, s.id); refresh(); }));
-      if (s.screenshot) {
-        const hint = document.createElement("span");
-        hint.className = "se-hint";
-        const tool = (label, title, run) => btn(label, title, async (e) => {
-          const b = e.currentTarget; b.classList.add("on"); hint.textContent = "Draw a rectangle on the screenshot…";
-          const fig = card.querySelector(".se-fig");
-          const f = await drawRect(fig);
-          hint.textContent = "";
-          if (f) { await run(f); refresh(); } else b.classList.remove("on");
-        });
-        tools.append(tool("Crop", "Keep only the area you draw", (f) => crop(s, f)), tool("Blur", "Blur the area you draw (private data)", (f) => blur(s, f)));
-        if (s.marker) tools.append(btn("Remove marker", "Remove the marker from the screenshot", () => { s.marker = null; refresh(); }));
-        tools.append(hint);
-      }
+    card.className = "se-step";
+    const screen = (run.lead && run.lead.screen) || run.steps[0].screen;
+    if (screen) { const sc = document.createElement("div"); sc.className = "se-hint"; sc.textContent = screen; card.appendChild(sc); }
+    if (run.lead && run.lead.screenshot) {
+      card.appendChild(figure(run, save));
+      const ptools = document.createElement("div");
+      ptools.className = "se-tools";
+      const hint = document.createElement("span");
+      hint.className = "se-hint";
+      const tool = (label, title, fn) => btn(label, title, async (e) => {
+        const b = e.currentTarget; b.classList.add("on"); hint.textContent = "Draw a rectangle on the screenshot…";
+        const f = await drawRect(card.querySelector(".se-fig"));
+        hint.textContent = "";
+        if (f) { await fn(f); refresh(); } else b.classList.remove("on");
+      });
+      ptools.append(tool("Crop", "Keep only the area you draw", (f) => crop(run, f)), tool("Blur", "Blur the area you draw (private data)", (f) => blur(run, f)),
+        btn("↑ Page", "Move this page (screenshot and its steps) up", () => { SR.movePage(rec.steps, run.lead.id, -1); refresh(); }),
+        btn("↓ Page", "Move this page down", () => { SR.movePage(rec.steps, run.lead.id, 1); refresh(); }));
+      if (rec.steps.indexOf(run.lead) > 0) ptools.append(btn("Join previous page", "Treat this page as part of the page before it (this screenshot is dropped)", () => { SR.joinPreviousPage(rec.steps, run.lead.id); refresh(); }));
+      ptools.append(hint);
+      card.appendChild(ptools);
+    } else if (run.lead && run.lead.shotError) {
+      const w = document.createElement("div"); w.className = "se-flag"; w.textContent = "No screenshot: " + run.lead.shotError; card.appendChild(w);
     }
-    tools.append(btn("+ Text section", "Add a free text section after this one", () => { SR.addSection(rec.steps, s.id, "Note"); refresh(); }), btn("Delete", "Delete", () => { SR.removeStep(rec.steps, s.id); refresh(); }));
-    card.appendChild(tools);
+    for (const s of run.steps) card.appendChild(stepRow(s, !!(run.lead && run.lead.screenshot)));
     box.appendChild(card);
-  });
+  }
   document.title = (rec.meta.title || L.untitled) + " - Step Recorder";
 }
 
-function printFig(step) {
+function printFig(run) {
   const fig = document.createElement("div");
   fig.className = "p-fig";
   const img = document.createElement("img");
-  img.src = step.screenshot;
+  img.src = run.lead.screenshot;
   fig.appendChild(img);
-  if (step.marker && step.marker.vw) fig.appendChild(markerEl(step, fig, null));
+  for (const st of run.steps) if (st.marker && st.marker.vw) fig.appendChild(markerEl(st, fig, null));
   return fig;
 }
 
@@ -225,22 +259,27 @@ function buildPrint() {
   toc.append(ol);
   root.append(toc);
   let screen = null;
-  for (const s of rec.steps) {
-    if (s.kind === "section") {
+  for (const run of SR.pageRuns(rec.steps)) {
+    if (run.type === "section") {
       const sec = el("section", "p-sec");
-      sec.append(el("h3", "", s.text), el("p", "", s.note || ""));
+      sec.append(el("h3", "", run.step.text), el("p", "", run.step.note || ""));
       root.append(sec);
       continue;
     }
-    if (s.screen && s.screen !== screen) root.append(el("h2", "p-screen", s.screen));
-    screen = s.screen;
-    const st = el("section", "p-step");
-    const line = el("div", "p-line");
-    line.append(el("span", "p-num", s.number), el("span", "", s.text));
-    st.append(line);
-    if (s.note) st.append(el("div", "p-note", s.note));
-    if (s.screenshot) st.append(printFig(s));
-    root.append(st);
+    const title = (run.lead && run.lead.screen) || run.steps[0].screen;
+    const page = el("section", "p-page");
+    if (title && title !== screen) page.append(el("h2", "p-screen", title));
+    screen = title;
+    if (run.lead && run.lead.screenshot) page.append(printFig(run));
+    for (const s of run.steps) {
+      const st = el("div", "p-step");
+      const line = el("div", "p-line");
+      line.append(el("span", "p-num", s.number), el("span", "", s.text));
+      st.append(line);
+      if (s.note) st.append(el("div", "p-note", s.note));
+      page.append(st);
+    }
+    root.append(page);
   }
   // Footer: language (left) and page number (right).
   let style = $("printStyle");

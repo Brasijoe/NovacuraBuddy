@@ -57,7 +57,7 @@
       info.review = true; // layout guessed, not yet verified against the real web client
     }
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
-    return { info, screen: screenTitle(), rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
+    return { info, screen: screenTitle(), page: location.pathname + location.hash, rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
   }
 
   function report(ev, kind) {

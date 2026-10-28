@@ -36,23 +36,66 @@ async function srRefresh() {
   }
 }
 
-/** Screenshot with its numbered marker; the marker is an overlay, so renumbering never needs a new picture. */
-function srThumb(step) {
+/** The page screenshot with a numbered marker per step; markers are overlays, so renumbering never needs a new picture. */
+function srPageThumb(run) {
   const wrap = document.createElement("div");
   wrap.className = "sr-thumb";
-  if (!step.screenshot) { wrap.textContent = "No screenshot" + (step.shotError ? ": " + step.shotError : ""); wrap.style.padding = "6px"; return wrap; }
+  const lead = run.lead;
+  if (!lead || !lead.screenshot) { wrap.textContent = "No screenshot" + (lead && lead.shotError ? ": " + lead.shotError : ""); wrap.style.padding = "6px"; return wrap; }
   const img = document.createElement("img");
-  img.src = step.screenshot;
+  img.src = lead.screenshot;
   wrap.appendChild(img);
-  const m = step.marker;
-  if (m && m.vw && m.vh) {
+  for (const s of run.steps) {
+    const m = s.marker;
+    if (!m || !m.vw || !m.vh) continue;
     const el = document.createElement("span");
     el.className = "sr-marker sr-" + m.shape;
-    if (m.shape === "circle") { el.style.left = (m.x / m.vw) * 100 + "%"; el.style.top = (m.y / m.vh) * 100 + "%"; el.textContent = step.number; }
-    else { el.style.left = (m.x / m.vw) * 100 + "%"; el.style.top = (m.y / m.vh) * 100 + "%"; el.style.width = (m.w / m.vw) * 100 + "%"; el.style.height = (m.h / m.vh) * 100 + "%"; }
+    el.style.left = (m.x / m.vw) * 100 + "%"; el.style.top = (m.y / m.vh) * 100 + "%";
+    if (m.shape === "circle") el.textContent = s.number;
+    else { el.style.width = (m.w / m.vw) * 100 + "%"; el.style.height = (m.h / m.vh) * 100 + "%"; el.dataset.n = s.number; }
     wrap.appendChild(el);
   }
   return wrap;
+}
+
+function srStepRow(s) {
+  const card = document.createElement("div");
+  card.className = "sr-step" + (s.sub ? " sr-substep" : "");
+  const head = document.createElement("div");
+  head.className = "sr-head";
+  const num = document.createElement("span");
+  num.className = "sr-num";
+  num.textContent = s.number;
+  const text = document.createElement("input");
+  text.className = "sr-text";
+  text.value = s.text;
+  text.onchange = () => srEdit({ op: "text", id: s.id, value: text.value });
+  head.append(num, text);
+  if (s.review) {
+    const w = document.createElement("span");
+    w.className = "sr-flag";
+    w.textContent = "⚠";
+    w.title = "Names were read from the page layout and not yet verified for this control type. Please check the sentence.";
+    head.appendChild(w);
+  }
+  const note = document.createElement("textarea");
+  note.className = "sr-note";
+  note.rows = 1;
+  note.placeholder = "Note (optional)";
+  note.value = s.note || "";
+  note.onchange = () => srEdit({ op: "note", id: s.id, value: note.value });
+  const tools = document.createElement("div");
+  tools.className = "sr-tools";
+  for (const [label, op, title] of [["↑", "up", "Move up"], ["↓", "down", "Move down"], ["⤴ Merge", "merge", "Merge into the step before"], ["✕", "delete", "Delete step"]]) {
+    const b = document.createElement("button");
+    b.className = "icon-btn";
+    b.textContent = label;
+    b.title = title;
+    b.onclick = () => srEdit({ op, id: s.id });
+    tools.appendChild(b);
+  }
+  card.append(head, note, tools);
+  return card;
 }
 
 function srRenderSteps(rec) {
@@ -62,49 +105,15 @@ function srRenderSteps(rec) {
     box.innerHTML = '<div class="empty-state">No steps yet. Press Start and work in the Flow web client.</div>';
     return;
   }
-  let screen = null;
-  for (const s of rec.steps) {
-    if (s.screen !== screen) {
-      screen = s.screen;
-      if (screen) { const h = document.createElement("div"); h.className = "sr-screen"; h.textContent = screen; box.appendChild(h); }
-    }
-    const card = document.createElement("div");
-    card.className = "sr-step" + (s.sub ? " sr-substep" : "");
-    const head = document.createElement("div");
-    head.className = "sr-head";
-    const num = document.createElement("span");
-    num.className = "sr-num";
-    num.textContent = s.number;
-    const text = document.createElement("input");
-    text.className = "sr-text";
-    text.value = s.text;
-    text.onchange = () => srEdit({ op: "text", id: s.id, value: text.value });
-    head.append(num, text);
-    if (s.review) {
-      const w = document.createElement("span");
-      w.className = "sr-flag";
-      w.textContent = "⚠";
-      w.title = "Names were read from the page layout and not yet verified for this control type. Please check the sentence.";
-      head.appendChild(w);
-    }
-    const note = document.createElement("textarea");
-    note.className = "sr-note";
-    note.rows = 1;
-    note.placeholder = "Note (optional)";
-    note.value = s.note || "";
-    note.onchange = () => srEdit({ op: "note", id: s.id, value: note.value });
-    const tools = document.createElement("div");
-    tools.className = "sr-tools";
-    for (const [label, op, title] of [["↑", "up", "Move up"], ["↓", "down", "Move down"], ["⤴ Merge", "merge", "Merge into the step before"], ["✕", "delete", "Delete step"]]) {
-      const b = document.createElement("button");
-      b.className = "icon-btn";
-      b.textContent = label;
-      b.title = title;
-      b.onclick = () => srEdit({ op, id: s.id });
-      tools.appendChild(b);
-    }
-    card.append(head, srThumb(s), note, tools);
-    box.appendChild(card);
+  for (const run of StepRecorder.pageRuns(rec.steps)) {
+    if (run.type === "section") continue;
+    const page = document.createElement("div");
+    page.className = "sr-page";
+    const title = (run.lead && run.lead.screen) || run.steps[0].screen;
+    if (title) { const h = document.createElement("div"); h.className = "sr-screen"; h.textContent = title; page.appendChild(h); }
+    page.appendChild(srPageThumb(run));
+    for (const s of run.steps) page.appendChild(srStepRow(s));
+    box.appendChild(page);
   }
   box.scrollTop = box.scrollHeight;
 }
@@ -166,4 +175,5 @@ srEl("srSubStart").onclick = async () => {
   if (!res.ok) srEl("srStatusText").textContent = res.error || "";
   srLast = ""; srRefresh();
 };
+srEl("srNewPage").onclick = async () => { await send({ type: "STEPREC_NEWPAGE" }); srEl("srStatusText").textContent = "The next step gets a new screenshot."; };
 srEl("srSubEnd").onclick = async () => { await send({ type: "STEPREC_SUB", action: "end" }); srRefresh(); };
