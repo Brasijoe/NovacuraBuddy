@@ -1,12 +1,13 @@
 // Injected into the Flow web client (app.novacura.com). Nothing runs in the background: the only
-// listeners are a click handler that places ONE button, "Add PL/SQL info", in the Diagnostic panel's
+// listeners are a click handler that places ONE button, "Add PL/SQL & REST info", in the Diagnostic panel's
 // Trace Logs toolbar. Once it is pressed, the logged steps are looked up in the flow's designer data
 // (see lib/flow-step-sql.js) and every Database step's log row gets a "Copy with values" button: the
-// step's PL/SQL with the variables from the panel's Variables tab written in as literals. Read-only.
-const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, trail: [], copied: new Map(), active: false };
+// step's PL/SQL with the variables from the panel's Variables tab written in as literals; every REST step's row gets "Copy Postman"
+// (lib/rest-postman.js). Read-only.
+const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL & REST info", title: "" }, trail: [], copied: new Map(), active: false };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
 const CD_TOKEN_RE = /\/token\/organization\/([^/]+)\/environments\/([^/]+)\/package\/([^/?#]+)/;
-const CD_LABEL = "Add PL/SQL info";
+const CD_LABEL = "Add PL/SQL & REST info";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Writes text to the clipboard: the Clipboard API, else a hidden textarea + execCommand. Returns true on success. */
@@ -34,7 +35,7 @@ function cdReport() {
     "Diagnostic panel: " + (p ? "found" : "not found"),
     "Flow / step: " + (crumb ? JSON.stringify(crumb) : "not found"),
     "Logged steps: " + (rows.length ? [...new Set(rows.map((r) => r.name))].join(", ") : "none"),
-    "Database steps found: " + ([...CD.cache].filter(([, v]) => v).map(([k]) => k).join(", ") || "none"),
+    "Database / REST steps found: " + ([...CD.cache].filter(([, v]) => v).map(([k]) => k).join(", ") || "none"),
     "Flow versions loaded: " + (cdVersions().map((v) => v.app + "@" + v.version).join(", ") || "none"),
     "Org / environment / package: " + (cdIds() ? Object.values(cdIds()).join(" / ") : "not found"),
     "Lookup:",
@@ -191,12 +192,16 @@ function cdMarkRows() {
     if (!hit) continue;
     marked++;
     if (source.querySelector(".nb-copy")) continue;
+    const rest = hit.kind === "rest";
+    const label = rest ? "Copy Postman" : "Copy with values";
     const b = document.createElement("button");
     b.className = "nb-copy";
     b.dataset.step = name;
-    b.textContent = "Copy with values";
+    b.textContent = label;
     b.style.cssText = CD_BTN_STYLE;
-    b.title = `Copies this Database step's code with the variables as they are now (Variables tab) written in as PL/SQL literals. Code from: ${hit.source}`;
+    b.title = rest
+      ? `Copies a Postman collection with this REST call (method, URL, headers, body) and the variables as they are now (Variables tab). In Postman: Import > Raw text. Set the connector's base URL and auth there. From: ${hit.source}`
+      : `Copies this Database step's code with the variables as they are now (Variables tab) written in as PL/SQL literals. Code from: ${hit.source}`;
     // The row may be redrawn while copying: the outcome is kept by step name and shown on whichever button is there.
     const copied = CD.copied.get(name);
     if (copied && Date.now() - copied < 2500) b.textContent = "Copied ✓";
@@ -204,12 +209,14 @@ function cdMarkRows() {
       e.stopPropagation(); e.preventDefault();
       b.textContent = "Copying…";
       const vars = await cdReadVariables();
-      if (!vars) { cdToast("Could not read the Variables tab", false); b.textContent = "Copy with values"; return; }
-      const ok = await cdCopy(PlsqlTestScript.inlineBinds(hit.sql, vars));
+      if (!vars) { cdToast("Could not read the Variables tab", false); b.textContent = label; return; }
+      const text = rest ? JSON.stringify(RestPostman.buildCollection(name, [{ label: name, command: hit.command }], vars), null, 2) : PlsqlTestScript.inlineBinds(hit.sql, vars);
+      const ok = await cdCopy(text);
       if (ok) CD.copied.set(name, Date.now());
-      cdToast(ok ? `Copied: PL/SQL of "${name}" with values` : "Copy failed", ok);
-      for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === name) btn.textContent = ok ? "Copied ✓" : "Copy failed";
-      setTimeout(() => { for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === name) btn.textContent = "Copy with values"; }, 2500);
+      cdToast(!ok ? "Copy failed" : rest ? `Copied: Postman collection for "${name}" (Postman: Import > Raw text)` : `Copied: PL/SQL of "${name}" with values`, ok);
+      const each = (fn) => { for (const btn of document.querySelectorAll(".nb-copy")) if (btn.dataset.step === name) fn(btn); };
+      each((btn) => { btn.textContent = ok ? "Copied ✓" : "Copy failed"; });
+      setTimeout(() => each((btn) => { btn.textContent = label; }), 2500);
     };
     source.appendChild(b);
   }
@@ -251,7 +258,7 @@ async function cdScan() {
       for (const n of missing) CD.cache.set(n, res.steps[n] || false); // false: not a Database step, not asked again
     }
     const found = cdMarkRows();
-    say(found ? `PL/SQL info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database steps found", tried.length ? tried.join("\n") : CD.status.title);
+    say(found ? `PL/SQL & REST info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database or REST steps found", tried.length ? tried.join("\n") : CD.status.title);
     cdWatch();
   } catch (e) {
     say("PL/SQL info failed (click to retry)", String(e && e.message || e));
@@ -290,7 +297,7 @@ function cdDock() {
   const b = document.createElement("button");
   b.id = "nb-plsql";
   b.textContent = CD_LABEL;
-  b.title = "Finds the Database steps in this log, reads their PL/SQL from the flow's designer data and adds a Copy with values button to their rows. Nothing is looked up before you press this.";
+  b.title = "Finds the Database and REST steps in this log, reads them from the flow's designer data and adds Copy with values (PL/SQL) or Copy Postman (REST) buttons to their rows. Nothing is looked up before you press this.";
   b.style.cssText = "margin-left:8px;padding:6px 12px;border:1px solid #0c65f4;border-radius:6px;background:#0c65f4;color:#fff;font:13px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
   b.dataset.help = b.title;
   b.onclick = (e) => { e.stopPropagation(); cdStatus("Searching PL/SQL steps…", ""); cdScan(); };
