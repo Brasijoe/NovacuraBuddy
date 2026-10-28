@@ -494,3 +494,136 @@ async function mcFocusPending() {
 }
 mcFocusPending();
 setInterval(() => { if (mc.marks && !mc.hidden) mcPlace(); }, 300);
+
+// --- PL/SQL test script ---------------------------------------------------------------------
+// While a Database step's window is open, a button next to it turns the step's PL/SQL and the test
+// values entered there into a PL/SQL Developer test script (.tst) with the Flow binds (":MyVar")
+// kept as they are. Read-only: it only reads the open window and downloads a file; nothing is
+// written to the flow. The window's markup is not known exactly, so the code is looked for as the
+// largest SQL-like text (text area, code editor lines) and a test value as the input labelled with
+// a bind's name (label, aria-label, placeholder or the text just before it).
+const PT = { host: null, root: null, info: null };
+const PT_CODE_RE = /\b(begin|declare|select|insert|update|delete)\b/i;
+
+function ptDialogs() {
+  const out = [];
+  for (const root of mcRoots()) {
+    for (const el of root.querySelectorAll(MC_DIALOG_SELECTOR)) {
+      if ((mc.host && mc.host.contains(el)) || (PT.host && PT.host.contains(el))) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 200 || r.height < 120) continue;
+      const css = getComputedStyle(el);
+      if (css.display === "none" || css.visibility === "hidden" || css.opacity === "0") continue;
+      out.push(el);
+    }
+  }
+  return out;
+}
+
+/** The controls inside a window: elements with a value or text, and the code editors' visible lines. */
+function ptControls(win) {
+  const controls = [];
+  const nodes = [win, ...win.querySelectorAll("*")];
+  for (const el of nodes) {
+    if (el.shadowRoot) nodes.push(...el.shadowRoot.querySelectorAll("*"));
+  }
+  for (const el of nodes) {
+    const tag = el.tagName;
+    if (tag === "TEXTAREA" || (tag === "INPUT" && !/^(checkbox|radio|button|submit|hidden|file)$/i.test(el.type))) controls.push({ el, kind: "field", text: el.value || "" });
+    else if (el.isContentEditable && el.getAttribute("contenteditable") !== "inherit" && !el.parentElement?.isContentEditable) controls.push({ el, kind: "editable", text: el.innerText || "" });
+    else if (el.matches && el.matches(".view-lines, .cm-content, .CodeMirror-code")) controls.push({ el, kind: "editor", text: [...el.querySelectorAll(".view-line, .cm-line, .CodeMirror-line")].map((l) => l.textContent).join("\n").replace(/ /g, " ") || el.textContent });
+  }
+  return controls;
+}
+
+/** The text that labels a control: its <label>, aria-label, placeholder, or the text just before it. */
+function ptLabelOf(el) {
+  const names = [el.getAttribute("aria-label"), el.getAttribute("placeholder"), el.getAttribute("name"), el.getAttribute("title")];
+  if (el.id) { const l = (el.getRootNode().querySelector ? el.getRootNode() : document).querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l) names.push(l.textContent); }
+  const wrap = el.closest("label"); if (wrap) names.push(wrap.textContent);
+  for (let node = el, i = 0; node && i < 4; node = node.parentElement, i++) {
+    const prev = node.previousElementSibling;
+    if (prev && !prev.querySelector("input, textarea") && prev.textContent.trim().length <= 80) { names.push(prev.textContent); break; }
+  }
+  return names.filter(Boolean).map((n) => n.replace(/\s+/g, " ").trim());
+}
+
+/** What the open window offers: { sql, values, found, binds, label } or null when there is no PL/SQL in it. */
+function ptRead() {
+  for (const win of ptDialogs()) {
+    const controls = ptControls(win);
+    let best = null;
+    for (const c of controls) {
+      const binds = PlsqlTestScript.extractBinds(c.text);
+      if (!PT_CODE_RE.test(c.text) || c.text.length < 20) continue;
+      const score = binds.length * 1000 + c.text.length;
+      if (!best || score > best.score) best = { c, score, binds };
+    }
+    if (!best) continue;
+    const values = {};
+    for (const c of controls) {
+      if (c === best.c || c.kind !== "field") continue;
+      const labels = ptLabelOf(c.el).map((n) => n.toLowerCase());
+      const bind = best.binds.find((b) => labels.some((n) => n === b.toLowerCase() || n === `:${b.toLowerCase()}` || n.split(/[\s:]+/).includes(b.toLowerCase()) && n.length <= b.length + 12));
+      if (bind && !(bind in values)) values[bind] = c.text;
+    }
+    const heading = win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
+    return { sql: best.c.text, values, binds: best.binds, found: Object.keys(values).length, label: heading ? heading.textContent.trim().slice(0, 60) : "", controls };
+  }
+  return null;
+}
+
+function ptEnsureHost() {
+  if (PT.host) return;
+  PT.host = document.createElement("div");
+  PT.host.id = "novacura-buddy-plsql-test";
+  PT.root = PT.host.attachShadow({ mode: "open" });
+  PT.root.innerHTML = `<style>
+    :host { all: initial; }
+    .bar { position: fixed; left: 16px; bottom: 16px; z-index: 2147483002; display: flex; align-items: center; gap: 6px; background: #fff; color: #141635; border: 1px solid #d9dcef; border-radius: 10px; padding: 6px 8px; box-shadow: 0 6px 22px rgba(20,22,53,.22); font: 13px/1.3 system-ui, sans-serif; }
+    button { font: inherit; border: 1px solid #0c65f4; background: #0c65f4; color: #fff; border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+    button.ghost { background: none; color: #6b7280; border-color: #d1d5db; padding: 4px 8px; }
+    .note { font-size: 11.5px; color: #6b7280; }
+    @media (prefers-color-scheme: dark) { .bar { background: #1b1d3a; color: #eef0ff; border-color: #33365c; } .note { color: #a9acc9; } }
+  </style><div class="bar" hidden></div>`;
+  document.documentElement.appendChild(PT.host);
+}
+
+function ptDownload(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function ptRender() {
+  ptEnsureHost();
+  const bar = PT.root.querySelector(".bar");
+  const info = ptRead();
+  PT.info = info;
+  const sig = info ? `${info.sql.length}|${info.binds.length}|${info.found}` : "";
+  if (bar.dataset.sig === sig) return;
+  bar.dataset.sig = sig;
+  bar.hidden = !info;
+  bar.innerHTML = "";
+  if (!info) return;
+  const make = PlsqlTestScript.buildTst;
+  const go = document.createElement("button");
+  go.textContent = "PL/SQL test script (.tst)";
+  go.title = "Creates a PL/SQL Developer test script from this step's code, with the test values entered here. The :binds stay as they are.";
+  go.onclick = () => { const cur = PT.info || info; ptDownload(PlsqlTestScript.fileName(cur.label), make(cur.sql, cur.values)); };
+  const note = document.createElement("span");
+  note.className = "note";
+  note.textContent = info.binds.length ? `${info.found} of ${info.binds.length} variables filled` : "no variables";
+  const diag = document.createElement("button");
+  diag.className = "ghost"; diag.textContent = "Copy page info";
+  diag.title = "Copies how this window is built (fields and their labels, no values) so the matching can be fixed if values are missed";
+  diag.onclick = async () => {
+    const text = info.controls.map((c) => `${c.kind} <${c.el.tagName.toLowerCase()}${c.el.id ? "#" + c.el.id : ""}> labels=${JSON.stringify(ptLabelOf(c.el))} length=${c.text.length}`).join("\n") + `\nbinds: ${info.binds.join(", ")}`;
+    try { await navigator.clipboard.writeText(text); diag.textContent = "Copied"; } catch { diag.textContent = "Copy failed"; }
+  };
+  bar.append(go, note, diag);
+}
+
+setInterval(() => { try { ptRender(); } catch { /* never disturb the Designer */ } }, 700);
