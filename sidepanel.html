@@ -116,6 +116,10 @@
         </label>
         <span class="info-tip" data-tip="The language of the generated step sentences. Prompts and values stay as the web client shows them. You can switch it any time; sentences you edited by hand are kept."></span>
       </div>
+      <div class="sr-options">
+        <label class="sr-check"><input type="checkbox" id="srAny" /> Also record clicks on read-only objects</label>
+        <span class="info-tip" data-tip="Off: only real controls become steps (buttons, links, inputs, list rows, clickable items) and clicks on empty space or plain text are ignored. On: a click on any text or object also becomes a step ('Note ...') so you can point at information for the documentation. You can switch it while recording."></span>
+      </div>
       <div id="srStatusBar" class="status-bar"><span class="status-indicator"></span><span id="srStatusText">Open the Flow web client in the active tab, then press Start.</span></div>
       <div id="srSubRow" class="sr-sub" hidden>
         <button id="srNewPage" title="Normally one screenshot is taken per page (same screen title and URL) and every later click on it only adds a numbered marker. Use this when the page changed without the title or URL changing.">New screenshot now</button>

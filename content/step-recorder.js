@@ -4,7 +4,7 @@
 // else; steps stay in the browser's extension storage.
 (function () {
   if (window.__nbStepRecorder) return;
-  const SR = { armed: false };
+  const SR = { armed: false, any: false };
   window.__nbStepRecorder = SR;
 
   const text = (el) => (el && (el.getAttribute("aria-label") || el.innerText || el.textContent || "") || "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -47,15 +47,27 @@
     return null;
   }
 
+  /** The smallest element at the click that carries text (for read-only objects), never a big container. */
+  function textObjectOf(raw) {
+    for (let el = raw; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      const t = text(el);
+      if (t && t.length <= 120) return el;
+      if (t) return null; // the nearest text belongs to a container
+    }
+    return null;
+  }
+
   function describe(ev, kind) {
     const raw = ev.target instanceof Element ? ev.target : null;
     if (!raw) return null;
-    const el = controlOf(raw);
-    if (!el) return null; // a click that hit no control (empty page area) is not a step
+    const strict = controlOf(raw);
+    // By default a click that hit no control (empty page area, plain text) is not a step; with "any object" on, read-only text counts.
+    const el = strict || (SR.any ? textObjectOf(raw) : null);
+    if (!el) return null;
     const tag = el.tagName.toLowerCase();
     const row = raw.closest("tr, [role='row'], [role='option']");
     const grid = row && row.closest("table, [role='grid'], [role='listbox'], [role='table']");
-    const info = { event: kind, tag, role: el.getAttribute("role") || "", type: el.getAttribute("type") || (tag === "input" ? "text" : ""), label: text(el), prompt: labelOf(el) };
+    const info = { event: kind, readonly: !strict, tag, role: el.getAttribute("role") || "", type: el.getAttribute("type") || (tag === "input" ? "text" : ""), label: text(el), prompt: labelOf(el) };
     if (kind === "change") {
       info.checked = !!el.checked || el.getAttribute("aria-checked") === "true";
       info.value = el.type === "password" ? "" : el.value;
@@ -73,7 +85,7 @@
       if (dialog) { info.inLov = true; info.prompt = info.prompt || text(dialog.querySelector("h1, h2, h3, [role='heading']")); } else info.inList = true;
       info.review = true; // layout guessed, not yet verified against the real web client
     }
-    if (kind === "click" && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return null; // a container, not a labelled control
+    if (kind === "click" && !info.readonly && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return null; // a container, not a labelled control
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
     return { info, screen: screenTitle(), page: location.pathname + location.hash, rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
   }
@@ -89,7 +101,7 @@
   addEventListener("change", (ev) => report(ev, "change"), true);
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg && msg.type === "STEPREC_ARM") { SR.armed = !!msg.armed; sendResponse({ ok: true, top: window === window.top }); }
+    if (msg && msg.type === "STEPREC_ARM") { SR.armed = !!msg.armed; SR.any = !!msg.any; sendResponse({ ok: true, top: window === window.top }); }
   });
-  chrome.runtime.sendMessage({ type: "STEPREC_QUERY" }).then((res) => { if (res && res.armed) SR.armed = true; }).catch(() => {});
+  chrome.runtime.sendMessage({ type: "STEPREC_QUERY" }).then((res) => { if (res && res.armed) { SR.armed = true; SR.any = !!res.any; } }).catch(() => {});
 })();

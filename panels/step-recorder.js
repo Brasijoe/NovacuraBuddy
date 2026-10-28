@@ -18,6 +18,7 @@ async function srRefresh() {
   srEl("srPause").textContent = state === "paused" ? "▶ Resume" : "❚❚ Pause";
   srEl("srStop").disabled = !rec;
   srEl("srLang").value = rec ? rec.lang : srEl("srLang").value;
+  if (rec && document.activeElement !== srEl("srAny")) srEl("srAny").checked = !!rec.any;
   srEl("srSubRow").hidden = !rec;
   srEl("srSubStart").hidden = !!(rec && rec.sub);
   srEl("srSubEnd").hidden = !(rec && rec.sub);
@@ -156,7 +157,7 @@ srEl("srStart").onclick = async () => {
   try {
     if (!(await chrome.permissions.contains({ origins: ["<all_urls>"] }))) shots = await chrome.permissions.request({ origins: ["<all_urls>"] });
   } catch { shots = false; }
-  const res = await send({ type: "STEPREC_START", lang: srEl("srLang").value });
+  const res = await send({ type: "STEPREC_START", lang: srEl("srLang").value, any: srEl("srAny").checked });
   if (!res.ok) srEl("srStatusText").textContent = res.error || "Could not start.";
   else {
     srLast = ""; srRefresh();
@@ -182,3 +183,4 @@ srEl("srSubStart").onclick = async () => {
 };
 srEl("srNewPage").onclick = async () => { await send({ type: "STEPREC_NEWPAGE" }); srEl("srStatusText").textContent = "The next step gets a new screenshot."; };
 srEl("srSubEnd").onclick = async () => { await send({ type: "STEPREC_SUB", action: "end" }); srRefresh(); };
+srEl("srAny").onchange = async () => { const cur = await send({ type: "STEPREC_GET" }); if (cur.rec) await send({ type: "STEPREC_OPTION", any: srEl("srAny").checked }); };
