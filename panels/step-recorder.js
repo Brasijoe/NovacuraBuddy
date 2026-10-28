@@ -27,6 +27,7 @@ async function srRefresh() {
   srEl("srStatusText").textContent = !rec ? "Open the Flow web client in the active tab, then press Start."
     : state === "paused" ? `Paused (${rec.steps.length} steps) - nothing is captured` : `Recording (${rec.steps.length} steps, ${rec.events || 0} clicks/inputs seen, ${rec.skipped || 0} ignored)`;
 
+  srEl("srLog").textContent = rec && rec.log ? [...rec.log].reverse().map((l) => new Date(l.t).toLocaleTimeString() + "  " + l.text).join("\n") : "";
   // Do not rebuild the list while the user types in it.
   const sig = JSON.stringify([rec && rec.steps.map((s) => [s.id, s.number, s.text, s.note]), sessions.map((s) => s.id)]);
   const typing = srEl("srSteps").contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName);

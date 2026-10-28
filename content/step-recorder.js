@@ -72,11 +72,11 @@
 
   function describe(ev, kind) {
     const raw = ev.target instanceof Element ? ev.target : null;
-    if (!raw) return null;
+    if (!raw) return { ignored: "no element" };
     const strict = controlOf(raw);
     // By default a click that hit no control (empty page area, plain text) is not a step; with "any object" on, read-only text counts.
     const el = strict || (SR.any ? textObjectOf(raw) : null);
-    if (!el) return null;
+    if (!el) return { ignored: "click hit no control (" + raw.tagName.toLowerCase() + (SR.any ? ", no short text there" : ", read-only objects are off") + ")" };
     const tag = el.tagName.toLowerCase();
     const row = raw.closest("tr, [role='row'], [role='option']");
     const grid = row && row.closest("table, [role='grid'], [role='listbox'], [role='table']");
@@ -98,7 +98,14 @@
       if (dialog) { info.inLov = true; info.prompt = info.prompt || text(dialog.querySelector("h1, h2, h3, [role='heading']")); } else info.inList = true;
       info.review = true; // layout guessed, not yet verified against the real web client
     }
-    if (kind === "click" && !info.readonly && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return null; // a container, not a labelled control
+    // A read-only or disabled field is something to point at (value shown on screen), not something to type in.
+    if (kind === "click" && /^(input|textarea|select)$/.test(tag) && (el.readOnly || el.disabled || el.getAttribute("aria-readonly") === "true")) {
+      if (!SR.any) return { ignored: "read-only field (read-only objects are off)" };
+      const val = el.type === "password" ? "" : (el.value || "");
+      info.readonly = true;
+      info.label = ((info.prompt ? info.prompt + ": " : "") + val).slice(0, 120);
+    }
+    if (kind === "click" && !info.readonly && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return { ignored: "container without a short label (" + tag + ")" }; // not a labelled control
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
     return { info, screen: screenTitle(), page: location.pathname + location.hash, sig: layoutSig(), rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
   }
