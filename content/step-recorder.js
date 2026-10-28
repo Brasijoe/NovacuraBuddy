@@ -9,7 +9,6 @@
   window.__nbStepRecorder = SR;
   const onDown = (ev) => { if (ev.button === 0) report(ev, "click"); };
   const onChange = (ev) => report(ev, "change");
-  SR.resetGeneric = () => { GENERIC.counts = {}; GENERIC.ids = new WeakMap(); };
   SR.dispose = () => { SR.armed = false; removeEventListener("pointerdown", onDown, true); removeEventListener("change", onChange, true); };
 
   const text = (el) => (el && (el.getAttribute("aria-label") || el.innerText || el.textContent || "") || "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -92,15 +91,11 @@
     return pretty(el.getAttribute("data-testid") || el.getAttribute("data-name") || el.getAttribute("name") || "");
   }
 
-  // Controls that have no name anywhere get a generic one with a counter per object: "Pinned Step 1", "Pinned Step 2", ...
-  // (the same element clicked again keeps its number). The counters restart with every recording.
-  const GENERIC = { counts: {}, ids: new WeakMap() };
+  // Controls that have no name anywhere get a generic one ("Pinned Step", or "Object"); the step shows the control's icon.
   function genericName(el) {
     let hint = "";
     for (let n = el, i = 0; n && i < 4; n = n.parentElement, i++) hint += " " + (n.getAttribute("class") || "") + " " + (n.id || "") + " " + (n.getAttribute("title") || "") + " " + (n.getAttribute("data-testid") || "") + " " + (n.getAttribute("aria-label") || "");
-    const kind = /pin/i.test(hint) ? "Pinned Step" : "Object";
-    if (!GENERIC.ids.has(el)) { GENERIC.counts[kind] = (GENERIC.counts[kind] || 0) + 1; GENERIC.ids.set(el, GENERIC.counts[kind]); }
-    return kind + " " + GENERIC.ids.get(el);
+    return /pin/i.test(hint) ? "Pinned Step" : "Object";
   }
 
   function describe(ev, kind) {
@@ -169,7 +164,7 @@
   addEventListener("change", onChange, true);
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg && msg.type === "STEPREC_ARM") { if (msg.armed && !SR.armed) SR.resetGeneric(); SR.armed = !!msg.armed; SR.any = !!msg.any; sendResponse({ ok: true, top: window === window.top }); }
+    if (msg && msg.type === "STEPREC_ARM") { SR.armed = !!msg.armed; SR.any = !!msg.any; sendResponse({ ok: true, top: window === window.top }); }
   });
   chrome.runtime.sendMessage({ type: "STEPREC_QUERY" }).then((res) => { if (res && res.armed) { SR.armed = true; SR.any = !!res.any; } }).catch(() => {});
 })();
