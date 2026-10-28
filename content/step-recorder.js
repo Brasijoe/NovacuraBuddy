@@ -31,10 +31,27 @@
     return h ? text(h) : "";
   }
 
+  const INTERACTIVE = "button, a[href], [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option'], [role='switch'], [role='checkbox'], [role='radio'], input, textarea, select, summary";
+
+  /** The control a click hit: a real control, a data row of a grid, or an element the cursor shows as clickable. Never an ancestor that merely has text. */
+  function controlOf(raw) {
+    const hit = raw.closest(INTERACTIVE);
+    if (hit) return hit;
+    const row = raw.closest("tr, [role='row']");
+    if (row && row.closest("table, [role='grid'], [role='table'], [role='listbox']") && !row.querySelector("th")) return row;
+    if (getComputedStyle(raw).cursor === "pointer") {
+      let el = raw;
+      while (el.parentElement && el.parentElement !== document.body && getComputedStyle(el.parentElement).cursor === "pointer") el = el.parentElement;
+      return el;
+    }
+    return null;
+  }
+
   function describe(ev, kind) {
     const raw = ev.target instanceof Element ? ev.target : null;
     if (!raw) return null;
-    const el = raw.closest("button, [role='button'], a, input, textarea, select, [role='switch'], [role='checkbox'], [role='option'], tr, [role='row'], li") || raw;
+    const el = controlOf(raw);
+    if (!el) return null; // a click that hit no control (empty page area) is not a step
     const tag = el.tagName.toLowerCase();
     const row = raw.closest("tr, [role='row'], [role='option']");
     const grid = row && row.closest("table, [role='grid'], [role='listbox'], [role='table']");
@@ -56,6 +73,7 @@
       if (dialog) { info.inLov = true; info.prompt = info.prompt || text(dialog.querySelector("h1, h2, h3, [role='heading']")); } else info.inList = true;
       info.review = true; // layout guessed, not yet verified against the real web client
     }
+    if (kind === "click" && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return null; // a container, not a labelled control
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
     return { info, screen: screenTitle(), page: location.pathname + location.hash, rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
   }

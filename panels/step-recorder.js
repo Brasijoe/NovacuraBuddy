@@ -111,6 +111,11 @@ function srRenderSteps(rec) {
     page.className = "sr-page";
     const title = (run.lead && run.lead.screen) || run.steps[0].screen;
     if (title) { const h = document.createElement("div"); h.className = "sr-screen"; h.textContent = title; page.appendChild(h); }
+    const key = document.createElement("div");
+    key.className = "sr-key";
+    key.textContent = "Page key: " + (title || "(no title)") + " · " + ((run.lead && run.lead.url) || (run.steps[0] && run.steps[0].url) || "(no url)") + (run.lead && run.lead.lov ? " · LoV" : "");
+    key.title = "A new screenshot is taken when this key changes (screen title, URL, LoV dialog open/closed).";
+    page.appendChild(key);
     page.appendChild(srPageThumb(run));
     for (const s of run.steps) page.appendChild(srStepRow(s));
     box.appendChild(page);
