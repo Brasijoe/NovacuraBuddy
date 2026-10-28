@@ -109,7 +109,14 @@
       info.readonly = true;
       info.label = ((info.prompt ? info.prompt + ": " : "") + val).slice(0, 120);
     }
-    if (kind === "click" && !info.readonly && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) return { ignored: "container without a short label (" + tag + ")" }; // not a labelled control
+    if (kind === "click" && !info.readonly && !info.rowKey && (info.label.length > 80 || !info.label) && !/^(input|textarea|select)$/.test(tag)) {
+      // A clickable card or tile (e.g. an Inbox entry): its first line of text is its name; an icon button has a tooltip or alt text.
+      const first = String(el.innerText || "").split("\n").map((l) => l.replace(/\s+/g, " ").trim()).find(Boolean);
+      const tip = el.querySelector("[title], [aria-label], img[alt]");
+      const name = (first && first.length <= 80 ? first : first ? first.slice(0, 80) : "") || (tip && (tip.getAttribute("title") || tip.getAttribute("aria-label") || tip.getAttribute("alt"))) || "";
+      if (!name) return { ignored: "clickable " + tag + " without any text, title or alt" };
+      info.label = name.trim();
+    }
     const r = (kind === "change" || /^(input|select|textarea)$/.test(tag) ? el : row || el).getBoundingClientRect();
     return { info, screen: screenTitle(), page: location.pathname + location.hash, sig: layoutSig(), rect: { x: r.left, y: r.top, w: r.width, h: r.height }, point: ev.clientX !== undefined && kind === "click" ? { x: ev.clientX, y: ev.clientY } : null, vw: innerWidth, vh: innerHeight };
   }
