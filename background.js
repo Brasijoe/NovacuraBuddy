@@ -1117,14 +1117,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           })).filter((st) => st.text);
           return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "", steps });
         }
-        case "MC_SAVE_RESULT": {
-          // The result, plus the steps it marks in the Designer (kept small, one entry per scan).
-          const key = moduleCompareKey(message);
-          const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
-          index[key] = { orgId: message.orgId, packageId: message.packageId || null, baseUrl: message.baseUrl, scannedAt: message.result.scannedAt, flows: ModuleCompare.flowMarks(message.result) };
-          await chrome.storage.local.set({ [key]: message.result, [MODULE_COMPARE_MARKS_KEY]: index });
-          return sendResponse({ ok: true });
-        }
         case "STEP_SQL_MANY": { // the web client's content script: the SQL of the Database steps in the Diagnostic panel's log
           if (!flowToken.get()) return sendResponse({ ok: false, error: "Open a Flow Designer tab (build.novacura.com) once so the extension can read the flow" });
           const r = await FlowStepSql.resolveSteps({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId, apps: message.versions || [], flowName: message.flowName || "", stepNames: message.stepNames || [] });
@@ -1162,7 +1154,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "MC_LAST_RESULT": {
           const key = moduleCompareKey(message);
           const { [key]: result = null } = await chrome.storage.local.get(key);
-          return sendResponse({ ok: true, result });
+          // The side panel only needs the headline; the full result can be too large for a message.
+          return sendResponse({ ok: true, result: result && { scannedAt: result.scannedAt, modules: result.modules.map((m) => ({ status: m.status })) } });
         }
         case "MC_UPDATE": { // user-clicked per module: commits the regenerated code, the same calls as Create module
           const flowFetch = boundFlowFetch();
@@ -1182,7 +1175,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
           const { [key]: result = null } = await chrome.storage.local.get(key);
-          return sendResponse({ ok: true, result });
+          // The side panel only needs the headline; the full result can be too large for a message.
+          return sendResponse({ ok: true, result: result && { scannedAt: result.scannedAt, modules: result.modules.map((m) => ({ status: m.status })) } });
         }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
