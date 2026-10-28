@@ -3,6 +3,8 @@ importScripts(
   "lib/projection-filter.js",
   "lib/ifs-instances.js",
   "lib/recorder-capture.js",
+  "lib/step-recorder.js",
+  "lib/step-recorder-service.js",
   "lib/projection-search.js",
   "lib/flow-connect-rest.js",
   "lib/tracking.js",
@@ -544,6 +546,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // A restarted worker must finish restoring the persisted Connect token and Designer tab
       // before answering — otherwise the panel's first poll after every restart saw neither.
       await ready;
+      if (StepRecService.isStepRecMessage(message.type)) {
+        sendResponse(await StepRecService.handle(message, _sender));
+        return;
+      }
       if (RecorderCapture.isRecorderMessage(message.type)) {
         // The recorder answers these itself; this router must not answer them too (the old
         // default branch replied "Unknown message type", racing the recorder's real reply).

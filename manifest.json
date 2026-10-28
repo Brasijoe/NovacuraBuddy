@@ -5,14 +5,14 @@
   "version_name": "0.5.0 beta",
   "description": "Traces IFS Cloud projection calls and turns them into Novacura Flow Connect modules.",
   "permissions": ["storage", "sidePanel", "webRequest", "debugger", "alarms", "unlimitedStorage", "tabs", "downloads", "scripting"],
-  "host_permissions": ["https://build.novacura.com/*", "https://api.github.com/*"],
+  "host_permissions": ["https://build.novacura.com/*", "https://app.novacura.com/*", "https://api.github.com/*"],
   "optional_host_permissions": ["https://*/*"],
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "sidepanel.html" },
   "action": { "default_title": "Novacura Buddy" },
   "content_scripts": [
     { "matches": ["https://build.novacura.com/*"], "js": ["lib/plsql-test-script.js", "content/designer.js"], "run_at": "document_idle" },
-    { "matches": ["https://app.novacura.com/*"], "js": ["lib/flow-step-sql.js", "lib/plsql-test-script.js", "lib/rest-postman.js", "content/client-diagnostics.js"], "run_at": "document_idle" },
+    { "matches": ["https://app.novacura.com/*"], "js": ["lib/flow-step-sql.js", "lib/plsql-test-script.js", "lib/rest-postman.js", "content/client-diagnostics.js", "content/step-recorder.js"], "run_at": "document_idle" },
     { "matches": ["https://build.novacura.com/*"], "js": ["content/monaco-hook.js"], "run_at": "document_start", "world": "MAIN" },
     { "matches": ["https://build.novacura.com/*"], "js": ["content/canvas-hook.js"], "run_at": "document_start", "world": "MAIN" }
   ],
