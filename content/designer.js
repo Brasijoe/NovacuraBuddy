@@ -535,7 +535,7 @@ function ptPlain(text) {
   return t;
 }
 
-/** The test panel's variables as { "Record__field": value }. The panel lists records and their fields
+/** The test panel's variables as { "Record__field": value as written in the panel }. The panel lists records and their fields
  *  as rows one after the other, a field indented under its record; a row without a value box is a record. */
 function ptTestValues(win) {
   const values = {};
@@ -549,7 +549,7 @@ function ptTestValues(win) {
     while (stack.length && stack[stack.length - 1].left >= left - 1) stack.pop();
     const input = row.querySelector("app-single-line-code-input");
     if (!input) { stack.push({ left, name }); continue; } // a record
-    values[[...stack.map((s) => s.name), name].join("__")] = ptPlain(input.textContent);
+    values[[...stack.map((s) => s.name), name].join("__")] = input.textContent.replace(/\u00a0/g, " ").trim();
   }
   return values;
 }
@@ -562,10 +562,10 @@ function ptRead() {
     if (!code) continue;
     const binds = PlsqlTestScript.extractBinds(code.text);
     const all = new Map(Object.entries(ptTestValues(win)).map(([k, v]) => [k.toLowerCase(), v]));
-    const values = {};
-    for (const b of binds) if (all.has(b.toLowerCase())) values[b] = all.get(b.toLowerCase());
+    const values = {}, raw = {};
+    for (const b of binds) if (all.has(b.toLowerCase())) { raw[b] = all.get(b.toLowerCase()); values[b] = ptPlain(raw[b]); }
     const heading = win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
-    return { sql: code.text, values, binds, found: Object.keys(values).length, label: heading ? heading.textContent.trim().slice(0, 60) : "" };
+    return { sql: code.text, values, raw, binds, found: Object.keys(values).length, label: heading ? heading.textContent.trim().slice(0, 60) : "" };
   }
   return null;
 }
@@ -599,7 +599,7 @@ function ptRender() {
   const bar = PT.root.querySelector(".bar");
   const info = ptRead();
   PT.info = info;
-  const sig = info ? `${info.sql.length}|${info.binds.length}|${info.found}|${Object.values(info.values).join("\u0001")}` : "";
+  const sig = info ? `${info.sql.length}|${info.binds.length}|${info.found}|${Object.values(info.raw).join("\u0001")}` : "";
   if (bar.dataset.sig === sig) return;
   bar.dataset.sig = sig;
   bar.hidden = !info;
@@ -610,12 +610,20 @@ function ptRender() {
   go.textContent = "PL/SQL test script (.tst)";
   go.title = "Creates a PL/SQL Developer test script from this step's code, with the test values entered here. The :binds stay as they are.";
   go.onclick = () => { const cur = PT.info || info; ptDownload(PlsqlTestScript.fileName(cur.label), make(cur.sql, cur.values)); };
+  const copy = document.createElement("button");
+  copy.textContent = "Copy with values";
+  copy.title = "Copies the step's code to the clipboard with every :bind replaced by its test value as a PL/SQL literal ('text', 12, NULL, TO_DATE(...)), ready to run in any SQL tool.";
+  copy.onclick = async () => {
+    const cur = PT.info || info;
+    try { await navigator.clipboard.writeText(PlsqlTestScript.inlineBinds(cur.sql, cur.raw)); copy.textContent = "Copied"; } catch { copy.textContent = "Copy failed"; }
+    setTimeout(() => { copy.textContent = "Copy with values"; }, 2000);
+  };
   const note = document.createElement("span");
   note.className = "note";
   note.textContent = info.binds.length ? `${info.found} of ${info.binds.length} variables filled` : "no variables";
   const missing = info.binds.filter((b) => !(b in info.values));
   note.title = missing.length ? `No test value in the window for: ${missing.join(", ")} (left empty in the script)` : "All variables have a test value";
-  bar.append(go, note);
+  bar.append(go, copy, note);
 }
 
 setInterval(() => { try { ptRender(); } catch { /* never disturb the Designer */ } }, 700);
