@@ -29,6 +29,7 @@ importScripts(
   "lib/update-check.js",
   "lib/flow-deps.js",
   "lib/flow-documentation.js",
+  "lib/permission-check.js",
   "lib/module-compare.js",
   "apimodule/api-module-service.js"
 );
@@ -903,6 +904,75 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
           return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+        }
+        case "PC_TARGETS": { // permission check: the IFS users (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, users: await IfsPermissions.listUsers(client, await IfsPermissions.entitySets(client)) });
+        }
+        case "PC_COMPARE": { // permission check: required projections against a user's or permission sets' grants (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const sets = await IfsPermissions.entitySets(client);
+          const grants = message.user ? await IfsPermissions.userProjections(client, sets, message.user)
+            : await IfsPermissions.permissionSetProjections(client, sets, message.roles || []);
+          // The permission sets a projection may be put into: the user's own customer sets, or the chosen ones.
+          let assignable;
+          if (message.user) assignable = await IfsPermissions.userPermissionSets(client, sets, message.user);
+          else {
+            const names = new Map((await IfsPermissions.listPermissionSets(client)).map((p) => [p.id, p.name]));
+            assignable = message.roles.map((id) => ({ id, name: names.get(id) || id }));
+          }
+          const allowed = new Set(assignable.map((p) => p.id));
+          const { missing } = PermissionCheck.compare(message.required, grants.map((g) => g.projection));
+          const missingSet = new Set(missing.map((r) => r.projection));
+          const lowSet = new Set(PermissionCheck.tooLow(message.required, grants).map((r) => r.projection));
+          const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
+          // The sets that give the projection, as IFS reports them for the user (a second source next to the
+          // ProjectionGrant list, which can lag behind a fresh grant).
+          const givenBy = new Map();
+          for (const g of grants) {
+            const key = g.projection.toLowerCase();
+            if (!givenBy.has(key)) givenBy.set(key, new Set());
+            const pick = [g.grantingSet, g.userSet].find((id) => id && allowed.has(id));
+            if (pick) givenBy.get(key).add(pick);
+          }
+          const rows = [];
+          let warning = null;
+          const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
+          for (const r of message.required) {
+            // A projection IFS does not know cannot be granted (name typo, other IFS version, removed).
+            let found = true;
+            try { found = !!(await ProjectionSearch.queryProjectionMeta(message.baseUrl, ifsToken, r.projection)); } catch (e) { warning = warning || `Could not check whether ${r.projection} exists: ${e.message}`; }
+            if (!found) { rows.push({ ...r, state: "notfound", current: [], managed: [], others: [], via: null }); continue; }
+            let all = [];
+            try { all = await IfsPermissions.permissionSetsGranting(client, sets, r.projection); } catch (e) { warning = warning || `Could not read which permission sets grant ${r.projection}: ${e.message}`; }
+            rows.push({
+              ...r,
+              state: missingSet.has(r.projection) ? "missing" : lowSet.has(r.projection) ? "low" : "ok",
+              current: [...new Set([...all.filter((p) => !p.managed && allowed.has(p.role)).map((p) => p.role), ...(givenBy.get(r.projection.toLowerCase()) || [])])], // editable sets of the user that grant it
+              managed: all.filter((p) => p.managed).map((p) => p.role), // IFS-delivered sets that grant it
+              others: all.filter((p) => !p.managed && !allowed.has(p.role)).map((p) => p.role), // customer sets that grant it but the user does not have
+              via: viaOf.get(r.projection.toLowerCase()) || null
+            });
+          }
+          return sendResponse({ ok: true, assignable, rows, warning, user: message.user || null });
+        }
+        case "PC_APPLY": { // permission check: the changes the user confirmed in the panel (writes to IFS)
+          const valid = Array.isArray(message.changes) && message.changes.length > 0 && message.changes.every((c) =>
+            ["grant", "revoke", "assign"].includes(c.type) && typeof c.role === "string" && c.role &&
+            (c.type === "assign" ? typeof c.user === "string" && c.user : typeof c.projection === "string" && c.projection));
+          if (!valid) return sendResponse({ ok: false, error: "No valid changes to apply — nothing was changed." });
+          log("PC_APPLY:", message.changes.length, "change(s) on", message.baseUrl);
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const sets = await IfsPermissions.entitySets(client);
+          const outcome = await IfsPermissions.applyChanges(client, sets, message.changes);
+          log("PC_APPLY done:", JSON.stringify(outcome.results.map((r) => [r.change.type, r.change.role, r.ok])));
+          return sendResponse({ ok: true, ...outcome });
+        }
+        case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
+          const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
+          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
         }
         case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
           const tab = captureDesignerTab();

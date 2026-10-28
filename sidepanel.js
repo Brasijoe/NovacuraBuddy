@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "module-compare", "linked-flows", "commit-chain", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "module-compare", "linked-flows", "commit-chain", "permission-check", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -12,6 +12,11 @@ function showTab(name) {
     btn.classList.toggle("is-active", !!active);
     btn.title = active ? active.textContent : "";
   }
+  // Subheader under the tab bar: which tab is open (and the menu group it sits in).
+  const openItem = document.getElementById(`tab-${name}`);
+  const openGroup = openItem.closest(".tab-group");
+  const itemLabel = openItem.firstChild.textContent.trim();
+  document.getElementById("tabSubheader").textContent = openGroup ? `${openGroup.querySelector(".tab-group-btn").firstChild.textContent.trim()} › ${itemLabel}` : itemLabel;
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
@@ -21,6 +26,14 @@ function showTab(name) {
   if (name === "module-compare") mcOnShow();
   if (name === "commit-chain") ccOnShow();
 }
+
+// After unlocking the saved credentials, reload what the open tab could not read while locked.
+document.addEventListener("ifs-unlocked", () => {
+  const name = TABS.find((t) => !document.getElementById(`panel-${t}`).hidden);
+  if (name === "flow-deps") fdOnShow();
+  if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
+  if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
+});
 
 for (const tab of TABS) document.getElementById(`tab-${tab}`).addEventListener("click", () => { showTab(tab); closeTabMenus(); });
 

@@ -830,3 +830,24 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cc-node input[type="checkbox"] { flex: none; width: 14px; height: 14px; margin: 0; padding: 0; } .cc-node .ft-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .wip-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; margin-left: 4px; border-radius: 8px; background: var(--accent-orange); color: #fff; vertical-align: middle; }
+
+/* Permission Check: one card per connector */
+.pc-card { border: 1px solid var(--border, #8884); border-radius: 6px; margin: 6px 0; padding: 6px 8px; }
+.pc-card-head { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+.pc-list { list-style: none; margin: 4px 0 0 22px; padding: 0; }
+.pc-list li { padding: 1px 0; }
+.pc-sub { opacity: 0.65; font-size: 0.9em; }
+.pc-missing { color: #c0392b; }
+.pc-ok { color: #2e7d32; }
+
+/* Which tab is open */
+.tab-subheader { font-size: 0.9em; opacity: 0.75; padding: 4px 2px 2px; }
+
+/* Permission Check mapping: fixed two columns, the dropdown stays where it is whatever the projection name */
+.pc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 4px 8px; align-items: start; margin-bottom: 8px; }
+.pc-proj { overflow-wrap: anywhere; }
+.pc-dd { position: relative; border: 1px solid var(--border, #8884); border-radius: 4px; padding: 2px 6px; }
+.pc-dd summary { cursor: pointer; }
+.pc-dd-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; max-height: 180px; overflow: auto; }
+.pc-preview { margin: 4px 0 8px; }
+.pc-dd-give { margin-top: 4px; border-style: dashed; }
