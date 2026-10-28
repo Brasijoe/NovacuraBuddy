@@ -122,7 +122,9 @@
       const d = describe(ev, kind);
       if (d) chrome.runtime.sendMessage({ type: "STEPREC_EVENT", event: d }).catch(() => {});
     } catch (e) {
-      if (/context invalidated/i.test(String(e && e.message))) SR.dispose(); // reload the Flow tab after reloading the extension
+      if (/context invalidated/i.test(String(e && e.message))) { SR.dispose(); return; } // reload the Flow tab after reloading the extension
+      // Anything else is shown in the panel's "Last clicks" log instead of failing silently.
+      try { chrome.runtime.sendMessage({ type: "STEPREC_EVENT", event: { ignored: "script error: " + String((e && e.message) || e) + " | " + String((e && e.stack) || "").split("\n").slice(1, 3).join(" ").slice(0, 200) } }).catch(() => {}); } catch { /* nothing more to do */ }
     }
   }
 
