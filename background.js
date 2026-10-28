@@ -30,6 +30,7 @@ importScripts(
   "lib/flow-deps.js",
   "lib/flow-documentation.js",
   "lib/permission-check.js",
+  "lib/permission-set-compare.js",
   "lib/module-compare.js",
   "apimodule/api-module-service.js"
 );
@@ -966,6 +967,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const sets = await IfsPermissions.entitySets(client);
           const outcome = await IfsPermissions.applyChanges(client, sets, message.changes);
           log("PC_APPLY done:", JSON.stringify(outcome.results.map((r) => [r.change.type, r.change.role, r.ok])));
+          return sendResponse({ ok: true, ...outcome });
+        }
+        case "PSC_SETS": { // compare permission sets: the customer permission sets of an instance (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, sets: await IfsPermissions.listPermissionSets(client) });
+        }
+        case "PSC_READ": { // compare permission sets: the grants of the chosen sets on one instance (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const sets = await IfsPermissions.entitySets(client);
+          return sendResponse({ ok: true, data: await IfsPermissions.readPermissionSets(client, sets, message.roles || []) });
+        }
+        case "PSC_APPLY": { // compare permission sets: the changes the user confirmed for ONE instance (writes to IFS)
+          const valid = Array.isArray(message.changes) && message.changes.length > 0 && message.changes.every((c) =>
+            ["create", "grant", "revoke"].includes(c.type) && typeof c.role === "string" && c.role &&
+            (c.type === "create" || (typeof c.projection === "string" && c.projection)));
+          if (!valid) return sendResponse({ ok: false, error: "No valid changes to apply — nothing was changed." });
+          log("PSC_APPLY:", message.changes.length, "change(s) on", message.baseUrl);
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const outcome = await IfsPermissions.applyChanges(client, await IfsPermissions.entitySets(client), message.changes);
+          log("PSC_APPLY done:", JSON.stringify(outcome.results.map((r) => [r.change.type, r.change.role, r.ok])));
           return sendResponse({ ok: true, ...outcome });
         }
         case "PC_SCAN": { // permission check step 1: the IFS projections the open flow (and what it uses) calls; read-only

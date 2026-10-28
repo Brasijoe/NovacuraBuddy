@@ -36,6 +36,7 @@
           <div class="tab-menu-row"><button id="tab-recorder" class="tab-item" role="tab">Traffic Recorder</button><span class="info-tip" data-tip="Records the IFS projection calls your browser tabs make, with requests and responses. Open a session in the viewer to filter the calls, drop redundant ones and create a Flow asset from them."></span></div>
           <div class="tab-menu-row"><button id="tab-quick-reports" class="tab-item" role="tab">Quick Reports</button><span class="info-tip" data-tip="SQL Quick Reports kept in your GitHub repo. Deploy one to an IFS instance with permission sets, then create its Flow module for the open flow."></span></div>
           <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
+          <div class="tab-menu-row"><button id="tab-permission-sets" class="tab-item" role="tab">Compare Permission Sets <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Compares permission sets (their projection and action grants) between two IFS instances. Tick the sets, see what differs, then create missing sets, merge both ways, or use one instance as the reference and copy or sync to the other. Nothing is written before you confirm the preview with a second click."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-deps" class="tab-item" role="tab">Flow Dependencies</button><span class="info-tip" data-tip="Scans an IFS installation for everything that calls Novacura Flow (run.novacura.com or app.novacura.com): events, event actions, workflows, routing addresses and page commands. Results open in a new browser tab. Read-only: the scan never changes anything in IFS."></span></div>
         </div>
       </div>
@@ -341,6 +342,32 @@
       </div>
     </section>
 
+    <section id="panel-permission-sets" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> not tested against a live IFS. Reading is safe; creating permission sets and removing grants are not confirmed live. Try it on test instances first.</span></div>
+      <div class="section-head"><h2>Instances</h2><span class="info-tip" data-tip="Pick the two IFS instances from Basic Data. They are called A and B; in Copy and Sync you choose which one is the reference."></span></div>
+      <select id="pscInstA" aria-label="Instance A"></select>
+      <select id="pscInstB" aria-label="Instance B"></select>
+      <div class="section-head"><h3>Permission sets</h3><span class="info-tip" data-tip="All customer permission sets of both instances (IFS-delivered ones are left out). The tag says where each exists. Tick as many as you like; the filter only narrows the list, and All / None act on the visible rows."></span></div>
+      <div class="search-row"><input id="pscFilter" placeholder="Filter permission sets…" autocomplete="off" /><button id="pscAll" class="btn-ghost">All</button><button id="pscNone" class="btn-ghost">None</button></div>
+      <div id="pscSets" class="checklist"></div>
+      <p id="pscCount" class="list-count"></p>
+      <div class="section-head"><h3>Action</h3><span class="info-tip" data-tip="Merge: each instance gets the projections only the other has. Copy from reference: the target gets what the reference has, nothing is removed. Sync to reference: like copy, and can also remove what the reference does not have. The reference is the template instance. Action grants are compared but not changed yet."></span></div>
+      <select id="pscMode" aria-label="Action">
+        <option value="merge">Merge (add what is missing on both)</option>
+        <option value="copy">Copy from reference (add missing to the target)</option>
+        <option value="sync">Sync to reference (make the target match)</option>
+      </select>
+      <div id="pscRefRow" hidden><label>Reference (template) <select id="pscRef"><option value="A">A</option><option value="B">B</option></select></label></div>
+      <div id="pscRemoveRow" hidden><label class="fd-default"><input type="checkbox" id="pscRemove" /> Also remove projections the reference does not have</label></div>
+      <label class="fd-default"><input type="checkbox" id="pscCreate" checked /> Create permission sets that do not exist on the target</label>
+      <button id="pscCompareBtn" class="btn-primary fd-scan-btn">Compare</button>
+      <div id="pscHint" class="empty-state" hidden></div>
+      <div id="pscOut" hidden>
+        <div id="pscResult"></div>
+        <div id="pscPlan" class="pc-preview"></div>
+      </div>
+    </section>
+
     <section id="panel-commit-chain" role="tabpanel" hidden>
       <div class="banner banner-warning"><span><strong>Not fully tested.</strong> Commit Dependencies changes Flow assets. Apps, pages and automations are save-only. Try it on a copy of a flow first and check the result in the Designer.</span></div>
       <div class="lf-head">
@@ -418,6 +445,8 @@
     <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
     <script src="panels/permission-check.js"></script>
+    <script src="lib/permission-set-compare.js"></script>
+    <script src="panels/permission-set-compare.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>
