@@ -1,9 +1,12 @@
-// Injected into the Flow web client (app.novacura.com). While the Diagnostic panel is open and the
-// current step is a Database step, a button copies the step's PL/SQL with the variables from the
-// panel's Variables tab written in as literals. The SQL is not in the client or the trace log: the
-// extension reads it from the flow's designer data (see lib/flow-step-sql.js). Read-only.
-const CD = { host: null, root: null, cache: new Map(), key: null, state: null };
+// Injected into the Flow web client (app.novacura.com). Nothing runs in the background: the only
+// listeners are a click handler that places ONE button, "Add PL/SQL info", in the Diagnostic panel's
+// Trace Logs toolbar. Once it is pressed, the logged steps are looked up in the flow's designer data
+// (see lib/flow-step-sql.js) and every Database step's log row gets a "Copy with values" button: the
+// step's PL/SQL with the variables from the panel's Variables tab written in as literals. Read-only.
+const CD = { observer: null, scanning: false, cache: new Map(), flow: null, button: null };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
+const CD_LABEL = "Add PL/SQL info";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function cdPanel() {
   const heading = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6,div,span,p")].find((e) => e.children.length === 0 && e.textContent.trim() === "Diagnostic panel");
@@ -11,7 +14,7 @@ function cdPanel() {
   let panel = heading;
   for (let i = 0; i < 6 && panel.parentElement; i++) {
     panel = panel.parentElement;
-    if (panel.querySelector("table, .mud-tabs, [role=tablist]")) break;
+    if (panel.querySelector(".mud-tabs, [role=tablist], .mud-tab")) break;
   }
   return { heading, panel };
 }
@@ -43,7 +46,7 @@ function cdFlowLiteral(value, type) {
 }
 
 /** The Variables tab as { "Record__field": flow literal }: rows with the type "Record" open a record, indented fields follow. */
-function cdVariables(p) {
+function cdVariablesNow(p) {
   const rows = [...p.panel.querySelectorAll("tr.variableRow")];
   if (!rows.length) return null;
   const values = {}, stack = [];
@@ -55,83 +58,133 @@ function cdVariables(p) {
     const left = nameEl.getBoundingClientRect().left;
     while (stack.length && stack[stack.length - 1].left >= left - 1) stack.pop();
     const type = cells[cells.length - 1].textContent.trim();
-    if (/^record$/i.test(type)) { stack.push({ left, name }); continue; }
-    values[[...stack.map((s) => s.name), name.replace(/\s*\(\d+\)$/, "")].join("__")] = cdFlowLiteral(cells[cells.length - 2].textContent, type);
+    if (/^record$/i.test(type)) { stack.push({ left, name: name.replace(/\s*\(\d+\)$/, "") }); continue; }
+    values[[...stack.map((s) => s.name), name].join("__")] = cdFlowLiteral(cells[cells.length - 2].textContent, type);
   }
   return values;
 }
 
-function cdEnsureHost() {
-  if (CD.host) return;
-  CD.host = document.createElement("div");
-  CD.host.id = "novacura-buddy-client";
-  CD.root = CD.host.attachShadow({ mode: "open" });
-  CD.root.innerHTML = `<style>
-    :host { all: initial; }
-    .bar { position: fixed; left: 16px; bottom: 16px; z-index: 2147483002; display: flex; align-items: center; gap: 6px; background: #fff; color: #141635; border: 1px solid #d9dcef; border-radius: 10px; padding: 6px 8px; box-shadow: 0 6px 22px rgba(20,22,53,.22); font: 13px/1.3 system-ui, sans-serif; }
-    button { font: inherit; border: 1px solid #0c65f4; background: #0c65f4; color: #fff; border-radius: 7px; padding: 4px 10px; cursor: pointer; }
-    button.ghost { background: none; color: #6b7280; border-color: #d1d5db; padding: 4px 8px; }
-    .note { font-size: 11.5px; color: #6b7280; max-width: 340px; }
-    @media (prefers-color-scheme: dark) { .bar { background: #1b1d3a; color: #eef0ff; border-color: #33365c; } .note { color: #a9acc9; } }
-  </style><div class="bar" hidden></div>`;
-  document.documentElement.appendChild(CD.host);
+/** The current variables. While the Trace Logs tab is open the Variables tab is not drawn, so it is
+ *  opened for a moment and the log tab is restored. */
+async function cdReadVariables() {
+  let p = cdPanel();
+  if (!p) return null;
+  const now = cdVariablesNow(p);
+  if (now) return now;
+  const tabs = [...p.panel.querySelectorAll(".mud-tab")];
+  const varTab = tabs.find((t) => t.textContent.trim() === "Variables");
+  const back = tabs.find((t) => t.classList.contains("mud-tab-active"));
+  if (!varTab) return null;
+  varTab.click();
+  let values = null;
+  for (let i = 0; i < 20 && !values; i++) { await sleep(100); p = cdPanel(); values = p && cdVariablesNow(p); }
+  if (back && back !== varTab) back.click();
+  return values;
 }
 
-function cdRender() {
-  cdEnsureHost();
-  const bar = CD.root.querySelector(".bar");
-  const st = CD.state;
-  const sig = st ? `${st.kind}|${st.key}|${st.error || ""}` : "";
-  if (bar.dataset.sig === sig) return;
-  bar.dataset.sig = sig;
-  bar.hidden = !st;
-  bar.innerHTML = "";
-  if (!st) return;
-  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
-  if (st.kind === "sql") {
-    const copy = h("button", null, "Copy with values");
-    copy.title = `Copies this Database step's code with the variables from the Variables tab written in as PL/SQL literals ('text', 12, NULL, TO_DATE(...)). Code from: ${st.source}`;
-    copy.onclick = async () => {
-      const p = cdPanel();
-      const vars = p && cdVariables(p);
-      if (!vars) { copy.textContent = "Open the Variables tab first"; setTimeout(() => { copy.textContent = "Copy with values"; }, 2500); return; }
-      try { await navigator.clipboard.writeText(PlsqlTestScript.inlineBinds(st.sql, vars)); copy.textContent = "Copied"; } catch { copy.textContent = "Copy failed"; }
-      setTimeout(() => { copy.textContent = "Copy with values"; }, 2000);
+/** Logged steps: [{ row, name }] from the Trace Logs table (rows of type "Step"). */
+function cdStepRows() {
+  const out = [];
+  for (const row of document.querySelectorAll(".diagnosticLogTableRow")) {
+    const type = (row.children[1] && row.children[1].textContent.trim()) || "";
+    const source = row.querySelector(".sourceCell");
+    if (type === "Step" && source) out.push({ row, name: source.textContent.trim(), source });
+  }
+  return out;
+}
+
+const CD_BTN_STYLE = "margin-left:8px;padding:1px 8px;border:1px solid #0c65f4;border-radius:6px;background:#fff;color:#0c65f4;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
+
+function cdMarkRows() {
+  let marked = 0;
+  for (const { source, name } of cdStepRows()) {
+    const hit = CD.cache.get(name);
+    if (!hit) continue;
+    marked++;
+    if (source.querySelector(".nb-copy")) continue;
+    const b = document.createElement("button");
+    b.className = "nb-copy";
+    b.textContent = "Copy with values";
+    b.style.cssText = CD_BTN_STYLE;
+    b.title = `Copies this Database step's code with the variables as they are now (Variables tab) written in as PL/SQL literals. Code from: ${hit.source}`;
+    b.onclick = async (e) => {
+      e.stopPropagation(); e.preventDefault();
+      b.textContent = "Reading variables…";
+      const vars = await cdReadVariables();
+      if (!vars) { b.textContent = "Open the Diagnostic panel"; setTimeout(() => { b.textContent = "Copy with values"; }, 2500); return; }
+      try { await navigator.clipboard.writeText(PlsqlTestScript.inlineBinds(hit.sql, vars)); b.textContent = "Copied"; } catch { b.textContent = "Copy failed"; }
+      setTimeout(() => { b.textContent = "Copy with values"; }, 2000);
     };
-    bar.append(copy, h("span", "note", `Database step "${st.step}"`));
-  } else {
-    bar.append(h("span", "note", st.error));
-    if (st.tried) {
-      const details = h("button", "ghost", "Copy details");
-      details.onclick = async () => { try { await navigator.clipboard.writeText(st.tried.join("\n")); details.textContent = "Copied"; } catch { details.textContent = "Copy failed"; } };
-      bar.append(details);
+    source.appendChild(b);
+  }
+  return marked;
+}
+
+async function cdScan() {
+  if (CD.scanning) return;
+  CD.scanning = true;
+  const btn = CD.button;
+  const say = (text, title) => { if (btn) { btn.textContent = text; btn.title = title || ""; } };
+  try {
+    const p = cdPanel();
+    const crumb = p && cdBreadcrumb(p);
+    const rows = cdStepRows();
+    if (!crumb || !rows.length) { say(CD_LABEL, "No logged steps yet: run the flow with tracing on, then press again."); return; }
+    const missing = [...new Set(rows.map((r) => r.name))].filter((n) => !CD.cache.has(n));
+    let tried = [];
+    if (missing.length) {
+      say("Searching PL/SQL steps…");
+      const vars = (await cdReadVariables()) || {};
+      const lit = (k) => (vars[k] || "").replace(/^"([\s\S]*)"$/, "$1");
+      const res = await chrome.runtime.sendMessage({
+        type: "STEP_SQL_MANY", flowName: crumb.flow, stepNames: missing, versions: cdVersions(),
+        envName: lit("environment__environmentName"), envType: lit("environment__environmentType")
+      }).catch((e) => ({ ok: false, error: e.message }));
+      if (!res || !res.ok) { say(CD_LABEL, ""); say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)"); return; }
+      tried = res.tried || [];
+      for (const n of missing) CD.cache.set(n, res.steps[n] || false); // false: not a Database step, not asked again
     }
+    const found = cdMarkRows();
+    say(found ? `PL/SQL info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database steps found", tried.join("\n"));
+    cdWatch();
+  } finally {
+    CD.scanning = false;
   }
 }
 
-async function cdTick() {
-  const p = cdPanel();
-  const crumb = p && cdBreadcrumb(p);
-  if (!crumb) { CD.key = null; CD.state = null; cdRender(); return; }
-  const key = `${crumb.flow}|${crumb.step}`;
-  if (key === CD.key) { cdRender(); return; }
-  CD.key = key;
-  CD.state = null;
-  cdRender();
-  let res = CD.cache.get(key);
-  if (!res) {
-    const vars = cdVariables(p) || {};
-    const envLiteral = vars.environment__environmentName || vars.environment__environmentType || "";
-    const envName = envLiteral.replace(/^"([\s\S]*)"$/, "$1");
-    const envType = (vars.environment__environmentType || "").replace(/^"([\s\S]*)"$/, "$1");
-    res = await chrome.runtime.sendMessage({ type: "STEP_SQL", flowName: crumb.flow, stepName: crumb.step, versions: cdVersions(), envName, envType }).catch((e) => ({ ok: false, error: e.message }));
-    if (res && res.ok) CD.cache.set(key, res);
-  }
-  if (CD.key !== key) return;
-  if (res && res.ok && res.sql !== undefined) CD.state = { kind: "sql", key, sql: res.sql, source: res.source, step: crumb.step };
-  else if (res && res.ok === false && res.notDatabase) CD.state = null; // a step that is not a Database step: nothing to offer
-  else CD.state = { kind: "error", key, error: (res && res.error) || "SQL not available", tried: res && res.tried };
-  cdRender();
+/** After the button was pressed only: new log rows get their button too (until the log table goes away). */
+function cdWatch() {
+  if (CD.observer) return;
+  const table = document.querySelector(".diagnosticLogTable");
+  if (!table) return;
+  let timer = null;
+  CD.observer = new MutationObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (!document.body.contains(table)) { CD.observer.disconnect(); CD.observer = null; if (CD.button) CD.button.textContent = CD_LABEL; return; }
+      if (!CD.scanning) cdScan();
+    }, 700);
+  });
+  CD.observer.observe(table, { childList: true, subtree: true });
 }
 
-setInterval(() => { cdTick().catch(() => {}); }, 800);
+/** Places the one button in the Trace Logs toolbar (next to "Clear logs"). */
+function cdDock() {
+  const toolbar = document.querySelector(".diagnosticLogTraceToolbar");
+  if (!toolbar || toolbar.querySelector("#nb-plsql")) return;
+  const b = document.createElement("button");
+  b.id = "nb-plsql";
+  b.textContent = CD_LABEL;
+  b.title = "Finds the Database steps in this log, reads their PL/SQL from the flow's designer data and adds a Copy with values button to their rows. Nothing is looked up before you press this.";
+  b.style.cssText = "margin-left:8px;padding:6px 12px;border:1px solid #0c65f4;border-radius:6px;background:#0c65f4;color:#fff;font:13px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
+  b.onclick = (e) => { e.stopPropagation(); cdScan(); };
+  CD.button = b;
+  toolbar.appendChild(b);
+}
+
+// No polling: the button is placed after a click anywhere (opening the panel or its tab is a click)
+// and once or twice shortly after the page loaded.
+let cdDockTimer = null;
+addEventListener("click", () => { clearTimeout(cdDockTimer); cdDockTimer = setTimeout(cdDock, 400); }, true);
+setTimeout(cdDock, 3000);
+setTimeout(cdDock, 8000);
