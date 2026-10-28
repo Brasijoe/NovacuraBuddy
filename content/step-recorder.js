@@ -3,9 +3,13 @@
 // background worker, which takes the screenshot. Password values are never read. Nothing is sent anywhere
 // else; steps stay in the browser's extension storage.
 (function () {
-  if (window.__nbStepRecorder) return;
+  // A copy left behind by a reloaded extension is orphaned (its chrome.runtime is gone): switch it off and take over.
+  if (window.__nbStepRecorder && window.__nbStepRecorder.dispose) { try { window.__nbStepRecorder.dispose(); } catch { /* already dead */ } }
   const SR = { armed: false, any: false };
   window.__nbStepRecorder = SR;
+  const onDown = (ev) => { if (ev.button === 0) report(ev, "click"); };
+  const onChange = (ev) => report(ev, "change");
+  SR.dispose = () => { SR.armed = false; removeEventListener("pointerdown", onDown, true); removeEventListener("change", onChange, true); };
 
   const text = (el) => (el && (el.getAttribute("aria-label") || el.innerText || el.textContent || "") || "").replace(/\s+/g, " ").trim().slice(0, 120);
 
@@ -112,13 +116,18 @@
 
   function report(ev, kind) {
     if (!SR.armed) return;
+    if (!chrome.runtime || !chrome.runtime.id) { SR.dispose(); return; } // extension was reloaded: this copy is orphaned
     if (ev.target instanceof Element && ev.target.closest("[data-nb-ignore]")) return;
-    const d = describe(ev, kind);
-    if (d) chrome.runtime.sendMessage({ type: "STEPREC_EVENT", event: d }).catch(() => {});
+    try {
+      const d = describe(ev, kind);
+      if (d) chrome.runtime.sendMessage({ type: "STEPREC_EVENT", event: d }).catch(() => {});
+    } catch (e) {
+      if (/context invalidated/i.test(String(e && e.message))) SR.dispose(); // reload the Flow tab after reloading the extension
+    }
   }
 
-  addEventListener("pointerdown", (ev) => { if (ev.button === 0) report(ev, "click"); }, true);
-  addEventListener("change", (ev) => report(ev, "change"), true);
+  addEventListener("pointerdown", onDown, true);
+  addEventListener("change", onChange, true);
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg && msg.type === "STEPREC_ARM") { SR.armed = !!msg.armed; SR.any = !!msg.any; sendResponse({ ok: true, top: window === window.top }); }
