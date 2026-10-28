@@ -64,24 +64,35 @@ function cdBreadcrumb(p) {
   return title ? FlowStepSql.parseBreadcrumb(title.textContent) : null;
 }
 
-/** The versions of flows the client has loaded, newest first: [{ app, version }]. */
+/** What the client's own requests tell about the running flow. The browser keeps only the first ~250 request
+ *  entries, which a big flow fills, so the ids are also noted as requests pass by (a cheap observer that stores
+ *  nothing but these ids) and the buffer is made larger. */
+const CD_EXEC_RE = /\/execution\/v2\/appPackages\/([^/]+)\/apps\/([^/]+)\/versions\/([^/]+)\/machineSteps/;
+const CD_SEEN = { apps: [], execApps: [], ids: null };
+function cdNote(url) {
+  let m = CD_APP_RE.exec(url);
+  if (m && !CD_SEEN.apps.some((o) => o.app === m[1] && o.version === m[2])) CD_SEEN.apps.unshift({ app: m[1], version: m[2] });
+  if ((m = CD_EXEC_RE.exec(url)) && !CD_SEEN.execApps.some((o) => o.app === m[2] && o.version === m[3])) CD_SEEN.execApps.unshift({ app: m[2], version: m[3], packageId: m[1] });
+  if ((m = CD_TOKEN_RE.exec(url))) CD_SEEN.ids = { orgId: m[1], envId: m[2], packageId: m[3] };
+}
+try {
+  performance.setResourceTimingBufferSize(3000);
+  for (const e of performance.getEntriesByType("resource")) cdNote(e.name);
+  new PerformanceObserver((list) => { for (const e of list.getEntries()) cdNote(e.name); }).observe({ type: "resource", buffered: true });
+} catch { /* the entries are read when the button is pressed instead */ }
+
+/** The versions of flows the client has loaded: the app it loaded first, then the ones it executes: [{ app, version }]. */
 function cdVersions() {
-  const out = [];
-  for (const e of performance.getEntriesByType("resource")) {
-    const m = CD_APP_RE.exec(e.name);
-    if (m && !out.some((o) => o.app === m[1] && o.version === m[2])) out.unshift({ app: m[1], version: m[2] });
-  }
+  for (const e of performance.getEntriesByType("resource")) cdNote(e.name);
+  const out = [...CD_SEEN.apps];
+  for (const a of CD_SEEN.execApps) if (!out.some((o) => o.app === a.app && o.version === a.version)) out.push({ app: a.app, version: a.version });
   return out;
 }
 
 /** The org, environment and package the client runs in, from its token request: { orgId, envId, packageId } or null. */
 function cdIds() {
-  let ids = null;
-  for (const e of performance.getEntriesByType("resource")) {
-    const m = CD_TOKEN_RE.exec(e.name);
-    if (m) ids = { orgId: m[1], envId: m[2], packageId: m[3] };
-  }
-  return ids;
+  for (const e of performance.getEntriesByType("resource")) cdNote(e.name);
+  return CD_SEEN.ids;
 }
 
 /** A value as the Variables tab shows it, as the Designer test panel would write it (see PlsqlTestScript.toLiteral). */
@@ -294,8 +305,9 @@ async function cdScan() {
     if (missing.length) {
       say("Searching PL/SQL steps…");
       const ids = cdIds() || {};
+      const crumb = cdBreadcrumb(cdPanel());
       const res = await chrome.runtime.sendMessage({
-        type: "STEP_SQL_MANY", orgId: ids.orgId, packageId: ids.packageId, stepNames: missing, versions: cdVersions()
+        type: "STEP_SQL_MANY", orgId: ids.orgId, packageId: ids.packageId, flowName: crumb ? crumb.flow : "", stepNames: missing, versions: cdVersions()
       }).catch((e) => ({ ok: false, error: e.message }));
       if (!res || !res.ok) { CD.trail = ["Error: " + ((res && res.error) || "no answer from the extension")]; say("PL/SQL info: " + ((res && res.error) || "failed") + " (click to retry)", (res && res.error) || ""); return; }
       tried = res.tried || [];
