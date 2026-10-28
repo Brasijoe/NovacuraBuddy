@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Step Recorder - Editor</title>
+  <link rel="stylesheet" href="steps-editor.css" />
+</head>
+<body>
+  <div id="screen">
+    <header class="se-top">
+      <div class="se-brand"><img src="../icons/icon48.png" width="22" height="22" alt="" /> <span>Step Recorder</span></div>
+      <span id="seSaved" class="se-saved">Saved</span>
+      <div class="se-actions">
+        <button id="seAddSection" title="Add a free text section (introduction, prerequisites, warning) at the top">+ Text section</button>
+        <button id="seDocx" title="Downloads an editable Word document (.docx) with the same cover, contents, pages and steps. Markers are part of the screenshots there.">Export Word</button>
+        <button id="sePdf" class="primary" title="Opens the print dialog: choose 'Save as PDF'. The PDF shows exactly what is on this page.">Export PDF</button>
+      </div>
+    </header>
+    <main class="se-main">
+      <section class="se-meta">
+        <label>Title<input id="mTitle" /></label>
+        <label>Workflow<input id="mWorkflow" /></label>
+        <label>Version<input id="mVersion" /></label>
+        <label>Author<input id="mAuthor" /></label>
+        <label>Date<input id="mDate" type="date" /></label>
+        <label>Document language<select id="mLang"><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option></select></label>
+        <label class="se-check"><span>Page headings</span><span><input type="checkbox" id="mHeadings" /> Show the screen title above each page in PDF and Word</span></label>
+      </section>
+      <div id="seMixed" class="se-warn" hidden>The document language differs from the language the web client was recorded in: prompts and values stay as recorded, so the text will mix languages.</div>
+      <div id="seSteps"></div>
+    </main>
+  </div>
+  <div id="print"></div>
+  <script src="../lib/step-recorder.js"></script>
+  <script src="../lib/step-icon.js"></script>
+  <script src="../lib/docx-writer.js"></script>
+  <script src="steps-editor.js"></script>
+</body>
+</html>
