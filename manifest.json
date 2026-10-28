@@ -12,6 +12,7 @@
   "action": { "default_title": "Novacura Buddy" },
   "content_scripts": [
     { "matches": ["https://build.novacura.com/*"], "js": ["lib/plsql-test-script.js", "content/designer.js"], "run_at": "document_idle" },
+    { "matches": ["https://app.novacura.com/*"], "js": ["lib/flow-step-sql.js", "lib/plsql-test-script.js", "content/client-diagnostics.js"], "run_at": "document_idle" },
     { "matches": ["https://build.novacura.com/*"], "js": ["content/monaco-hook.js"], "run_at": "document_start", "world": "MAIN" },
     { "matches": ["https://build.novacura.com/*"], "js": ["content/canvas-hook.js"], "run_at": "document_start", "world": "MAIN" }
   ],

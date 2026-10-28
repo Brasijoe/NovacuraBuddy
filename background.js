@@ -10,6 +10,7 @@ importScripts(
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
   "lib/flow-links.js",
+  "lib/flow-step-sql.js",
   "lib/flow-commit-chain.js",
   "lib/flow-environments.js",
   "lib/flow-token.js",
@@ -1117,6 +1118,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           index[key] = { orgId: message.orgId, packageId: message.packageId || null, baseUrl: message.baseUrl, scannedAt: message.result.scannedAt, flows: ModuleCompare.flowMarks(message.result) };
           await chrome.storage.local.set({ [key]: message.result, [MODULE_COMPARE_MARKS_KEY]: index });
           return sendResponse({ ok: true });
+        }
+        case "STEP_SQL": { // the web client's content script: the SQL of the Database step shown in the Diagnostic panel
+          if (!flowToken.get()) return sendResponse({ ok: false, error: "Open a Flow Designer tab (build.novacura.com) once so the extension can read the flow." });
+          const r = await FlowStepSql.resolveStepSql({ flowFetch: boundFlowFetch(), flowName: message.flowName, stepName: message.stepName, versions: message.versions || [] });
+          return sendResponse(r.sql !== undefined ? { ok: true, sql: r.sql, source: r.source } : { ok: false, ...r });
         }
         case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
           const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
