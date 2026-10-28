@@ -287,4 +287,62 @@ function buildPrint() {
   style.textContent = `@page { @bottom-left { content: ${JSON.stringify(SR.LANG_NAMES[rec.lang])}; font: 9pt Roboto, Arial, sans-serif; color: #465466; } @bottom-right { content: ${JSON.stringify(L.page + " ")} counter(page); font: 9pt Roboto, Arial, sans-serif; color: #465466; } }`;
 }
 
+/** The page screenshot with its numbered markers drawn into it (a Word document cannot overlay them), as JPEG bytes. */
+async function flattenedPage(run) {
+  const img = await loadImage(run.lead.screenshot);
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const unit = Math.max(c.width / 900, 1); // marker sizes in "editor pixels", scaled to the real image
+  const badge = (x, y, n) => {
+    ctx.fillStyle = "#0C65F4"; ctx.beginPath(); ctx.arc(x, y, 11 * unit, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = `700 ${13 * unit}px Montserrat, Arial, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(String(n), x, y + unit * 0.5);
+  };
+  for (const st of run.steps) {
+    const m = st.marker;
+    if (!m || !m.vw) continue;
+    const sx = c.width / m.vw, sy = c.height / m.vh;
+    ctx.lineWidth = 4 * unit; ctx.strokeStyle = "#0C65F4";
+    if (m.shape === "circle") {
+      ctx.fillStyle = "rgba(12,101,244,0.15)";
+      ctx.beginPath(); ctx.arc(m.x * sx, m.y * sy, 17 * unit, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      badge(m.x * sx + 17 * unit * 0.8, m.y * sy - 17 * unit * 0.8, st.number);
+    } else {
+      ctx.strokeRect(m.x * sx, m.y * sy, m.w * sx, m.h * sy);
+      badge(m.x * sx + 4 * unit, m.y * sy - 4 * unit, st.number);
+    }
+  }
+  const b64 = c.toDataURL("image/jpeg", 0.88).split(",")[1];
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { bytes, w: c.width, h: c.height };
+}
+
+async function exportDocx() {
+  const L = SR.DOC_LABELS[rec.lang] || SR.DOC_LABELS.en;
+  const m = rec.meta;
+  const blocks = [];
+  let screen = null;
+  for (const run of SR.pageRuns(rec.steps)) {
+    if (run.type === "section") { blocks.push({ type: "section", heading: run.step.text, text: run.step.note || "" }); continue; }
+    const title = (run.lead && run.lead.screen) || run.steps[0].screen;
+    blocks.push({ type: "page", screen: title && title !== screen ? title : "", image: run.lead && run.lead.screenshot ? await flattenedPage(run) : null, steps: run.steps.map((s) => ({ number: s.number, text: s.text, note: s.note })) });
+    screen = title;
+  }
+  const bytes = DocxWriter.buildDocx({
+    title: SR.brandTitle(m.title) || SR.brandTitle(L.untitled), workflow: m.workflow,
+    meta: [[L.author, m.author], [L.version, m.version], [L.date, m.date], [L.language, SR.LANG_NAMES[rec.lang]]],
+    contentsLabel: L.contents, toc: SR.contents(rec.steps).map((c) => (c.from ? `${c.title} (${L.step} ${c.from})` : c.title)),
+    pageLabel: L.page, footerLeft: SR.LANG_NAMES[rec.lang], blocks
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+  a.download = ((m.title || rec.name || "step-recording").replace(/[\\/:*?"<>|]+/g, "_").trim() || "step-recording") + ".docx";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+$("seDocx").onclick = () => exportDocx().catch((e) => { $("seSaved").textContent = "Word export failed: " + e.message; });
+
 load();
