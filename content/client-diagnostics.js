@@ -3,7 +3,7 @@
 // Trace Logs toolbar. Once it is pressed, the logged steps are looked up in the flow's designer data
 // (see lib/flow-step-sql.js) and every Database step's log row gets a "Copy with values" button: the
 // step's PL/SQL with the variables from the panel's Variables tab written in as literals. Read-only.
-const CD = { observer: null, scanning: false, cache: new Map(), flow: null, button: null };
+const CD = { observer: null, scanning: false, cache: new Map(), button: null, detailsButton: null, status: { text: "Add PL/SQL info", title: "" }, active: false };
 const CD_APP_RE = /\/apps\/v1\/appPackages\/[^/]+\/versions\/[^/]+\/apps\/([^/]+)\/versions\/([^/?#]+)/;
 const CD_LABEL = "Add PL/SQL info";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -123,16 +123,25 @@ function cdMarkRows() {
   return marked;
 }
 
+/** The button's text and the lookup details. The client redraws the toolbar now and then and drops what was
+ *  added to it, so the state is kept here and applied to whichever button is in the page. */
+function cdStatus(text, title) {
+  CD.status = { text, title: title || "" };
+  cdApplyStatus();
+}
+function cdApplyStatus() {
+  // Only write what changed: our own writes would otherwise wake the observer again.
+  const set = (el, prop, value) => { if (el && el[prop] !== value) el[prop] = value; };
+  set(CD.button, "textContent", CD.status.text);
+  set(CD.button, "title", CD.status.title || (CD.button && CD.button.dataset.help) || "");
+  if (CD.detailsButton) set(CD.detailsButton.style, "display", CD.status.title ? "" : "none");
+}
+
 async function cdScan() {
   if (CD.scanning) return;
   CD.scanning = true;
-  const btn = CD.button;
-  const say = (text, title) => {
-    if (!btn) return;
-    btn.textContent = text; btn.title = title || "";
-    CD.details = title || "";
-    if (CD.detailsButton) CD.detailsButton.style.display = title ? "" : "none";
-  };
+  CD.active = true;
+  const say = (text, title) => cdStatus(text, title);
   try {
     const p = cdPanel();
     const crumb = p && cdBreadcrumb(p);
@@ -154,7 +163,7 @@ async function cdScan() {
       for (const n of missing) CD.cache.set(n, res.steps[n] || false); // false: not a Database step, not asked again
     }
     const found = cdMarkRows();
-    say(found ? `PL/SQL info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database steps found", tried.join("\n"));
+    say(found ? `PL/SQL info added (${new Set(rows.filter((r) => CD.cache.get(r.name)).map((r) => r.name)).size})` : "No Database steps found", tried.length ? tried.join("\n") : CD.status.title);
     cdWatch();
   } catch (e) {
     say("PL/SQL info failed (click to retry)", String(e && e.message || e));
@@ -163,20 +172,23 @@ async function cdScan() {
   }
 }
 
-/** After the button was pressed only: new log rows get their button too (until the log table goes away). */
+/** After the button was pressed only: whatever the client redraws is repaired (button, row buttons) and new log
+ *  rows get theirs, until the Diagnostic panel goes away. */
 function cdWatch() {
   if (CD.observer) return;
-  const table = document.querySelector(".diagnosticLogTable");
-  if (!table) return;
+  const p = cdPanel();
+  if (!p) return;
+  const root = p.panel;
   let timer = null;
   CD.observer = new MutationObserver(() => {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      if (!document.body.contains(table)) { CD.observer.disconnect(); CD.observer = null; if (CD.button) CD.button.textContent = CD_LABEL; return; }
+      if (!document.body.contains(root)) { CD.observer.disconnect(); CD.observer = null; CD.active = false; CD.status = { text: CD_LABEL, title: "" }; return; }
+      cdDock();
       if (!CD.scanning) cdScan();
     }, 700);
   });
-  CD.observer.observe(table, { childList: true, subtree: true });
+  CD.observer.observe(root, { childList: true, subtree: true });
 }
 
 /** Places the one button in the Trace Logs toolbar (next to "Clear logs"). */
@@ -192,7 +204,8 @@ function cdDock() {
   b.textContent = CD_LABEL;
   b.title = "Finds the Database steps in this log, reads their PL/SQL from the flow's designer data and adds a Copy with values button to their rows. Nothing is looked up before you press this.";
   b.style.cssText = "margin-left:8px;padding:6px 12px;border:1px solid #0c65f4;border-radius:6px;background:#0c65f4;color:#fff;font:13px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
-  b.onclick = (e) => { e.stopPropagation(); b.textContent = "Searching PL/SQL steps…"; cdScan(); };
+  b.dataset.help = b.title;
+  b.onclick = (e) => { e.stopPropagation(); cdStatus("Searching PL/SQL steps…", ""); cdScan(); };
   CD.button = b;
   const d = document.createElement("button");
   d.className = "nb-details";
@@ -202,6 +215,7 @@ function cdDock() {
   d.onclick = async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(CD.details || ""); d.textContent = "Copied"; } catch { d.textContent = "Copy failed"; } setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
   CD.detailsButton = d;
   toolbar.append(b, d);
+  cdApplyStatus();
 }
 
 // No polling: the button is placed after a click anywhere (opening the panel or its tab is a click)
