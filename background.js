@@ -765,6 +765,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, assets: await FlowTransfer.listAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId }) });
         case "FT_REF_COUNTS":
           return sendResponse({ ok: true, counts: await FlowTransfer.countAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemIds: message.itemIds }) });
+        case "CM_CONTEXT": { // Flow Classic Migration: the sniffed Flow session token and the user id steps are attributed to
+          const token = flowToken.get();
+          if (!token) throw new Error("No Novacura Flow session found yet: open Flow (build.novacura.com) in a tab and click in it once.");
+          const meRes = await FlowConnectRest.flowFetch(token, "/admin/security/api/v3/user/whoAmI");
+          const me = meRes.ok ? await meRes.json().catch(() => ({})) : {};
+          return sendResponse({ ok: true, token, userId: me.id || me.userId || "" });
+        }
+        case "CM_IFS_TOKEN": // Flow Classic Migration: an IFS token to read projection metadata for module generation
+          return sendResponse({ ok: true, token: await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey()) });
         case "FT_ORGS":
           return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
         case "FT_PACKAGES":
