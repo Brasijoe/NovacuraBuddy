@@ -26,8 +26,10 @@ function newAttribute() {
   return { name: "", prompt: "", type: "STRING", length: CustomLuModel.DEFAULT_LENGTH, locked: false };
 }
 
-function block(lu, { nameLocked = false, attributesLocked = false, checked = true, source = null } = {}) {
+function block(lu, { nameLocked = false, attributesLocked = false, checked = true, source = null, rows = [] } = {}) {
   return {
+    rows,
+    fill: false,
     name: lu.name || "",
     prompt: lu.prompt || "",
     nameLocked,
@@ -44,7 +46,9 @@ function block(lu, { nameLocked = false, attributesLocked = false, checked = tru
 /** The definition deploy/save sends: in Existing mode only the new rows (deploy skips what IFS has). */
 function definitionOf(b) {
   const attributes = b.attributes.filter((a) => (mode === "existing" ? !a.locked : true));
-  return CustomLuModel.normalizeLu({ name: b.name, prompt: b.prompt, attributes });
+  const lu = CustomLuModel.normalizeLu({ name: b.name, prompt: b.prompt, attributes });
+  if (b.fill && b.rows.length) lu.rows = b.rows; // row data goes to deploy only, never to the library
+  return lu;
 }
 
 /** The model's validation plus editor-only checks: a blank String length (the model would default it to 100)
@@ -144,6 +148,17 @@ function renderBlock(b, index) {
   });
   table.appendChild(tbody);
   wrap.appendChild(table);
+
+  if (mode === "import" && b.rows.length) {
+    const label = document.createElement("label");
+    label.className = "lu-note";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = b.fill;
+    box.onchange = () => { b.fill = box.checked; };
+    label.append(box, ` Fill with the ${b.rows.length} value row(s) from the file after deploy (inserts only, nothing is deleted)`);
+    wrap.appendChild(label);
+  }
 
   if (mode !== "library") {
     const add = document.createElement("button");
@@ -246,7 +261,9 @@ function importFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      blocks = FlowProperties.parseConnectProperties(String(reader.result)).map((lu) => block(lu, { source: lu.source }));
+      const text = String(reader.result);
+      const rowsOf = FlowProperties.parseTableRows(text);
+      blocks = FlowProperties.parseConnectProperties(text).map((lu) => block(lu, { source: lu.source, rows: rowsOf[lu.source] || [] }));
       els.modeHint.textContent = `${blocks.length} Table propert${blocks.length === 1 ? "y" : "ies"} from ${file.name}. Imported LUs are not saved to the library.`;
       render();
     } catch (err) {
