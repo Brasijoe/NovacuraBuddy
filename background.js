@@ -778,7 +778,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
             claims = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
           } catch { /* not a readable JWT */ }
-          const candidates = [me.id, me.userId, me.user && me.user.id, me.oid, me.sub, claims.oid, claims.sub, claims.uid, claims.userId, claims.nameid, claims.user_id];
+          const candidates = [me.userBasicDto && me.userBasicDto.id, me.id, me.userId, me.user && me.user.id, me.oid, me.sub, claims.oid, claims.sub, claims.uid, claims.userId, claims.nameid, claims.user_id];
           const userId = candidates.find((c) => typeof c === "string" && GUID.test(c)) || "";
           if (!userId) throw new Error(`Could not find your Flow user id (whoAmI fields: ${Object.keys(me).join(", ") || "none"}; token claims: ${Object.keys(claims).join(", ") || "none"}).`);
           return sendResponse({ ok: true, token, userId });
