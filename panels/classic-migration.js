@@ -166,7 +166,11 @@ async function cmRenderConnectors() {
       box.addEventListener("change", () => { box.dataset.touched = "1"; cmSaveMapping(); });
       runAs.append(box, " Classic connector was set to Run as User ", Object.assign(document.createElement("span"), { className: "info-tip", title: "", textContent: "" }));
       runAs.querySelector(".info-tip").dataset.tip = "In Classic, Run as User was a setting of the connector and is not in the export. Ticked: database steps without their own runAs run as the signed-in user ({userId}). Unticked: they run as the connector user. Left untouched, the result carries a warning.";
-      const sync = () => { const c = cmOrgConnectors.find((x) => x.id === select.value); runAs.hidden = !(c && c.type === CM_IFS10_TYPE); };
+      const sync = () => {
+        const c = cmOrgConnectors.find((x) => x.id === select.value);
+        box.disabled = !c;
+        runAs.title = !c ? "Pick a connector first" : c.type === CM_IFS10_TYPE ? "" : `Only used for IFS Applications 10 connectors (this one is ${c.type || "another type"}).`;
+      };
       select.addEventListener("change", sync);
       sync();
       row.append(runAs);
@@ -219,7 +223,7 @@ function cmCurrentMapping(rawIds) {
     if (rawIds) { out[row.dataset.name] = id; continue; }
     const entry = { id: connector.id, name: connector.name, type: connector.type || "" };
     const box = row.querySelector("input[data-runas]");
-    if (box && box.dataset.touched && connector.type === CM_IFS10_TYPE) entry.runAsUser = box.checked;
+    if (box && box.dataset.touched) entry.runAsUser = box.checked;
     out[row.dataset.name] = entry;
   }
   return out;
