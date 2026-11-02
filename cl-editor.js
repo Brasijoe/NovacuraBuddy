@@ -36,18 +36,36 @@ function block(lu, { nameLocked = false, attributesLocked = false, checked = tru
     checked,
     source,
     attributes: (lu.attributes || []).map((a) => ({
-      name: a.name, prompt: a.prompt || "", type: a.type,
+      name: a.name, src: a.name, prompt: a.prompt || "", type: a.type,
       length: a.length === undefined ? CustomLuModel.DEFAULT_LENGTH : a.length,
       locked: attributesLocked
     }))
   };
 }
 
+/** The file's rows are keyed by the imported column name; the user may have renamed or removed attributes
+ *  in the editor, so re-key them by the committed (current) name. Columns without an attribute are dropped. */
+function rowsFor(b, lu) {
+  const rename = new Map();
+  for (const a of b.attributes) if (a.src) rename.set(a.src, CustomLuModel.toAttributeName(a.name));
+  const kept = new Set(lu.attributes.map((a) => a.name));
+  return b.rows
+    .map((row) => {
+      const out = {};
+      for (const [key, value] of Object.entries(row)) {
+        const name = rename.get(key);
+        if (name && kept.has(name)) out[name] = value;
+      }
+      return out;
+    })
+    .filter((row) => Object.values(row).some((v) => v !== ""));
+}
+
 /** The definition deploy/save sends: in Existing mode only the new rows (deploy skips what IFS has). */
 function definitionOf(b) {
   const attributes = b.attributes.filter((a) => (mode === "existing" ? !a.locked : true));
   const lu = CustomLuModel.normalizeLu({ name: b.name, prompt: b.prompt, attributes });
-  if (b.fill && b.rows.length) lu.rows = b.rows; // row data goes to deploy only, never to the library
+  if (b.fill && b.rows.length) lu.rows = rowsFor(b, lu); // row data goes to deploy only, never to the library
   return lu;
 }
 
