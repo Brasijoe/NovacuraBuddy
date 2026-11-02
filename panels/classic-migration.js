@@ -13,6 +13,8 @@ let cmBusy = false;
 let cmLoadedOnce = false;
 const cmEl = (id) => document.getElementById(id);
 const CM_MAPPING_KEY = "cmConnectorMapping"; // { [orgId]: { [classicConnectorName]: connectorId } }
+const CM_RUNAS_KEY = "cmRunAsUser"; // { [orgId]: { [classicConnectorName]: boolean } }
+const CM_IFS10_TYPE = "Database.IFS10";
 
 async function cmLoadService() {
   if (!cmService) cmService = await import(chrome.runtime.getURL("lib/classic-migration/service.js"));
@@ -132,6 +134,7 @@ async function cmRenderConnectors() {
   if (!cmDecoded) return;
   const orgId = cmEl("cmOrg").value;
   const remembered = await cmRememberedMapping(orgId);
+  const runAsRemembered = ((await chrome.storage.local.get(CM_RUNAS_KEY))[CM_RUNAS_KEY] || {})[orgId] || {};
   const refs = new Map();
   for (const flow of cmSelectedFlows()) for (const ref of cmService.listFlowConnectors(flow)) if (!refs.has(ref.name)) refs.set(ref.name, ref);
   if (!refs.size) {
@@ -150,8 +153,25 @@ async function cmRenderConnectors() {
     for (const c of cmOrgConnectors) select.append(new Option(`${c.name}${c.type ? ` (${c.type})` : ""}`, c.id));
     const preset = remembered[ref.name] || (cmOrgConnectors.find((c) => c.name.toLowerCase() === ref.name.toLowerCase()) || {}).id;
     if (preset && cmOrgConnectors.some((c) => c.id === preset)) select.value = preset;
-    select.addEventListener("change", cmSaveMapping);
     row.append(label, ftChip(ref.typeName || "?", "muted"), select);
+    if (ref.typeName === "database") {
+      // Classic's connector-level "Run as User" is not in the export, so it is asked here, only for
+      // a database connector mapped to an IFS Applications 10 connector.
+      const runAs = document.createElement("label");
+      runAs.className = "cm-runas";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.dataset.runas = "1";
+      if (runAsRemembered[ref.name] !== undefined) { box.checked = !!runAsRemembered[ref.name]; box.dataset.touched = "1"; }
+      box.addEventListener("change", () => { box.dataset.touched = "1"; cmSaveMapping(); });
+      runAs.append(box, " Classic connector was set to Run as User ", Object.assign(document.createElement("span"), { className: "info-tip", title: "", textContent: "" }));
+      runAs.querySelector(".info-tip").dataset.tip = "In Classic, Run as User was a setting of the connector and is not in the export. Ticked: database steps without their own runAs run as the signed-in user ({userId}). Unticked: they run as the connector user. Left untouched, the result carries a warning.";
+      const sync = () => { const c = cmOrgConnectors.find((x) => x.id === select.value); runAs.hidden = !(c && c.type === CM_IFS10_TYPE); };
+      select.addEventListener("change", sync);
+      sync();
+      row.append(runAs);
+    }
+    select.addEventListener("change", cmSaveMapping);
     if (ref.typeName === "rest") {
       const file = document.createElement("input");
       file.type = "file";
@@ -179,7 +199,13 @@ async function cmSaveMapping() {
   const stored = await chrome.storage.local.get(CM_MAPPING_KEY);
   const all = stored[CM_MAPPING_KEY] || {};
   all[orgId] = { ...(all[orgId] || {}), ...cmCurrentMapping(true) };
-  await chrome.storage.local.set({ [CM_MAPPING_KEY]: all });
+  const runAsAll = (await chrome.storage.local.get(CM_RUNAS_KEY))[CM_RUNAS_KEY] || {};
+  runAsAll[orgId] = { ...(runAsAll[orgId] || {}) };
+  for (const row of cmEl("cmConnectors").querySelectorAll(".cm-connector")) {
+    const box = row.querySelector("input[data-runas]");
+    if (box && box.dataset.touched) runAsAll[orgId][row.dataset.name] = box.checked;
+  }
+  await chrome.storage.local.set({ [CM_MAPPING_KEY]: all, [CM_RUNAS_KEY]: runAsAll });
 }
 
 /** Classic connector name -> connector id (rawIds) or the full {id, name, type} objects. */
@@ -189,7 +215,12 @@ function cmCurrentMapping(rawIds) {
     const id = row.querySelector("select").value;
     if (!id) continue;
     const connector = cmOrgConnectors.find((c) => c.id === id);
-    if (connector) out[row.dataset.name] = rawIds ? id : { id: connector.id, name: connector.name, type: connector.type || "" };
+    if (!connector) continue;
+    if (rawIds) { out[row.dataset.name] = id; continue; }
+    const entry = { id: connector.id, name: connector.name, type: connector.type || "" };
+    const box = row.querySelector("input[data-runas]");
+    if (box && box.dataset.touched && connector.type === CM_IFS10_TYPE) entry.runAsUser = box.checked;
+    out[row.dataset.name] = entry;
   }
   return out;
 }
