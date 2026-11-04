@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "module-compare", "linked-flows", "commit-chain", "permission-check", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "step-recorder", "module-compare", "linked-flows", "commit-chain", "permission-check", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -24,6 +24,7 @@ function showTab(name) {
   if (name === "flow-docs") fdocOnShow();
   if (name === "linked-flows") lfOnShow();
   if (name === "module-compare") mcOnShow();
+  if (name === "step-recorder") srOnShow(); else if (typeof srOnHide === "function") srOnHide();
   if (name === "commit-chain") ccOnShow();
 }
 

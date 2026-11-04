@@ -800,16 +800,19 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .fd-address-list li { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: var(--radius-full); background: var(--surface-raised); font-family: var(--font-mono); font-size: 12px; }
 .fd-address-list button { padding: 0 6px; border: none; background: none; line-height: 1.4; }
 
-/* --- Module Compare: search-as-you-type comboboxes --- */
-.mc-combo { position: relative; display: flex; flex-direction: column; }
-.mc-combo .mc-combo-input { width: 100%; box-sizing: border-box; padding-right: 28px !important; background-image: linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%), linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
-.mc-combo-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
-.mc-combo-option { padding: 6px 10px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
-.mc-combo-option:hover, .mc-combo-option.is-active { background: var(--accent-soft); }
-.mc-combo-option.is-selected { font-weight: 600; }
-.mc-combo-empty { padding: 6px 10px; color: var(--ink-muted); }
+/* --- Search-as-you-type selects and checklists (panels/combobox.js) --- */
+.combo { position: relative; display: flex; flex-direction: column; }
+.combo .combo-input { width: 100%; box-sizing: border-box; padding-right: 28px !important; background-image: linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%), linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.combo-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 20; max-height: 260px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
+.combo-option { padding: 6px 10px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
+.combo-option:hover, .combo-option.is-active { background: var(--accent-soft); }
+.combo-option.is-selected { font-weight: 600; }
+.combo-empty { padding: 6px 10px; color: var(--ink-muted); }
+.list-search { width: 100%; box-sizing: border-box; margin-bottom: 4px; }
+.combo[hidden] { display: none; }
+.combo select { display: none; }
 @media (prefers-color-scheme: dark) {
-  .mc-combo-option:hover, .mc-combo-option.is-active { background: rgba(64, 120, 255, 0.2); }
+  .combo-option:hover, .combo-option.is-active { background: rgba(64, 120, 255, 0.2); }
 }
 
 /* Commit Dependencies tab */
@@ -851,3 +854,30 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .pc-dd-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; max-height: 180px; overflow: auto; }
 .pc-preview { margin: 4px 0 8px; }
 .pc-dd-give { margin-top: 4px; border-style: dashed; }
+
+/* Step Recorder */
+.sr-options { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; margin: var(--space-2) 0; }
+.sr-options select { margin-left: var(--space-2); }
+.sr-sub { display: flex; gap: var(--space-2); margin: var(--space-2) 0; }
+.sr-steps { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.sr-screen { font-family: var(--font-sans-head); font-weight: 700; font-size: 12px; color: var(--ink-muted); margin-top: var(--space-2); }
+.sr-step { border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-raised); padding: var(--space-2) var(--space-3); display: flex; flex-direction: column; gap: 6px; }
+.sr-substep { margin-left: var(--space-3); }
+.sr-head { display: flex; align-items: center; gap: var(--space-2); }
+.sr-num { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font: 700 12px var(--font-sans-head); display: inline-flex; align-items: center; justify-content: center; }
+.sr-text { flex: 1; min-width: 0; }
+.sr-flag { color: var(--accent-orange); cursor: help; }
+.sr-note { width: 100%; resize: vertical; box-sizing: border-box; font-size: 12px; }
+.sr-tools { display: flex; gap: 4px; justify-content: flex-end; }
+.sr-thumb { position: relative; line-height: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--surface-raised); font-size: 11px; color: var(--ink-muted); }
+.sr-thumb img { width: 100%; display: block; }
+.sr-marker { position: absolute; box-sizing: border-box; pointer-events: none; }
+.sr-marker.sr-circle { width: 24px; height: 24px; margin: -12px 0 0 -12px; border: 3px solid var(--accent); border-radius: 50%; background: rgba(12, 101, 244, 0.15); color: var(--accent); font: 700 11px/18px var(--font-sans-head); text-align: center; }
+.sr-marker.sr-frame { border: 3px solid var(--accent); border-radius: 4px; }
+.sr-page { display: flex; flex-direction: column; gap: var(--space-2); border: 1px solid var(--surface-raised); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-raised); padding: var(--space-2) var(--space-3); }
+.sr-page .sr-step { border: 0; box-shadow: none; padding: 4px 0; border-top: 1px solid var(--surface-raised); border-radius: 0; }
+.sr-marker.sr-frame::after { content: attr(data-n); position: absolute; left: -3px; top: -20px; min-width: 18px; height: 18px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: 700 10px/18px var(--font-sans-head); text-align: center; }
+.sr-key { font-size: 10px; color: var(--ink-muted); word-break: break-all; }
+.sr-log { font-size: 11px; margin: var(--space-2) 0; color: var(--ink-muted); }
+.sr-log #srLog { white-space: pre-wrap; font-family: var(--font-mono); font-size: 10px; max-height: 140px; overflow: auto; }
+.sr-icon { height: 22px; width: auto; border: 1px solid var(--surface-raised); border-radius: 4px; background: #fff; flex: none; }
