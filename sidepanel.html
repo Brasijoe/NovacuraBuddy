@@ -38,6 +38,7 @@
           <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
           <div class="tab-menu-row"><button id="tab-permission-sets" class="tab-item" role="tab">Compare Permission Sets <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Compares permission sets (their projection and action grants) between two IFS instances. Tick the sets, see what differs, then create missing sets, merge both ways, or use one instance as the reference and copy or sync to the other. Nothing is written before you confirm the preview with a second click."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-deps" class="tab-item" role="tab">Flow Dependencies</button><span class="info-tip" data-tip="Scans an IFS installation for everything that calls Novacura Flow (run.novacura.com or app.novacura.com): events, event actions, workflows, routing addresses and page commands. Results open in a new browser tab. Read-only: the scan never changes anything in IFS."></span></div>
+          <div class="tab-menu-row"><button id="tab-permission-check" class="tab-item" role="tab">Permission Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds every IFS projection the flow open in the Designer calls and compares them with what an IFS user is allowed to use. Per connector (they can run as the user or the IAM client user), for one user or some permission sets. Read-only so far; adding the missing permissions comes next."></span></div>
         </div>
       </div>
       <div class="tab-group">
@@ -46,11 +47,11 @@
         </button>
         <div class="tab-menu">
           <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
-          <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported flows and modules are committed as a new version."></span></div>
+          <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported modules are committed; flows are saved with all their steps and committed by you in the Designer."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
+          <div class="tab-menu-row"><button id="tab-step-recorder" class="tab-item" role="tab">Step Recorder <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Records what you do in the Flow web client (app.novacura.com): every click, input and selection becomes a numbered step with a screenshot and a ready sentence in German, English or French. Pause to skip private screens; password fields are never captured."></span></div>
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
-          <div class="tab-menu-row"><button id="tab-permission-check" class="tab-item" role="tab">Permission Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds every IFS projection the flow open in the Designer calls and compares them with what an IFS user is allowed to use. Per connector (they can run as the user or the IAM client user), for one user or some permission sets. Read-only so far; adding the missing permissions comes next."></span></div>
           <div class="tab-menu-row"><button id="tab-commit-chain" class="tab-item" role="tab">Commit Dependencies</button><span class="info-tip" data-tip="Commits the open flow and everything it uses, bottom to top: modules and sub-flows first, then the flows that use them, each pointing at the new versions below. You see what needs a commit first and can undo every commit. Optionally deploys afterwards."></span></div>
         </div>
       </div>
@@ -78,7 +79,7 @@
 
       <main>
         <details id="trackedSection" class="tracker-section" open>
-          <summary><h2>Tracked projections</h2><span class="info-tip" data-tip="Projections the selected instance's pages called, newest first. The switch adds the projection's Flow module to the open flow, creating the module first if it doesn't exist yet. Switching off removes it from the flow; the module itself stays."></span><span class="list-count" id="listCount"></span></summary>
+          <summary><h2>Tracked projections</h2><span class="info-tip" data-tip="Projections the selected instance's pages called, newest first. The switch adds the projection's Flow module to the open flow, creating the module first if it doesn't exist yet. Switching off removes it from the flow; the module itself stays. ⟳ (shown while a module is on) refreshes it: it regenerates the module from the projection as it is on IFS now, commits a new module version and updates the open flow. Switching off and on again only re-uses the old version."></span><span class="list-count" id="listCount"></span></summary>
           <div class="list-toolbar">
             <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
           </div>
@@ -102,6 +103,35 @@
       <hr class="section-divider" />
       <div class="section-head"><h2>Recorded Sessions</h2><span class="info-tip" data-tip="Start attaches Chrome's debugger to your open tabs (Chrome shows a 'started debugging' bar) and captures every IFS projection call until Stop. Each recording is saved here; click one, or Open viewer, to inspect it and build a Flow asset from it."></span></div>
       <div id="sessionList" class="session-list"></div>
+    </section>
+
+    <section id="panel-step-recorder" role="tabpanel" hidden>
+      <div class="recorder-controls">
+        <button id="srStart" class="btn-primary">● Start</button>
+        <button id="srPause" disabled>❚❚ Pause</button>
+        <button id="srStop" disabled>■ Stop</button>
+      </div>
+      <div class="sr-options">
+        <label>Document language
+          <select id="srLang"><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option></select>
+        </label>
+        <span class="info-tip" data-tip="The language of the generated step sentences. Prompts and values stay as the web client shows them. You can switch it any time; sentences you edited by hand are kept."></span>
+      </div>
+      <div class="sr-options">
+        <label class="sr-check"><input type="checkbox" id="srAny" /> Also record clicks on read-only objects</label>
+        <span class="info-tip" data-tip="Off: only real controls become steps (buttons, links, inputs, list rows, clickable items) and clicks on empty space or plain text are ignored. On: a click on any text or object also becomes a step ('Note ...') so you can point at information for the documentation. You can switch it while recording."></span>
+      </div>
+      <div id="srStatusBar" class="status-bar"><span class="status-indicator"></span><span id="srStatusText">Open the Flow web client in the active tab, then press Start.</span></div>
+      <div id="srSubRow" class="sr-sub" hidden>
+        <button id="srNewPage" title="Normally one screenshot is taken per page (same screen title and mostly the same visible controls) and every later click on it only adds a numbered marker. Use this when the page changed without the title or URL changing.">New screenshot now</button>
+        <button id="srSubStart" title="The last step opens a sub-workflow: the following steps are numbered under it (4.1, 4.2 …)">Last step opened a sub-workflow</button>
+        <button id="srSubEnd" hidden>Sub-workflow ended</button>
+      </div>
+      <details class="sr-log"><summary>Last clicks (what the recorder did with them)</summary><div id="srLog"></div></details>
+      <div id="srSteps" class="sr-steps"></div>
+      <hr class="section-divider" />
+      <div class="section-head"><h2>Saved Recordings</h2><span class="info-tip" data-tip="Recordings are kept in this browser. Click one to open it in the full-screen editor, where you can polish the steps and export a PDF."></span></div>
+      <div id="srSessions" class="session-list"></div>
     </section>
 
     <section id="panel-quick-reports" role="tabpanel" hidden>
@@ -265,7 +295,7 @@
           <ul id="ftPackages" class="ft-list"></ul>
           <p class="api-hint">App Library assets go back to the App Library.</p>
         </div>
-        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Flows and modules that are created or updated are committed as a new version."></span></div>
+        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Modules that are created or updated are committed as a new version; flows are saved with all their steps (commit them in the Designer)."></span></div>
         <ul id="ftAssets" class="ft-tree"></ul>
         <div id="ftIfsBox" class="ft-ifs" hidden>
           <label class="api-field">IFS instance for "Generate from IFS" <select id="ftIfs"></select></label>
@@ -323,7 +353,7 @@
     </section>
 
     <section id="panel-permission-check" role="tabpanel" hidden>
-      <div class="banner banner-warning"><span><strong>WIP:</strong> the comparison is read-only and untested against a live IFS; adding permissions is not built yet.</span></div>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> applying permissions is not yet fully verified against a live IFS; Read Only grants are not supported.</span></div>
       <div class="section-head"><h2>Projections the open flow calls</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every module and sub-flow it uses, and lists the IFS projections they call. Nothing is changed in Flow or IFS."></span></div>
       <button id="pcScanBtn" class="btn-primary fd-scan-btn">Scan open flow</button>
       <div id="pcHint" class="empty-state" hidden></div>
@@ -401,6 +431,13 @@
         <button type="submit" class="btn-primary">Save GitHub settings</button>
       </form>
       <button id="githubMoveBtn" class="btn-ghost" hidden title="One-time: move reports saved before per-user folders into your own folder">Move unowned reports into my folder</button>
+      <hr class="section-divider" />
+      <div class="section-head"><h2>Backup &amp; restore</h2><span class="info-tip" data-tip="Saves your Basic Data (IFS instances, GitHub settings, master password check) and small settings to a file, and loads them back. Secrets stay encrypted with your master password in the file, so you need the same password after restoring. Make a backup before removing the extension or moving it to another folder or PC. Restoring replaces the matching settings on this browser."></span></div>
+      <div class="search-row">
+        <button id="backupExportBtn" class="btn-ghost">Export settings</button>
+        <button id="backupImportBtn" class="btn-ghost">Restore from file…</button>
+        <input id="backupImportFile" type="file" accept=".json,application/json" hidden />
+      </div>
     </section>
 
     <script src="lib/vendor/fuse.min.js"></script>
@@ -410,9 +447,14 @@
     <script src="lib/qr-deploy.js"></script>
     <script src="panels/common.js"></script>
     <script src="panels/info-tip.js"></script>
+    <script src="panels/combobox.js"></script>
     <script src="panels/tracker.js"></script>
+    <script src="lib/settings-backup.js"></script>
     <script src="panels/basic-data.js"></script>
     <script src="panels/recorder.js"></script>
+    <script src="lib/step-recorder.js"></script>
+    <script src="lib/step-icon.js"></script>
+    <script src="panels/step-recorder.js"></script>
     <script src="panels/permission-picker.js"></script>
     <script src="panels/qr-deploy-form.js"></script>
     <script src="lib/custom-lu-model.js"></script>

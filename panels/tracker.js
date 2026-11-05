@@ -105,10 +105,40 @@ function buildModuleSwitch(entry, { name, status, assetId, headVersionId, open }
   return label;
 }
 
+/** Refresh = regenerate the module from the projection as it is on the IFS instance now, commit it
+ *  as a NEW module version and point the open flow at it (the Designer reloads). Switching off and on
+ *  again only re-references the module's existing head version, so IFS-side changes never arrive.
+ *  Same path as Create module (CREATE_MODULE), which already commits a new version for an existing module. */
+function buildRefreshButton(entry, { name, open }) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "icon-btn proj-refresh";
+  btn.textContent = "⟳";
+  btn.disabled = !open || !currentBaseUrl;
+  btn.setAttribute("aria-label", `Refresh ${name} from IFS`);
+  btn.title = !currentBaseUrl ? "Select an IFS instance first"
+    : !open ? "Open or interact with the Designer tab first"
+      : "Refresh from IFS: creates a new module version from the current projection and updates the open flow";
+  btn.onclick = async () => {
+    entry.busy = true;
+    btn.disabled = true;
+    btn.textContent = "…";
+    try {
+      const response = await createAndActivateModule(currentBaseUrl, name);
+      if (response) showNotice(`${name} refreshed: new module version created and applied in the open flow.`);
+    } finally {
+      entry.busy = false;
+      refreshProjections();
+    }
+  };
+  return btn;
+}
+
 function renderActions(entry, state) {
   if (entry.busy) return; // keep the in-flight switch as the user left it until the action ends
   entry.actions.innerHTML = "";
   if (state.status === "unknown" || state.status === "no_designer") return;
+  if (state.status === "activated") entry.actions.appendChild(buildRefreshButton(entry, state));
   entry.actions.appendChild(buildModuleSwitch(entry, state));
 }
 

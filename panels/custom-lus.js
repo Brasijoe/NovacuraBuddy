@@ -151,6 +151,7 @@ function refreshCustomLus() {
 }
 
 function initCustomLusPanel() {
+  chrome.runtime.onMessage.addListener((message) => { if (message && message.type === "CL_LIBRARY_CHANGED" && clLoadedOnce) refreshClLibrary(); });
   document.getElementById("clNewBtn").onclick = () => openClEditor("mode=new");
   document.getElementById("clImportBtn").onclick = () => openClEditor("mode=import");
   document.getElementById("clLibrarySearch").oninput = renderClLibrary;

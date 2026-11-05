@@ -185,3 +185,42 @@ document.getElementById("githubMoveBtn").addEventListener("click", async (e) => 
   showNotice(`Moved ${response.moved.length} report(s) into your folder.${skipped}`);
   if (typeof qrLoadedOnce !== "undefined") qrLoadedOnce = false;
 });
+
+// Backup & restore of Basic Data and small settings. Secrets are exported exactly as stored
+// (encrypted with the master password), so the same password unlocks them after a restore.
+document.getElementById("backupExportBtn").addEventListener("click", async () => {
+  const stored = await chrome.storage.local.get(SettingsBackup.BACKUP_KEYS);
+  const backup = SettingsBackup.buildBackup(stored, { version: chrome.runtime.getManifest().version });
+  const { instances } = SettingsBackup.summarize(backup.data);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `novacura-buddy-settings-${backup.exportedAt.slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  showNotice(`Exported ${instances} IFS instance(s) and your settings. Secrets stay encrypted with your master password.`);
+});
+
+document.getElementById("backupImportBtn").addEventListener("click", () => document.getElementById("backupImportFile").click());
+
+document.getElementById("backupImportFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  let data;
+  try {
+    data = SettingsBackup.parseBackup(await file.text());
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  const { instances } = SettingsBackup.summarize(data);
+  if (!confirm(`Restore ${instances} IFS instance(s) and settings from "${file.name}"? Matching settings on this browser are replaced. You need the master password the backup was made with.`)) return;
+  await chrome.storage.local.set(data);
+  await chrome.storage.session.remove("credentialSessionKey"); // a cached key may belong to the old master password
+  showNotice("Settings restored. Unlock with the master password from the backup.");
+  currentBaseUrl = null;
+  refreshInstances();
+  refreshGithubStatus();
+  refreshLockStatus();
+});

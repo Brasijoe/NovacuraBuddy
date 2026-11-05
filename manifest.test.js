@@ -12,7 +12,7 @@ test("manifest declares MV3 with the required surfaces", () => {
   for (const p of ["debugger", "alarms", "unlimitedStorage", "tabs"]) assert.ok(manifest.permissions.includes(p), p);
   assert.ok(manifest.host_permissions.includes("https://build.novacura.com/*"));
   assert.ok(manifest.optional_host_permissions.includes("https://*/*"));
-  assert.equal(manifest.content_scripts[0].js[0], "content/designer.js");
+  assert.deepEqual(manifest.content_scripts[0].js, ["lib/plsql-test-script.js", "content/designer.js"]);
   assert.deepEqual(manifest.content_scripts[0].matches, ["https://build.novacura.com/*"]);
 });
 

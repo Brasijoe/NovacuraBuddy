@@ -10,6 +10,8 @@ const els = {
   importFile: document.getElementById("importFile"),
   blocks: document.getElementById("luBlocks"),
   save: document.getElementById("saveBtn"),
+  saved: document.getElementById("savedNote"),
+  saveHint: document.getElementById("saveHint"),
   deployForm: document.getElementById("deployForm")
 };
 
@@ -18,6 +20,7 @@ const EXISTING_NOTE = "Deleting or changing attributes must be done in IFS.";
 
 /** Editor state: one block per LU. Locked attributes exist already (IFS or library) and are shown read-only. */
 let blocks = [];
+let savedLu = null; // set once "new" mode saved the LU to the library; the form stays as is
 
 function newAttribute() {
   return { name: "", prompt: "", type: "STRING", length: CustomLuModel.DEFAULT_LENGTH, locked: false };
@@ -168,7 +171,7 @@ function refreshProblems() {
       ul.appendChild(li);
     }
   });
-  els.save.disabled = mode !== "new" || !blocks.length || problemsOf(blocks[0]).length > 0;
+  els.save.disabled = mode !== "new" || !!savedLu || !blocks.length || problemsOf(blocks[0]).length > 0;
 }
 
 function render() {
@@ -192,9 +195,21 @@ async function save() {
   const response = await send({ type: "CL_CREATE", lu: definitionOf(blocks[0]), masterPassword: "" });
   els.save.textContent = "Save to library";
   if (!response.ok) { refreshProblems(); return showError(explainLocked(response), true); }
+  savedLu = response.lu;
+  els.save.hidden = true;
+  els.saved.textContent = `Saved "${response.lu.name}" to your library (side panel: Custom LUs). The form stays open — Deploy sends it to an IFS instance.`;
+  els.saved.hidden = false;
   showNotice(`Saved "${response.lu.name}" to your library.`);
-  history.replaceState(null, "", `?mode=library&id=${encodeURIComponent(response.lu.id)}`);
-  location.reload();
+  chrome.runtime.sendMessage({ type: "CL_LIBRARY_CHANGED" }).catch(() => {});
+  refreshProblems();
+}
+
+/** Save is offered only when the GitHub library can be reached (repo, token and login set in Basic Data). */
+async function offerSave() {
+  const response = await send({ type: "CL_LIBRARY", masterPassword: "" });
+  if (response.ok) { els.save.hidden = false; return; }
+  els.saveHint.textContent = `Saving to the library isn't possible yet: ${explainLocked(response)} (GitHub settings are in Basic Data.) Deploy still works.`;
+  els.saveHint.hidden = false;
 }
 
 async function loadLibrary(id) {
@@ -248,10 +263,10 @@ function start() {
   renderClDeployForm(els.deployForm, lusToDeploy, { send, onError: (message) => showError(message, true), moduleFromPanelOnly: true, offerFlowPropertiesModule: mode === "import" });
   if (mode === "new") {
     els.title.textContent = "New Custom LU";
-    els.save.hidden = false;
     els.save.onclick = save;
+    offerSave();
     blocks = [block({ name: "", attributes: [newAttribute()] })];
-    els.modeHint.textContent = "Save stores it once in your GitHub library; Deploy sends it to an IFS instance.";
+    els.modeHint.textContent = "Save (when GitHub is set up) stores it once in your GitHub library; Deploy sends it to an IFS instance.";
     render();
   } else if (mode === "library") {
     loadLibrary(params.get("id") || "");

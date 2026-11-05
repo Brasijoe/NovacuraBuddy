@@ -3,6 +3,8 @@ importScripts(
   "lib/projection-filter.js",
   "lib/ifs-instances.js",
   "lib/recorder-capture.js",
+  "lib/step-recorder.js",
+  "lib/step-recorder-service.js",
   "lib/projection-search.js",
   "lib/flow-connect-rest.js",
   "lib/tracking.js",
@@ -10,6 +12,7 @@ importScripts(
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
   "lib/flow-links.js",
+  "lib/flow-step-sql.js",
   "lib/flow-commit-chain.js",
   "lib/flow-environments.js",
   "lib/flow-token.js",
@@ -544,6 +547,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // A restarted worker must finish restoring the persisted Connect token and Designer tab
       // before answering — otherwise the panel's first poll after every restart saw neither.
       await ready;
+      if (StepRecService.isStepRecMessage(message.type)) {
+        sendResponse(await StepRecService.handle(message, _sender));
+        return;
+      }
       if (RecorderCapture.isRecorderMessage(message.type)) {
         // The recorder answers these itself; this router must not answer them too (the old
         // default branch replied "Unknown message type", racing the recorder's real reply).
@@ -927,6 +934,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const missingSet = new Set(missing.map((r) => r.projection));
           const lowSet = new Set(PermissionCheck.tooLow(message.required, grants).map((r) => r.projection));
           const viaOf = new Map(grants.map((g) => [g.projection.toLowerCase(), g.via]));
+          // The sets that give the projection, as IFS reports them for the user (a second source next to the
+          // ProjectionGrant list, which can lag behind a fresh grant).
+          const givenBy = new Map();
+          for (const g of grants) {
+            const key = g.projection.toLowerCase();
+            if (!givenBy.has(key)) givenBy.set(key, new Set());
+            const pick = [g.grantingSet, g.userSet].find((id) => id && allowed.has(id));
+            if (pick) givenBy.get(key).add(pick);
+          }
           const rows = [];
           let warning = null;
           const ifsToken = await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey());
@@ -940,7 +956,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             rows.push({
               ...r,
               state: missingSet.has(r.projection) ? "missing" : lowSet.has(r.projection) ? "low" : "ok",
-              current: all.filter((p) => !p.managed && allowed.has(p.role)).map((p) => p.role), // editable sets of the user that grant it
+              current: [...new Set([...all.filter((p) => !p.managed && allowed.has(p.role)).map((p) => p.role), ...(givenBy.get(r.projection.toLowerCase()) || [])])], // editable sets of the user that grant it
               managed: all.filter((p) => p.managed).map((p) => p.role), // IFS-delivered sets that grant it
               others: all.filter((p) => !p.managed && !allowed.has(p.role)).map((p) => p.role), // customer sets that grant it but the user does not have
               via: viaOf.get(r.projection.toLowerCase()) || null
@@ -1122,13 +1138,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           })).filter((st) => st.text);
           return sendResponse({ ok: true, assets, text: uses ? ModuleCompare.flowText(d) : "", steps });
         }
-        case "MC_SAVE_RESULT": {
-          // The result, plus the steps it marks in the Designer (kept small, one entry per scan).
-          const key = moduleCompareKey(message);
-          const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
-          index[key] = { orgId: message.orgId, packageId: message.packageId || null, baseUrl: message.baseUrl, scannedAt: message.result.scannedAt, flows: ModuleCompare.flowMarks(message.result) };
-          await chrome.storage.local.set({ [key]: message.result, [MODULE_COMPARE_MARKS_KEY]: index });
-          return sendResponse({ ok: true });
+        case "STEP_SQL_MANY": { // the web client's content script: the SQL of the Database steps in the Diagnostic panel's log
+          if (!flowToken.get()) return sendResponse({ ok: false, error: "Open a Flow Designer tab (build.novacura.com) once so the extension can read the flow" });
+          const r = await FlowStepSql.resolveSteps({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId, apps: message.versions || [], flowName: message.flowName || "", stepNames: message.stepNames || [] });
+          return sendResponse({ ok: true, steps: r.steps, tried: r.tried, flowFound: r.flowFound });
         }
         case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
           const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
@@ -1162,7 +1175,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "MC_LAST_RESULT": {
           const key = moduleCompareKey(message);
           const { [key]: result = null } = await chrome.storage.local.get(key);
-          return sendResponse({ ok: true, result });
+          // The side panel only needs the headline; the full result can be too large for a message.
+          return sendResponse({ ok: true, result: result && { scannedAt: result.scannedAt, modules: result.modules.map((m) => ({ status: m.status })) } });
         }
         case "MC_UPDATE": { // user-clicked per module: commits the regenerated code, the same calls as Create module
           const flowFetch = boundFlowFetch();
@@ -1182,7 +1196,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
           const { [key]: result = null } = await chrome.storage.local.get(key);
-          return sendResponse({ ok: true, result });
+          // The side panel only needs the headline; the full result can be too large for a message.
+          return sendResponse({ ok: true, result: result && { scannedAt: result.scannedAt, modules: result.modules.map((m) => ({ status: m.status })) } });
         }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.

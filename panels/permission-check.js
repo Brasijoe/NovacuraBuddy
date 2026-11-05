@@ -132,7 +132,9 @@ function pcInitPicker() {
   });
 }
 
-document.getElementById("pcCompareBtn").addEventListener("click", async () => {
+/** Reads the grants and redraws. `fromClick`: the permission request needs the user gesture of a
+ *  click; a refresh after Apply has none, so it only checks the permission is still there. */
+async function pcRunCompare(fromClick) {
   const baseUrl = pcPicker.baseUrl();
   if (!baseUrl) return pcHint("Choose an IFS installation first.");
   const required = pcSelectedProjections();
@@ -141,8 +143,9 @@ document.getElementById("pcCompareBtn").addEventListener("click", async () => {
   const roles = pcPicker.selectedIds();
   if (pcMode() === "user" ? !user : !roles.length) return pcHint(pcMode() === "user" ? "Enter an IFS user." : "Tick at least one permission set.");
   const origin = new URL(baseUrl).origin;
-  // The click is the user gesture chrome.permissions.request needs; ask before any other await.
-  const granted = await new Promise((resolve) => chrome.permissions.request({ origins: [origin + "/*"] }, resolve));
+  const granted = await new Promise((resolve) => fromClick
+    ? chrome.permissions.request({ origins: [origin + "/*"] }, resolve) // before any other await
+    : chrome.permissions.contains({ origins: [origin + "/*"] }, resolve));
   if (!granted) return pcHint(`Permission for ${origin} was not granted.`);
   pcHint("Reading grants from IFS…");
   const response = await send({ type: "PC_COMPARE", baseUrl, required, ...(pcMode() === "user" ? { user } : { roles }) });
@@ -150,7 +153,10 @@ document.getElementById("pcCompareBtn").addEventListener("click", async () => {
   pcHint("");
   pcRender(response);
   pcShowMapping(response);
-});
+  return response;
+}
+
+document.getElementById("pcCompareBtn").addEventListener("click", () => pcRunCompare(true));
 
 // Mapping: per projection a dropdown of the permission sets it may sit in. The ones that grant it
 // now are pre-selected; ticking more adds a grant, unticking removes one. Only a preview for now.
@@ -307,6 +313,21 @@ function pcRenderPreview(box, results) {
   }
 }
 
+/** Re-reads the grants after a write. IFS can take a moment to show a fresh grant, so it looks
+ *  again (up to 3 times) until every applied grant and removal shows. */
+async function pcRefreshAfterApply(changes) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1500));
+    const response = await pcRunCompare(false);
+    if (!response || !response.rows) return;
+    const rowOf = new Map(response.rows.map((r) => [r.projection, r]));
+    const settled = changes.every((c) => c.type === "assign" || !rowOf.get(c.projection)
+      || (c.type === "grant" ? rowOf.get(c.projection).current.includes(c.role) : !rowOf.get(c.projection).current.includes(c.role)));
+    if (settled) return pcHint(`Applied ${changes.length} change(s); the check below shows the new state.`);
+  }
+  pcHint(`Applied ${changes.length} change(s), but IFS does not show them all yet. Press "Check permissions" again in a moment.`);
+}
+
 /** Two clicks: the first shows what will be written, the second writes it. */
 async function pcApply(btn, box) {
   if (!pcConfirming) {
@@ -325,7 +346,7 @@ async function pcApply(btn, box) {
   const failed = byChange.find((r) => !r.ok);
   pcRenderPreview(box, byChange);
   pcHint(failed ? `Stopped at the first error: ${failed.error}` : `Applied ${byChange.length} change(s). Reloading the check…`);
-  if (!failed) document.getElementById("pcCompareBtn").click();
+  if (!failed) pcRefreshAfterApply(byChange.map((r) => r.change));
 }
 
 pcInitPicker();
