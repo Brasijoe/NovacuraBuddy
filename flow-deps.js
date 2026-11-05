@@ -10,6 +10,7 @@ const TYPE_LABELS = {
   event: "Event",
   eventAction: "Event Action",
   workflow: "Workflow",
+  routingRule: "Routing Rule",
   routingAddress: "Routing Address",
   pageCommand: "Page Command",
   endpoint: "Endpoint"
@@ -32,6 +33,7 @@ function nodeLabel(node) {
     case "event": return d.eventId || "Event";
     case "eventAction": return d.matchedVia && d.matchedVia.type === "bpa" ? d.matchedVia.processKey : `Action #${d.actionNumber}`;
     case "workflow": return d.processKey;
+    case "routingRule": return d.ruleName;
     case "routingAddress": return d.addressName;
     case "pageCommand": return d.name || d.dataId;
     case "endpoint": return d.url || (d.matchedPatterns || []).join(", ") || "Endpoint";
@@ -45,6 +47,7 @@ function nodeSubLabel(node) {
     case "event": return d.eventLuName || null;
     case "eventAction": return d.actionType || null;
     case "workflow": return [`v${d.version}`, d.matchedVia.taskName].filter(Boolean).join(" · ");
+    case "routingRule": return [d.queue, (d.messageFunctions || []).join(", ")].filter(Boolean).join(" · ") || null;
     case "routingAddress": return d.restRootEndPoint || null;
     case "endpoint": {
       const target = flowIndex && FlowDeps.flowTargetForUrl(d.url, flowIndex);
@@ -236,7 +239,7 @@ function showResult(r) {
   const c = r.counts;
   document.getElementById("fdSummary").textContent =
     `Scanned ${new Date(r.scannedAt).toLocaleString()} for ${(r.patterns || []).join(", ")} · ${r.chains.length} chain(s) to ${Object.keys(r.grouped.groups).length} endpoint(s) · ` +
-    `${c.routingAddresses} routing address(es), ${c.workflows} workflow match(es) in ${c.workflowsScanned} active workflow(s), ${c.eventActions} event action(s), ${c.pageCommands} page command(s)`;
+    `${c.routingAddresses} routing address(es), ${c.routingRules || 0} routing rule(s), ${c.workflows} workflow match(es) in ${c.workflowsScanned} active workflow(s), ${c.eventActions} event action(s), ${c.pageCommands} page command(s)`;
   empty.textContent = r.chains.length ? "" : `Nothing in this installation calls ${(r.patterns || []).join(", ")}.`;
   empty.hidden = !!r.chains.length;
   document.getElementById("fdResults").hidden = !r.chains.length;

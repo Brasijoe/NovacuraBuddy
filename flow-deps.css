@@ -34,6 +34,7 @@
 .fd-type-eventAction { border-left-color: var(--accent-orange); }
 .fd-type-workflow { border-left-color: var(--accent); }
 .fd-type-routingAddress { border-left-color: #14b8a6; }
+.fd-type-routingRule { border-left-color: #8b5cf6; }
 .fd-type-pageCommand { border-left-color: #eab308; }
 .fd-type-endpoint { border-left-color: var(--accent-green); }
 
