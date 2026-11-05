@@ -787,7 +787,7 @@ function ftApplyIfsBox() {
 async function ftRunImport() {
   if (!ftPlan) return;
   const updates = ftPlan.assets.filter((row) => ftChoices[row.id] === "update" || (ftChoices[row.id] === "regenerate" && row.existing)).map((row) => row.existing.name);
-  if (updates.length && !confirm(`This replaces the content of ${updates.join(", ")} in the target. Other flows using them see the change. Continue?`)) return;
+  if (updates.length && !confirm(`Update makes ${updates.join(", ")} in the target match the file: steps and arrows that are not in the file are deleted. Other flows using them see the change. Continue?`)) return;
   const names = {};
   for (const row of ftPlan.assets.filter((r) => r.isRoot && ftChoices[r.id] === "create")) {
     names[row.id] = (ftNames[row.id] || "").trim();
@@ -880,7 +880,7 @@ function ftShowResult(outcome, links) {
   }
   const note = document.createElement("p");
   note.className = "ft-note";
-  note.textContent = "Modules are committed. Flows are saved with all their steps but not committed: commit them in the Designer.";
+  note.textContent = "Modules are committed. Flows are saved but not committed, so they keep their old version until you commit them in the Designer and move the parent flow to the new version.";
   box.appendChild(note);
   box.hidden = false;
   ftPkg = null;
