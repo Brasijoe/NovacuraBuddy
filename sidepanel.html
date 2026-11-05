@@ -48,6 +48,7 @@
         <div class="tab-menu">
           <div class="tab-menu-row"><button id="tab-api-modules" class="tab-item" role="tab">API Modules</button><span class="info-tip" data-tip="Turns an OpenAPI 3.x or Swagger 2.0 description into a Flowscript module and adds it to the flow open in the Designer tab."></span></div>
           <div class="tab-menu-row"><button id="tab-flows" class="tab-item" role="tab">Import/Export</button><span class="info-tip" data-tip="Export flows and whole packages with the modules and sub-flows they use, import such a file, or copy them straight to another organisation or package. For each module you choose to use, update or create it in the target; imported modules are committed; flows are saved with all their steps and committed by you in the Designer."></span></div>
+          <div class="tab-menu-row"><button id="tab-classic-migration" class="tab-item" role="tab">Flow Classic Migration <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Moves flows from Novacura Flow Classic to Flow Connect. Load a Classic export (.wap or .flow), map the Classic connectors to Connect connectors and choose the organisation and package. Every flow is translated step by step and created in Connect with its steps saved (not committed: check it and commit in the Designer). Flows that other flows include are created first. IFS OData steps get their Flow module generated from the IFS instance you pick."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
           <div class="tab-menu-row"><button id="tab-step-recorder" class="tab-item" role="tab">Step Recorder <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Records what you do in the Flow web client (app.novacura.com): every click, input and selection becomes a numbered step with a screenshot and a ready sentence in German, English or French. Pause to skip private screens; password fields are never captured."></span></div>
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
@@ -328,6 +329,31 @@
       <label class="fd-default"><input type="checkbox" id="mcMarksToggle" checked /> Mark affected steps in the Designer <span class="info-tip" data-tip="Outlines and badges on the steps in the Flow Designer that use changed module functions, from the last scan. Can also be switched in the list shown in the Designer."></span></label>
     </section>
 
+    <section id="panel-classic-migration" role="tabpanel" hidden>
+      <div class="section-head"><h2>Classic export</h2><span class="info-tip" data-tip="A Flow Classic export: a .wap archive (several flows) or a single .flow file. Nothing leaves the browser: the file is read and translated here."></span></div>
+      <input type="file" id="cmFile" accept=".wap,.flow,.zip" />
+      <p id="cmFileHint" class="api-hint" hidden></p>
+
+      <div id="cmSetup" hidden>
+        <div class="section-head"><h2>Flows</h2><span class="info-tip" data-tip="The flows in the file, dependency first: a flow that another flow includes is created before it, so the including flow can reference it. Untick what you do not want to migrate."></span></div>
+        <div id="cmFlows" class="cm-flows"></div>
+
+        <div class="section-head"><h2>Target</h2><span class="info-tip" data-tip="The Flow Connect organisation and package the flows are created in. A flow can only use assets of its own package or the App Library, so the modules it needs are created in the same package."></span></div>
+        <select id="cmOrg"></select>
+        <select id="cmPackage"></select>
+
+        <div class="section-head"><h2>IFS instance</h2><span class="info-tip" data-tip="The IFS instance (from Basic Data) the Classic flows talked to. Needed only for flows with IFS OData steps: their Flow modules are generated from this instance's metadata and committed into the package. Preselected from the Classic environment name."></span></div>
+        <select id="cmInstance"></select>
+
+        <div class="section-head"><h2>Connectors</h2><span class="info-tip" data-tip="Each Classic connector the selected flows use, mapped to a connector of the Connect organisation. For REST connectors you can also load the Classic REST project (.ncrcp) so its endpoints become real REST steps. The mapping is remembered per organisation."></span></div>
+        <div id="cmConnectors" class="cm-connectors"></div>
+
+        <button id="cmRunBtn" class="btn-primary fd-scan-btn" disabled>Migrate selected flows</button>
+        <p class="api-hint">Flows are created and their steps saved, but not committed. Open each in the Designer to check it, then commit (or use Commit Dependencies).</p>
+        <div id="cmResults" class="cm-results"></div>
+      </div>
+    </section>
+
     <section id="panel-linked-flows" role="tabpanel" hidden>
       <div class="lf-head">
         <label class="api-field lf-org">Organisation <select id="lfOrg"></select></label>
@@ -474,6 +500,7 @@
     <script src="panels/api-modules.js"></script>
     <script src="lib/flow-tree.js"></script>
     <script src="panels/flow-transfer.js"></script>
+    <script src="panels/classic-migration.js"></script>
     <script src="panels/linked-flows.js"></script>
     <script src="panels/commit-chain.js"></script>
     <script src="panels/module-compare.js"></script>

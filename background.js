@@ -767,6 +767,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, assets: await FlowTransfer.listAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId }) });
         case "FT_REF_COUNTS":
           return sendResponse({ ok: true, counts: await FlowTransfer.countAssetRefs({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemIds: message.itemIds }) });
+        case "CM_CONTEXT": { // Flow Classic Migration: the sniffed Flow session token and the user id steps are attributed to
+          const token = flowToken.get();
+          if (!token) throw new Error("No Novacura Flow session found yet: open Flow (build.novacura.com) in a tab and click in it once.");
+          const meRes = await FlowConnectRest.flowFetch(token, "/admin/security/api/v3/user/whoAmI");
+          const me = meRes.ok ? await meRes.json().catch(() => ({})) : {};
+          // The Designer wants a real GUID here. whoAmI's own field names are not documented, so take
+          // the first GUID among its likely id fields, then the token's own claims.
+          const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          let claims = {};
+          try {
+            const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+            claims = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
+          } catch { /* not a readable JWT */ }
+          const candidates = [me.userBasicDto && me.userBasicDto.id, me.id, me.userId, me.user && me.user.id, me.oid, me.sub, claims.oid, claims.sub, claims.uid, claims.userId, claims.nameid, claims.user_id];
+          const userId = candidates.find((c) => typeof c === "string" && GUID.test(c)) || "";
+          if (!userId) throw new Error(`Could not find your Flow user id (whoAmI fields: ${Object.keys(me).join(", ") || "none"}; token claims: ${Object.keys(claims).join(", ") || "none"}).`);
+          return sendResponse({ ok: true, token, userId });
+        }
+        case "CM_IFS_TOKEN": // Flow Classic Migration: an IFS token to read projection metadata for module generation
+          return sendResponse({ ok: true, token: await instanceStore.getIfsAuthToken(message.baseUrl, await masterKey()) });
         case "FT_ORGS":
           return sendResponse({ ok: true, orgs: await FlowTransfer.listOrganisations({ flowFetch: boundFlowFetch() }) });
         case "FT_PACKAGES":
