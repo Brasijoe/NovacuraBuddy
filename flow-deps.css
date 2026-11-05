@@ -108,3 +108,5 @@
 .fd-layer-nodes .fd-node { width: 230px; max-width: 230px; }
 .fd-edges { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; color: var(--ink-muted); overflow: visible; }
 .fd-edges line { stroke: currentColor; stroke-width: 1.5; }
+
+.fd-only-enabled { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }

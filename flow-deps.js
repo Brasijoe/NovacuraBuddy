@@ -19,6 +19,11 @@ const TYPE_LABELS = {
 const NOT_FLOW = "__notflow__";
 const NOT_FOUND = "__notfound__";
 const GROUP_MODE_KEY = "flowDepsGroupMode";
+const ONLY_ENABLED_KEY = "flowDepsOnlyEnabled";
+let onlyEnabled = false;
+try { onlyEnabled = localStorage.getItem(ONLY_ENABLED_KEY) === "1"; } catch { /* per-viewer convenience only */ }
+/** A chain is disabled when its event action or routing rule is switched off. */
+const chainDisabled = (c) => c.nodes.some((n) => (n.type === "eventAction" || n.type === "routingRule") && n.data.enabled === false);
 
 let result = null;
 let selectedGroup = ALL;
@@ -307,6 +312,12 @@ function chainText(chain) {
 }
 
 function groupEntries() {
+  const all = groupEntriesAll();
+  if (!onlyEnabled) return all;
+  return all.map(([key, label, chains, sub]) => [key, label, chains.filter((c) => !chainDisabled(c)), sub]).filter(([key, , chains]) => key === ALL || chains.length);
+}
+
+function groupEntriesAll() {
   const entries = groupMode === "package" && flowIndex ? [] : [[ALL, "All chains", result.chains]];
   if (groupMode === "package" && flowIndex) {
     const byPackage = FlowDeps.groupChainsByPackage(result.chains, flowIndex);
@@ -359,6 +370,7 @@ function render() {
   const needle = document.getElementById("fdFilter").value.trim().toLowerCase();
   const matches = (key, chains) => !needle || key.toLowerCase().includes(needle) || chains.some((c) => chainText(c).includes(needle));
   const entries = groupEntries().filter(([key, label, chains, sub]) => key === ALL || matches(`${label} ${sub || ""}`, chains));
+  if (!entries.length) entries.push([ALL, "Nothing to show", []]); // every chain filtered out
   if (!entries.some(([key]) => key === selectedGroup)) selectedGroup = entries[0][0];
 
   const list = document.getElementById("fdGroupList");
@@ -499,6 +511,13 @@ async function main() {
   document.getElementById("fdRescanBtn").onclick = scan;
   document.getElementById("fdExportBtn").onclick = exportForLlm;
   document.getElementById("fdFilter").addEventListener("input", () => result && render());
+  const onlyBox = document.getElementById("fdOnlyEnabled");
+  onlyBox.checked = onlyEnabled;
+  onlyBox.addEventListener("change", () => {
+    onlyEnabled = onlyBox.checked;
+    try { localStorage.setItem(ONLY_ENABLED_KEY, onlyEnabled ? "1" : "0"); } catch { /* per-viewer convenience only */ }
+    if (result) render();
+  });
   for (const btn of document.querySelectorAll("[data-group-mode]")) btn.onclick = () => setGroupMode(btn.dataset.groupMode);
   setGroupMode(groupMode);
   if (params.get("scan") === "1") {
