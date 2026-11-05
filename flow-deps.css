@@ -110,3 +110,6 @@
 .fd-edges line { stroke: currentColor; stroke-width: 1.5; }
 
 .fd-only-enabled { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+.fd-flow-link { color: inherit; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.fd-flow-link:hover { color: var(--accent); }
