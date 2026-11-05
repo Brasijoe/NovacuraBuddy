@@ -495,10 +495,11 @@ cmEl("cmRunBtn").addEventListener("click", async () => {
         const emitted = await svc.emitFlow(ctx, { flow, connectorMapping, restProjects: cmRestProjects, includedWorkflows: included, target: { orgId, packageId } });
         row.status("Saving…", "info");
         const kind = (cmDecoded.summaries.find((s) => s.versionIdentifier === flow.versionIdentifier) || {}).assetKind || "component";
-        const pushed = await svc.pushFlow(ctx, { orgId, packageId, name: flow.name, kind }, emitted);
+        const pushed = await svc.pushFlow(ctx, { orgId, packageId, name: flow.name, kind }, emitted, { updateExisting: cmEl("cmExisting").value === "update" });
         included[flow.versionIdentifier] = { name: flow.name, assetId: pushed.itemId, assetVersion: pushed.assetVersion };
         const blockers = cmService.groupWarningsBySeverity(emitted.warnings).blockers.length;
-        row.status(blockers ? `Saved, ${blockers} need${blockers === 1 ? "s" : ""} attention` : emitted.warnings.length ? `Saved, ${emitted.warnings.length} FYI` : "Saved", blockers ? "warn" : "ok");
+        const verb = pushed.updated ? "Updated" : "Saved";
+        row.status(blockers ? `${verb}, ${blockers} need${blockers === 1 ? "s" : ""} attention` : emitted.warnings.length ? `${verb}, ${emitted.warnings.length} FYI` : verb, blockers ? "warn" : "ok");
         row.summary(emitted);
         row.warnings(emitted.warnings);
       } catch (e) {
