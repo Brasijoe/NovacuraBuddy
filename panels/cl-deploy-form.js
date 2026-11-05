@@ -46,6 +46,7 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
     parts.push(outcome.createdLu ? "LU created" : "LU existed");
     parts.push(outcome.created.length ? `${outcome.created.length} attribute(s) added` : "no new attributes");
     if (outcome.published) parts.push("approved & published");
+    if (outcome.data) parts.push(`${outcome.data.inserted} row(s) inserted${outcome.data.failed ? `, ${outcome.data.failed} failed` : ""}`);
     if (outcome.granted.length) parts.push(`granted to ${outcome.granted.join(", ")}`);
     return parts.join(" · ");
   }
@@ -81,6 +82,12 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
           const warn = document.createElement("div");
           warn.className = "cl-warning";
           warn.textContent = `⚠ Not granted to ${g.role}: ${g.message}`;
+          li.appendChild(warn);
+        }
+        for (const e of (r.outcome.data && r.outcome.data.errors) || []) {
+          const warn = document.createElement("div");
+          warn.className = "cl-warning";
+          warn.textContent = `⚠ Row data: ${e}`;
           li.appendChild(warn);
         }
         for (const m of r.outcome.mismatches) {
