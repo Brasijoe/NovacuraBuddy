@@ -27,6 +27,7 @@ importScripts(
   "lib/custom-lu-data.js",
   "lib/custom-lu-deploy.js",
   "lib/flow-properties-module.js",
+  "lib/quickreports-module.js",
   "lib/github-settings.js",
   "lib/qr-service.js",
   "lib/cl-service.js",
@@ -376,6 +377,41 @@ async function handleFlowPropertiesModule({ baseUrl, luNames, masterPassword }) 
       return asset;
     },
     now: () => new Date().toISOString().slice(0, 19).replace("T", " ")
+  });
+}
+
+/** QR_PROJECTION_MODULE: the org-level "QuickReports" module (top level, no package) generated from the
+ *  instance's QuickReports projection. onlyCreated keeps just the reports deployed to that instance
+ *  through NovacuraBuddy; without force, a module that would lose reports is not written. */
+async function handleQuickReportsModule({ baseUrl, onlyCreated, force, masterPassword }) {
+  const { orgId, flowFetch } = await flowPropertiesContext();
+  const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(masterPassword));
+  const ifsToken = await instanceStore.getIfsAuthToken(baseUrl, masterKey);
+  const moduleName = QuickReportsModule.MODULE_NAME;
+  const deployedIds = onlyCreated ? (await qrService.historyForInstance(baseUrl)).map((d) => String(d.quickReportId)) : null;
+  log("QR_PROJECTION_MODULE start: org", orgId, "onlyCreated", !!onlyCreated, "deployed", deployedIds && deployedIds.length);
+  return QuickReportsModule.updateQuickReportsModule({
+    deployedIds,
+    force: !!force,
+    generate: async () => {
+      const inputs = await ProjectionSearch.fetchProjectionCodegenInputs(baseUrl, ifsToken, QuickReportsModule.PROJECTION_NAME);
+      const code = await FlowModules.generateModuleCode({
+        flowFetch, csdlXml: inputs.csdl, openApiJson: inputs.openApiJson,
+        codeGenSubPath: inputs.codeGenSubPath, importSourcePath: inputs.projectionSubPath
+      });
+      return code;
+    },
+    readExisting: async () => {
+      const asset = await FlowModules.findExistingModule({ flowFetch, orgId, packageId: null, projectionName: moduleName });
+      if (!asset) return null;
+      return { asset, source: await FlowModules.getModuleSource({ flowFetch, orgId, packageId: null, assetId: asset.id }) };
+    },
+    commit: async (code, existingAsset) => {
+      const asset = existingAsset || await FlowModules.createModuleAsset({ flowFetch, orgId, packageId: null, projectionName: moduleName });
+      await FlowModules.commitModuleCode({ flowFetch, orgId, packageId: null, assetId: asset.id, flowScriptCode: code });
+      log("QR_PROJECTION_MODULE committed, assetId=", asset.id);
+      return asset;
+    }
   });
 }
 
@@ -745,6 +781,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "CL_FLOW_PROPERTIES_PREFLIGHT":
           await handleFlowPropertiesPreflight();
           return sendResponse({ ok: true });
+        case "QR_PROJECTION_MODULE":
+          return sendResponse({ ok: true, result: await handleQuickReportsModule(message) });
         case "CL_FLOW_PROPERTIES_MODULE":
           return sendResponse({ ok: true, ...(await handleFlowPropertiesModule(message)) });
         case "CL_DEPLOY": {
