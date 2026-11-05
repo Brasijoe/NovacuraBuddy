@@ -166,6 +166,15 @@ function makeNode(node, onPick) {
 const STAGE_LABELS = ["IFS event", "Event action", "Workflow", "Routing rule", "Routing address", "Novacura"];
 
 /** One automation: chains are columns, layers are rows (a layer no chain uses has no row), the automation once at the bottom. */
+/** Flow (build.novacura.com) address of an automation: the flow it runs in the Designer, else its package page. */
+function flowLinkFor(target) {
+  const orgId = flowIndex && flowIndex.orgId;
+  if (!target || !orgId) return null;
+  if (target.assetId) return `https://build.novacura.com/admin/design/designer/organizations/${orgId}/items/${target.assetId}`;
+  if (target.packageId) return `https://build.novacura.com/#/organization/${orgId}/applications/package/${target.packageId}`;
+  return null;
+}
+
 function renderBlock(block) {
   const card = document.createElement("section");
   card.className = "fd-auto";
@@ -176,6 +185,20 @@ function renderBlock(block) {
   tag.textContent = block.target ? "Automation" : "Endpoint";
   const title = document.createElement("h3");
   title.textContent = block.title;
+  // The automation's name opens it in Flow (the flow it runs in the Designer; the package page when the flow is unknown).
+  const flowHref = flowLinkFor(block.target);
+  if (flowHref) {
+    const a = document.createElement("a");
+    a.className = "fd-flow-link";
+    a.href = flowHref;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.title = "Open in Flow";
+    a.textContent = block.title;
+    a.onclick = (e) => e.stopPropagation(); // the heading itself collapses the block
+    title.textContent = "";
+    title.appendChild(a);
+  }
   const url = document.createElement("span");
   url.className = "fd-url";
   url.textContent = block.urls.join(" · ");
