@@ -375,6 +375,7 @@ function showResult(r) {
   document.getElementById("fdSummary").textContent =
     `Scanned ${new Date(r.scannedAt).toLocaleString()} for ${(r.patterns || []).join(", ")} · ${r.chains.length} chain(s) to ${Object.keys(r.grouped.groups).length} endpoint(s) · ` +
     `${c.routingAddresses} routing address(es), ${c.routingRules || 0} routing rule(s), ${c.workflows} workflow match(es) in ${c.workflowsScanned} active workflow(s), ${c.eventActions} event action(s), ${c.pageCommands} page command(s)`;
+  document.getElementById("fdRescanBtn").title = document.getElementById("fdSummary").textContent; // the scan details, on hover
   empty.textContent = r.chains.length ? "" : `Nothing in this installation calls ${(r.patterns || []).join(", ")}.`;
   empty.hidden = !!r.chains.length;
   document.getElementById("fdResults").hidden = !r.chains.length;
@@ -425,7 +426,7 @@ async function scan() {
 
 async function main() {
   if (!baseUrl) return showError("No installation given — start the scan from the side panel's Flow Dependencies tab.", true);
-  document.getElementById("fdSubtitle").textContent = baseUrl;
+  document.getElementById("fdSubtitle").hidden = true; // the instance name in the title is enough
   send({ type: "LIST_INSTANCES" }).then((response) => {
     const instance = response.ok && response.instances.find((i) => i.baseUrl === baseUrl);
     if (instance) {
