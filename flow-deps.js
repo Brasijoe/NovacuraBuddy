@@ -162,7 +162,8 @@ function renderBlock(block) {
   url.className = "fd-url";
   url.textContent = block.urls.join(" · ");
   head.append(tag, title);
-  if (block.target && block.target.packageName) {
+  // The package is already the page heading in the package view.
+  if (block.target && block.target.packageName && !(groupMode === "package" && flowIndex)) {
     const pkg = document.createElement("span");
     pkg.className = "fd-auto-pkg";
     pkg.textContent = `Package: ${block.target.packageName}`;
