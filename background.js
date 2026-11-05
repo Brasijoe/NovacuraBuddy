@@ -630,6 +630,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return sendResponse({ ok: true, instances: await instanceStore.listInstances() });
         case "GET_LOCK_STATUS":
           return sendResponse({ ok: true, ...(await instanceStore.getLockStatus()) });
+        case "RESET_MASTER_PASSWORD": // forgotten password: clears the check and the saved secrets, keeps the installation list
+          await instanceStore.resetMasterPassword();
+          await githubSettings.clearToken();
+          log("RESET_MASTER_PASSWORD: password check and saved secrets cleared");
+          return sendResponse({ ok: true });
         case "UNLOCK":
           await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
           return sendResponse({ ok: true });

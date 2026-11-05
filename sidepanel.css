@@ -891,3 +891,5 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-result { border: 1px solid var(--border, #d0d4dc); border-radius: 6px; padding: 6px 8px; }
 .cm-notes { white-space: pre-wrap; font-size: 11px; max-height: 160px; overflow: auto; margin: 4px 0 0; }
 .cm-runas { flex: 1 1 100%; font-size: 12px; }
+#resetPasswordBox { flex-wrap: wrap; }
+#resetPasswordBox span { flex: 1 1 100%; }
