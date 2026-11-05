@@ -947,7 +947,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
-          return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+          // The last good index is remembered: without an open Flow tab there is no Flow login, and the names should still show.
+          const CACHE_KEY = "flowIndexCache";
+          try {
+            const index = await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId);
+            await chrome.storage.local.set({ [CACHE_KEY]: { savedAt: Date.now(), index } });
+            return sendResponse({ ok: true, index });
+          } catch (err) {
+            const { [CACHE_KEY]: cached } = await chrome.storage.local.get(CACHE_KEY);
+            if (!cached) throw err;
+            return sendResponse({ ok: true, index: { ...cached.index, stale: { savedAt: cached.savedAt, reason: err.message } } });
+          }
         }
         case "ET_FLOW_AUTOMATIONS": { // Event Triggers: automations of the open Flow organisation with an active webhook (read-only)
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);

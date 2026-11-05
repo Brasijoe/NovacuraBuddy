@@ -274,7 +274,8 @@ async function loadFlowIndex() {
   flowIndex = response.ok ? response.index : null;
   flowIndexError = response.ok ? "" : response.error;
   const wi = response.ok && response.index.webhookInfo;
-  hint.textContent = flowIndexError || (wi
+  const stale = response.ok && response.index.stale;
+  hint.textContent = flowIndexError || (stale ? `Flow can't be read right now (${stale.reason}). Showing the names last read from Flow on ${new Date(stale.savedAt).toLocaleString()}.` : wi
     ? `Webhook addresses read from Flow: ${(response.index.webhooks || []).length} for ${wi.checked} automation(s)${wi.failures.length ? `, ${wi.failures.length} failed (first: ${wi.failures[0]})` : ""}.`
     : "");
   hint.hidden = !hint.textContent;
