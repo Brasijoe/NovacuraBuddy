@@ -54,3 +54,9 @@
 
 .fd-mode { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .fd-mode button.is-active { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+
+.fd-block-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2); }
+.fd-stage-grid { display: grid; gap: 6px 10px; align-items: start; }
+.fd-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.fd-cell .fd-node { width: 100%; max-width: none; }
+.fd-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 6px; }

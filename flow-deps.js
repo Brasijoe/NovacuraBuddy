@@ -31,7 +31,7 @@ function nodeLabel(node) {
   const d = node.data;
   switch (node.type) {
     case "event": return d.eventId || "Event";
-    case "eventAction": return d.matchedVia && d.matchedVia.type === "bpa" ? d.matchedVia.processKey : `Action #${d.actionNumber}`;
+    case "eventAction": return d.matchedVia && d.matchedVia.type === "bpa" ? d.matchedVia.processKey : (d.actionType || "Event action");
     case "workflow": return d.processKey;
     case "routingRule": return d.ruleName;
     case "routingAddress": return d.addressName;
@@ -115,59 +115,96 @@ function renderValueTree(value) {
   return wrap;
 }
 
-function renderChain(chain) {
+// Layers of a chain, top to bottom. The automation at the end is drawn once per block.
+const STAGE_OF = { event: 0, pageCommand: 0, eventAction: 0, workflow: 1, routingRule: 2, routingAddress: 2 };
+
+function makeNode(node, onPick) {
+  const el = document.createElement("button");
+  el.className = `fd-node fd-type-${node.type}`;
+  const type = document.createElement("span");
+  type.className = "fd-node-type";
+  type.textContent = TYPE_LABELS[node.type] || node.type;
+  const value = document.createElement("span");
+  value.className = "fd-node-value";
+  value.textContent = nodeLabel(node);
+  el.append(type, value);
+  const sub = nodeSubLabel(node);
+  if (sub) {
+    const subEl = document.createElement("span");
+    subEl.className = "fd-node-sub";
+    subEl.textContent = sub;
+    el.appendChild(subEl);
+  }
+  for (const text of nodeWarnings(node)) {
+    const warn = document.createElement("span");
+    warn.className = "fd-node-warn";
+    warn.textContent = text;
+    el.appendChild(warn);
+  }
+  el.onclick = () => onPick(el, node);
+  return el;
+}
+
+/** One block: chains as columns, layers as rows (an unused layer has no row), the automation once at the bottom. */
+function renderBlock(block) {
   const card = document.createElement("div");
   card.className = "fd-chain";
-  const row = document.createElement("div");
-  row.className = "fd-chain-row";
-  chain.nodes.forEach((node, i) => {
-    const el = document.createElement("button");
-    el.className = `fd-node fd-type-${node.type}`;
-    const type = document.createElement("span");
-    type.className = "fd-node-type";
-    type.textContent = TYPE_LABELS[node.type] || node.type;
-    const value = document.createElement("span");
-    value.className = "fd-node-value";
-    value.textContent = nodeLabel(node);
-    el.append(type, value);
-    const sub = nodeSubLabel(node);
-    if (sub) {
-      const subEl = document.createElement("span");
-      subEl.className = "fd-node-sub";
-      subEl.textContent = sub;
-      el.appendChild(subEl);
+  const head = document.createElement("div");
+  head.className = "fd-block-head";
+  const title = document.createElement("strong");
+  title.textContent = block.title;
+  const meta = document.createElement("span");
+  meta.className = "fd-node-sub";
+  meta.textContent = `${block.urls.join(" · ")}${block.urls.length ? " · " : ""}${block.chains.length} chain(s)`;
+  head.append(title, meta);
+  card.appendChild(head);
+
+  const detailHost = document.createElement("div");
+  const pick = (el, node) => {
+    const open = detailHost.firstChild;
+    const wasThis = open && open.node === node;
+    detailHost.innerHTML = "";
+    card.querySelectorAll(".fd-node.is-active").forEach((n) => n.classList.remove("is-active"));
+    if (wasThis) return;
+    el.classList.add("is-active");
+    const panel = document.createElement("div");
+    panel.className = "fd-detail";
+    panel.node = node;
+    const h = document.createElement("div");
+    h.className = "fd-detail-type";
+    h.textContent = TYPE_LABELS[node.type] || node.type;
+    panel.append(h, renderValueTree(node.data));
+    detailHost.appendChild(panel);
+  };
+
+  const stages = [0, 1, 2].filter((st) => block.chains.some((c) => c.nodes.some((n) => STAGE_OF[n.type] === st)));
+  const grid = document.createElement("div");
+  grid.className = "fd-stage-grid";
+  grid.style.gridTemplateColumns = `repeat(${block.chains.length}, minmax(160px, 1fr))`;
+  for (const st of stages) {
+    for (const chain of block.chains) {
+      const cell = document.createElement("div");
+      cell.className = "fd-cell";
+      const nodes = chain.nodes.filter((n) => STAGE_OF[n.type] === st);
+      nodes.forEach((n, i) => {
+        if (i) { const arrow = document.createElement("span"); arrow.className = "fd-arrow"; arrow.textContent = "↓"; cell.appendChild(arrow); }
+        cell.appendChild(makeNode(n, pick));
+      });
+      grid.appendChild(cell);
     }
-    for (const text of nodeWarnings(node)) {
-      const warn = document.createElement("span");
-      warn.className = "fd-node-warn";
-      warn.textContent = text;
-      el.appendChild(warn);
-    }
-    el.onclick = () => {
-      const open = card.querySelector(".fd-detail");
-      const wasThis = open && open.dataset.index === String(i);
-      if (open) open.remove();
-      card.querySelectorAll(".fd-node.is-active").forEach((n) => n.classList.remove("is-active"));
-      if (wasThis) return;
-      el.classList.add("is-active");
-      const panel = document.createElement("div");
-      panel.className = "fd-detail";
-      panel.dataset.index = String(i);
-      const head = document.createElement("div");
-      head.className = "fd-detail-type";
-      head.textContent = TYPE_LABELS[node.type] || node.type;
-      panel.append(head, renderValueTree(node.data));
-      card.appendChild(panel);
-    };
-    row.appendChild(el);
-    if (i < chain.nodes.length - 1) {
-      const arrow = document.createElement("span");
-      arrow.className = "fd-arrow";
-      arrow.textContent = "→";
-      row.appendChild(arrow);
-    }
-  });
-  card.appendChild(row);
+  }
+  card.appendChild(grid);
+  const end = block.chains[0].nodes[block.chains[0].nodes.length - 1];
+  if (end && end.type === "endpoint") {
+    const bottom = document.createElement("div");
+    bottom.className = "fd-bottom";
+    const arrow = document.createElement("span");
+    arrow.className = "fd-arrow";
+    arrow.textContent = "↓";
+    bottom.append(arrow, makeNode(block.target ? { type: "endpoint", data: end.data } : end, pick));
+    card.appendChild(bottom);
+  }
+  card.appendChild(detailHost);
   return card;
 }
 
@@ -241,7 +278,8 @@ function render() {
   document.getElementById("fdGroupTitle").textContent = `${label} (${shown.length})`;
   const container = document.getElementById("fdChains");
   container.innerHTML = "";
-  for (const chain of shown) container.appendChild(renderChain(chain));
+  const blocks = FlowDeps.groupChainsByAutomation(shown, groupMode === "package" ? flowIndex : flowIndex);
+  for (const block of blocks) container.appendChild(renderBlock(block));
 }
 
 function showResult(r) {
