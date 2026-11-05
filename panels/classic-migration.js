@@ -29,7 +29,10 @@ function cmHint(text) {
 
 async function cmFlowSession() {
   const response = await send({ type: "CM_CONTEXT" });
-  if (!response.ok) throw new Error(response.error || "No Flow session.");
+  if (!response.ok) {
+    cmRest = null;
+    throw new Error(response.error || "No Flow session.");
+  }
   const svc = await cmLoadService();
   cmRest = svc.createRest(response.token);
   cmUserId = response.userId;
@@ -41,29 +44,72 @@ async function cmGetJson(path, what) {
   return res.json();
 }
 
-function cmOnShow() {
-  if (cmLoadedOnce) return;
-  cmLoadedOnce = true;
-  cmFillInstances();
+/** Greys out the target selection and shows the session chip, depending on whether a Flow token exists. */
+function cmSetSession(ok, message) {
+  const chip = cmEl("cmSession");
+  chip.className = `ft-chip ft-chip-${ok ? "ok" : "warn"}`;
+  chip.textContent = ok ? "Flow session found" : "No Flow session";
+  chip.title = ok ? "" : message || "";
+  cmEl("cmOrg").disabled = !ok;
+  cmEl("cmPackage").disabled = !ok;
+  cmEl("cmTargetCard").classList.toggle("is-disabled", !ok);
+  if (!ok) {
+    cmEl("cmOrg").innerHTML = "";
+    cmEl("cmPackage").innerHTML = "";
+    cmEl("cmOrg").append(new Option("Open Flow in a tab, then Refresh", ""));
+    cmOrgConnectors = [];
+    if (cmDecoded) cmRenderConnectors();
+  }
+  cmUpdateRun();
 }
 
-async function cmFillInstances() {
+/** Reloads everything this tab reads: Flow session, organisations, packages, connectors and IFS instances. */
+async function cmRefresh() {
+  const btn = cmEl("cmRefreshBtn");
+  btn.disabled = true;
+  try {
+    await cmFillInstances(cmEl("cmInstance").value);
+    try {
+      await cmFlowSession();
+      cmSetSession(true);
+      await cmFillOrgs(cmEl("cmOrg").value, cmEl("cmPackage").value);
+    } catch (e) {
+      cmSetSession(false, e.message);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function cmOnShow() {
+  // Always (re)check when the tab opens: the Flow token may have appeared since, and no Flow tab is needed to see the menus.
+  cmRefresh();
+}
+
+// While the tab is open without a session, look again every few seconds (a Flow tab may be opened meanwhile).
+setInterval(() => {
+  if (!cmEl("panel-classic-migration").hidden && !cmRest && !cmBusy) cmRefresh();
+}, 5000);
+
+async function cmFillInstances(keep) {
   const select = cmEl("cmInstance");
   select.innerHTML = "";
   select.append(new Option("None (no IFS OData steps)", ""));
   const response = await send({ type: "LIST_INSTANCES" });
   if (response.ok) for (const i of response.instances.slice().sort((a, b) => a.name.localeCompare(b.name))) select.append(new Option(i.name, i.baseUrl));
+  if (keep && [...select.options].some((o) => o.value === keep)) select.value = keep;
 }
 
-async function cmFillOrgs() {
+async function cmFillOrgs(keepOrg, keepPackage) {
   const select = cmEl("cmOrg");
   select.innerHTML = "";
   const [orgs, target] = await Promise.all([send({ type: "FT_ORGS" }), send({ type: "FT_DEFAULT_TARGET", excludeItemId: null })]);
   if (!orgs.ok) throw new Error(orgs.error);
   for (const o of orgs.orgs) select.append(new Option(o.name, o.id));
   const t = target && target.ok ? target.target : null;
-  if (t && orgs.orgs.some((o) => o.id === t.orgId)) select.value = t.orgId;
-  await cmOrgChanged(t && t.packageId);
+  if (keepOrg && orgs.orgs.some((o) => o.id === keepOrg)) select.value = keepOrg;
+  else if (t && orgs.orgs.some((o) => o.id === t.orgId)) select.value = t.orgId;
+  await cmOrgChanged(keepPackage || (t && t.packageId));
 }
 
 async function cmOrgChanged(preferPackage) {
@@ -131,7 +177,10 @@ async function cmRememberedMapping(orgId) {
 async function cmRenderConnectors() {
   const box = cmEl("cmConnectors");
   box.innerHTML = "";
-  if (!cmDecoded) return;
+  if (!cmDecoded) {
+    box.innerHTML = '<p class="api-hint">Shown once a file is loaded.</p>';
+    return;
+  }
   const orgId = cmEl("cmOrg").value;
   const remembered = await cmRememberedMapping(orgId);
   const runAsRemembered = ((await chrome.storage.local.get(CM_RUNAS_KEY))[CM_RUNAS_KEY] || {})[orgId] || {};
@@ -230,7 +279,7 @@ function cmCurrentMapping(rawIds) {
 }
 
 function cmUpdateRun() {
-  const ok = cmDecoded && !cmBusy && cmEl("cmPackage").value && cmSelectedFlows().length;
+  const ok = cmDecoded && cmRest && !cmBusy && cmEl("cmPackage").value && cmSelectedFlows().length;
   cmEl("cmRunBtn").disabled = !ok;
 }
 
@@ -240,26 +289,27 @@ cmEl("cmFile").addEventListener("change", async () => {
   const file = cmEl("cmFile").files[0];
   if (!file) return;
   cmHint("");
-  cmEl("cmSetup").hidden = true;
   cmEl("cmResults").innerHTML = "";
   cmRestProjects = {};
   try {
     const svc = await cmLoadService();
     const instances = (await send({ type: "LIST_INSTANCES" })).instances || [];
     cmDecoded = await svc.decodeArchive(new Uint8Array(await file.arrayBuffer()), instances.map((i) => ({ id: i.baseUrl, name: i.name, baseUrl: i.baseUrl })));
-    await cmFlowSession();
-    cmEl("cmSetup").hidden = false;
     cmRenderFlows();
     const matched = cmDecoded.summaries.map((s) => s.autoMatchedInstanceId).find(Boolean);
     if (matched) cmEl("cmInstance").value = matched;
-    await cmFillOrgs();
+    cmRenderConnectors();
+    cmUpdateRun();
     cmHint(`${cmDecoded.summaries.length} flow${cmDecoded.summaries.length === 1 ? "" : "s"} found.`);
   } catch (e) {
     cmDecoded = null;
+    cmEl("cmFlows").innerHTML = '<p class="api-hint">Load a Classic export first.</p>';
+    cmEl("cmConnectors").innerHTML = '<p class="api-hint">Shown once a file is loaded.</p>';
     cmHint(e.message);
   }
 });
 cmEl("cmOrg").addEventListener("change", () => cmOrgChanged());
+cmEl("cmRefreshBtn").addEventListener("click", cmRefresh);
 cmEl("cmPackage").addEventListener("change", cmUpdateRun);
 
 /* --- run --- */
