@@ -357,8 +357,21 @@ function render() {
   for (const block of blocks) container.appendChild(renderBlock(block));
 }
 
+function exportForLlm() {
+  if (!result) return;
+  const instance = (document.getElementById("fdTitle").textContent || "").replace(/^Flow dependencies · /, "");
+  const md = FlowDepsExport.buildLlmExport({ result: { ...result, baseUrl }, flowIndex, instanceName: instance });
+  const url = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `flow-dependencies-${(instance || "ifs").replace(/[^\w.-]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 function showResult(r) {
   result = r;
+  document.getElementById("fdExportBtn").disabled = !r || !r.chains.length;
   const empty = document.getElementById("fdEmpty");
   if (!r) {
     document.getElementById("fdResults").hidden = true;
@@ -431,6 +444,7 @@ async function main() {
     }
   });
   document.getElementById("fdRescanBtn").onclick = scan;
+  document.getElementById("fdExportBtn").onclick = exportForLlm;
   document.getElementById("fdFilter").addEventListener("input", () => result && render());
   for (const btn of document.querySelectorAll("[data-group-mode]")) btn.onclick = () => setGroupMode(btn.dataset.groupMode);
   setGroupMode(groupMode);
