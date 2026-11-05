@@ -169,6 +169,12 @@ function renderBlock(block) {
     head.appendChild(pkg);
   }
   if (block.urls.length) head.appendChild(url);
+  if (!block.target && flowIndex && block.urls.some((u) => /run\.novacura\.com|app\.novacura\.com/i.test(u))) {
+    const miss = document.createElement("span");
+    miss.className = "fd-node-warn";
+    miss.textContent = "No automation in Flow has this webhook address";
+    head.appendChild(miss);
+  }
   card.appendChild(head);
 
   const scroll = document.createElement("div");
@@ -255,7 +261,7 @@ async function setGroupMode(mode) {
   for (const btn of document.querySelectorAll("[data-group-mode]")) btn.classList.toggle("is-active", btn.dataset.groupMode === mode);
   if (!flowIndex) await loadFlowIndex(); // names of automations and packages come from Flow in both views
   if (groupMode !== mode) return; // switched again while Flow was answering
-  document.getElementById("fdGroupHint").hidden = !flowIndexError;
+  document.getElementById("fdGroupHint").hidden = !document.getElementById("fdGroupHint").textContent;
   document.getElementById("fdGroupHead").textContent = mode === "package" && flowIndex ? "Flow packages" : "Endpoints";
   if (result && result.chains.length) render();
 }
@@ -267,8 +273,11 @@ async function loadFlowIndex() {
   const response = await send({ type: "FD_FLOW_INDEX" });
   flowIndex = response.ok ? response.index : null;
   flowIndexError = response.ok ? "" : response.error;
-  hint.textContent = flowIndexError;
-  hint.hidden = !flowIndexError;
+  const wi = response.ok && response.index.webhookInfo;
+  hint.textContent = flowIndexError || (wi
+    ? `Webhook addresses read from Flow: ${(response.index.webhooks || []).length} for ${wi.checked} automation(s)${wi.failures.length ? `, ${wi.failures.length} failed (first: ${wi.failures[0]})` : ""}.`
+    : "");
+  hint.hidden = !hint.textContent;
 }
 
 function render() {
