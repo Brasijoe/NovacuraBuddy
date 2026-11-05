@@ -3,7 +3,7 @@
   "name": "Novacura Buddy",
   "version": "0.1.0",
   "description": "Traces IFS Cloud projection calls and turns them into Novacura Flow Connect modules.",
-  "permissions": ["storage", "webRequest", "tabs", "https://build.novacura.com/*"],
+  "permissions": ["storage", "webRequest", "tabs", "https://build.novacura.com/*", "https://api.novacura.com/*"],
   "optional_permissions": ["<all_urls>"],
   "background": {
     "scripts": [

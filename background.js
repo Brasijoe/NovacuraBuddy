@@ -32,6 +32,7 @@ importScripts(
   "lib/cl-service.js",
   "lib/update-check.js",
   "lib/flow-deps.js",
+  "lib/event-triggers.js",
   "lib/flow-documentation.js",
   "lib/permission-check.js",
   "lib/permission-set-compare.js",
@@ -474,7 +475,21 @@ async function buildFlowIndex(orgId) {
       log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
     }
   }
-  return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products };
+  // The exact webhook URL of every automation (from its settings, per environment): the sure way to tell which
+  // automation a run.novacura.com URL belongs to. Failure only costs this exact match.
+  let webhooks = [];
+  const webhookInfo = { checked: 0, failures: [] };
+  try {
+    const environments = await FlowEnvironments.listEnvironments({ flowFetch, orgId });
+    const r = await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments });
+    webhooks = r.webhooks;
+    webhookInfo.checked = r.checked;
+    webhookInfo.failures = r.failures;
+  } catch (e) {
+    log("FD_FLOW_INDEX: webhook settings failed:", e.message);
+    webhookInfo.failures = [e.message];
+  }
+  return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products, webhooks, webhookInfo };
 }
 
 
@@ -564,7 +579,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const { masterPassword, fields, token, report, code, result: _result, ...safeMessage } = message;
+      const { masterPassword, fields, token, accessKey: _accessKey, report, code, result: _result, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage, report ? { report: report.id } : "");
       const masterKey = () => instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
       switch (message.type) {
@@ -932,7 +947,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
         case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
-          return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+          // The last good index is remembered: without an open Flow tab there is no Flow login, and the names should still show.
+          const CACHE_KEY = "flowIndexCache";
+          try {
+            const index = await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId);
+            await chrome.storage.local.set({ [CACHE_KEY]: { savedAt: Date.now(), index } });
+            return sendResponse({ ok: true, index });
+          } catch (err) {
+            const { [CACHE_KEY]: cached } = await chrome.storage.local.get(CACHE_KEY);
+            if (!cached) throw err;
+            return sendResponse({ ok: true, index: { ...cached.index, stale: { savedAt: cached.savedAt, reason: err.message } } });
+          }
+        }
+        case "ET_FLOW_AUTOMATIONS": { // Event Triggers: automations of the open Flow organisation with an active webhook (read-only)
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
+          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: the automations are read from Flow.");
+          const flowFetch = boundFlowFetch();
+          const [scan, environments, accessKeys] = await Promise.all([
+            linkScan(orgId), FlowEnvironments.listEnvironments({ flowFetch, orgId }), EventTriggers.listAccessKeys({ flowFetch, orgId }).catch(() => [])
+          ]);
+          const onProgress = (current, total) => chrome.runtime.sendMessage({ type: "ET_PROGRESS", current, total }).catch(() => {});
+          const { automations, checked, failures } = await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments, onProgress });
+          return sendResponse({ ok: true, orgId, automations, accessKeys, environments, checked, failures });
+        }
+        case "ET_IFS_LISTS": { // Event Triggers: the queues and events of an IFS instance (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const [queues, events] = await Promise.all([EventTriggers.listQueues(client), EventTriggers.listEvents(client)]);
+          return sendResponse({ ok: true, queues, events });
+        }
+        case "ET_PLAN": { // Event Triggers: what would be created and what exists already (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, plan: await EventTriggers.plan(client, message.input) });
+        }
+        case "ET_LINK": { // Event Triggers: creates routing address, routing rule and event action (writes to IFS; only creates)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          log("ET_LINK:", message.baseUrl, message.input.automationName, message.input.eventLuName, message.input.eventId);
+          const results = await EventTriggers.link(client, { ...message.input, accessKey: message.accessKey });
+          log("ET_LINK done:", JSON.stringify(results.map((r) => [r.step, r.status])));
+          return sendResponse({ ok: true, results });
         }
         case "PC_TARGETS": { // permission check: the IFS users (read-only)
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
@@ -1217,8 +1270,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
           const { [key]: result = null } = await chrome.storage.local.get(key);
-          // The side panel only needs the headline; the full result can be too large for a message.
-          return sendResponse({ ok: true, result: result && { scannedAt: result.scannedAt, modules: result.modules.map((m) => ({ status: m.status })) } });
+          return sendResponse({ ok: true, result });
         }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.

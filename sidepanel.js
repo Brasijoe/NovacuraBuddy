@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "classic-migration", "step-recorder", "module-compare", "linked-flows", "commit-chain", "permission-check", "permission-sets", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "classic-migration", "step-recorder", "module-compare", "linked-flows", "commit-chain", "permission-check", "event-triggers", "permission-sets", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -27,6 +27,7 @@ function showTab(name) {
   if (name === "step-recorder") srOnShow(); else if (typeof srOnHide === "function") srOnHide();
   if (name === "commit-chain") ccOnShow();
   if (name === "classic-migration") cmOnShow();
+  if (name === "event-triggers") etOnShow();
 }
 
 // After unlocking the saved credentials, reload what the open tab could not read while locked.
