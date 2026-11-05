@@ -279,6 +279,10 @@ async function loadFlowIndex() {
     ? `Webhook addresses read from Flow: ${(response.index.webhooks || []).length} for ${wi.checked} automation(s)${wi.failures.length ? `, ${wi.failures.length} failed (first: ${wi.failures[0]})` : ""}.`
     : "");
   hint.hidden = !hint.textContent;
+  // The reason must not hide in the sidebar: without Flow the names stay as endpoint addresses.
+  const warn = document.getElementById("fdFlowWarn");
+  warn.textContent = flowIndexError ? `Package and automation names could not be read from Flow: ${flowIndexError}` : "";
+  warn.hidden = !flowIndexError;
 }
 
 function render() {
