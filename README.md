@@ -52,6 +52,10 @@ The settings are lost only if you remove the extension or load it from a differe
 extension's ID comes from its folder path). Before doing either, use **Basic Data → Backup & restore → Export
 settings** and restore the file afterwards. Secrets in the file stay encrypted with your master password.
 
+The master password can't be recovered. If you forgot it, use **Forgot password?** next to the Unlock field: it clears
+the password check, the saved IFS client secrets and the GitHub token (the installation list stays), and you set a new
+password by entering the secrets again.
+
 ## Releases
 
 Bumping `version` in `manifest.json` on `master` publishes a release automatically: the

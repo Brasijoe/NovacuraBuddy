@@ -22,6 +22,12 @@
     <div class="search-row" id="unlockRow" hidden>
       <input id="unlockPassword" type="password" placeholder="Master password (unlocks saved IFS credentials)" />
       <button id="unlockBtn">Unlock</button>
+      <button id="forgotPasswordBtn" type="button">Forgot password?</button>
+    </div>
+    <div id="resetPasswordBox" class="banner banner-warning" hidden>
+      <span id="resetPasswordText"><strong>Reset the master password?</strong> The master password can't be recovered. A reset clears the password check, the saved IFS client secrets and the GitHub token. The installation list and your other settings stay. Afterwards set a new password by adding each installation again (client secret) and saving the GitHub token again.</span>
+      <button id="resetPasswordConfirm" type="button" class="btn-primary">Reset and clear saved secrets</button>
+      <button id="resetPasswordCancel" type="button">Cancel</button>
     </div>
 
     <!-- Tabs are grouped into menus that open on hover, click or keyboard focus. To add a tab,
