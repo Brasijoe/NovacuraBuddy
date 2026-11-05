@@ -85,3 +85,8 @@
 .fd-mode { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; }
 .fd-mode .list-count { grid-column: 1 / -1; }
 .fd-mode button { padding: 6px 8px; min-width: 0; white-space: nowrap; text-align: center; }
+/* The label and the name share one font: "Package ALLUSE", "Automation QueryParams". */
+.fd-pkg-head .fd-tag { font-size: 22px; font-weight: 700; text-transform: none; letter-spacing: normal; }
+.fd-auto-head .fd-tag { font-size: 18px; font-weight: 700; text-transform: none; letter-spacing: normal; }
+.fd-auto-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.fd-auto-head .fd-url, .fd-auto-head .fd-auto-pkg, .fd-auto-head .fd-node-warn { flex-basis: 100%; }
