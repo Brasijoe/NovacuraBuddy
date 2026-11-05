@@ -1,7 +1,7 @@
 // Event Triggers tab: link a Flow automation (webhook endpoint) to an IFS event. Creates the routing
 // address, routing rule and event action in IFS (lib/event-triggers.js, background ET_* messages).
 // Preview first (read-only), then a second click creates; existing objects are reused, nothing is deleted.
-const et = { orgId: null, automations: [], accessKeys: [], ifsFor: null, events: [], planned: false };
+const et = { plan: null, orgId: null, automations: [], accessKeys: [], ifsFor: null, events: [], planned: false };
 
 const etEl = (id) => document.getElementById(id);
 
@@ -164,6 +164,7 @@ etEl("etPlanBtn").addEventListener("click", async () => {
   const response = await actionOrShowError({ type: "ET_PLAN", baseUrl, input: etInput() });
   if (!response) return;
   et.planned = true;
+  et.plan = response.plan;
   etRenderPlan(response.plan, etEl("etInstance").selectedOptions[0].textContent);
   etEl("etLinkBtn").hidden = false;
   etEl("etLinkBtn").textContent = "Confirm and link automation";
@@ -174,6 +175,7 @@ etEl("etLinkBtn").addEventListener("click", async () => {
   const btn = etEl("etLinkBtn");
   btn.disabled = true;
   btn.textContent = "Linking…";
+  et.eventId = etInput().eventId;
   const response = await actionOrShowError({ type: "ET_LINK", baseUrl: etEl("etInstance").value, input: etInput(), accessKey: etEl("etKey").value });
   btn.disabled = false;
   btn.hidden = true;
@@ -185,6 +187,19 @@ etEl("etLinkBtn").addEventListener("click", async () => {
     const p = document.createElement("p");
     p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : "failed — " + r.error}`;
     out.append(p);
+  }
+  // Direct links to the routing address and rule in IFS (created or reused).
+  const links = [["routingAddress", "routing address", et.plan && et.plan.addressName, { addressName: et.plan && et.plan.addressName }], ["routingRule", "routing rule", et.plan && et.plan.ruleName, { ruleName: et.plan && et.plan.ruleName }], ["eventAction", "event action of", et.eventId, { eventId: et.eventId }]];
+  for (const [type, label, name, data] of links) {
+    const url = name && IfsLinks.ifsObjectUrl(etEl("etInstance").value, type, data);
+    if (!url) continue;
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = `Open ${label} ${name} in IFS ↗`;
+    a.style.display = "block";
+    out.appendChild(a);
   }
   out.hidden = false;
 });

@@ -914,3 +914,5 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-warning-group { margin-top: 4px; font-size: 12px; }
 .cm-warning-group.blocker > summary { color: var(--accent-red); font-weight: 600; }
 .cm-warning-group.fyi > summary { color: var(--text-muted, #667); }
+#resetPasswordBox { flex-wrap: wrap; }
+#resetPasswordBox span { flex: 1 1 100%; }

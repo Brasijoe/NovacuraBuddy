@@ -92,6 +92,22 @@ async function unlock() {
   }
 }
 
+// Forgotten master password: inline confirmation (window.confirm is blocked in the side panel).
+const forgotBtnEl = document.getElementById("forgotPasswordBtn");
+if (forgotBtnEl) {
+  const box = document.getElementById("resetPasswordBox");
+  forgotBtnEl.addEventListener("click", () => { box.hidden = false; });
+  document.getElementById("resetPasswordCancel").addEventListener("click", () => { box.hidden = true; });
+  document.getElementById("resetPasswordConfirm").addEventListener("click", async () => {
+    const response = await actionOrShowError({ type: "RESET_MASTER_PASSWORD" });
+    box.hidden = true;
+    if (response) {
+      refreshLockStatus();
+      document.dispatchEvent(new Event("ifs-unlocked"));
+    }
+  });
+}
+
 const unlockBtnEl = document.getElementById("unlockBtn");
 if (unlockBtnEl) unlockBtnEl.addEventListener("click", unlock);
 const unlockPasswordEl = document.getElementById("unlockPassword");
