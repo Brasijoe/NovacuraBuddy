@@ -262,7 +262,15 @@ function groupEntries() {
     if (byPackage.notFlow.length) entries.push([NOT_FLOW, "Not run./app.novacura.com", byPackage.notFlow]);
     return entries;
   }
-  for (const [key, chains] of Object.entries(result.grouped.groups).sort(([a], [b]) => a.localeCompare(b))) entries.push([key, key, chains]);
+  // Endpoint view: the automation's name is the primary label, the endpoint address the smaller secondary one.
+  const named = Object.entries(result.grouped.groups).map(([key, chains]) => {
+    const end = chains[0].nodes[chains[0].nodes.length - 1];
+    const url = end && end.type === "endpoint" ? end.data.url : key;
+    const target = flowIndex ? FlowDeps.flowTargetForUrl(url, flowIndex) : null;
+    const name = target && !target.ambiguous ? (target.automationName || target.assetName) : null;
+    return [key, name || key, chains, name ? key : ""];
+  });
+  for (const entry of named.sort((a, b) => a[1].localeCompare(b[1]))) entries.push(entry);
   if (result.grouped.unknown.length) entries.push([UNKNOWN, "No endpoint URL", result.grouped.unknown]);
   return entries;
 }
@@ -301,18 +309,24 @@ async function loadFlowIndex() {
 function render() {
   const needle = document.getElementById("fdFilter").value.trim().toLowerCase();
   const matches = (key, chains) => !needle || key.toLowerCase().includes(needle) || chains.some((c) => chainText(c).includes(needle));
-  const entries = groupEntries().filter(([key, label, chains]) => key === ALL || matches(label, chains));
+  const entries = groupEntries().filter(([key, label, chains, sub]) => key === ALL || matches(`${label} ${sub || ""}`, chains));
   if (!entries.some(([key]) => key === selectedGroup)) selectedGroup = entries[0][0];
 
   const list = document.getElementById("fdGroupList");
   list.innerHTML = "";
-  for (const [key, label, chains] of entries) {
+  for (const [key, label, chains, sub] of entries) {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.className = "fd-group" + (key === selectedGroup ? " is-active" : "");
     const name = document.createElement("span");
     name.className = "fd-group-name";
     name.textContent = label;
+    if (sub) {
+      const subEl = document.createElement("small");
+      subEl.className = "fd-group-sub";
+      subEl.textContent = sub;
+      name.appendChild(subEl);
+    }
     const count = document.createElement("span");
     count.className = "list-count";
     count.textContent = String(chains.length);

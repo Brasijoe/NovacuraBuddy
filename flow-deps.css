@@ -95,3 +95,5 @@
 .fd-collapse { position: absolute; left: 10px; top: 10px; width: 22px; height: 22px; padding: 0; line-height: 1; border: 1px solid var(--surface-raised); border-radius: 6px; background: var(--surface); color: var(--ink-muted); }
 .fd-auto.is-collapsed .fd-scroll { display: none; }
 .fd-auto.is-collapsed .fd-auto-head { border-bottom: 0; }
+.fd-group-name { display: flex; flex-direction: column; min-width: 0; }
+.fd-group-sub { font-size: 11px; font-weight: 400; color: var(--ink-muted); overflow-wrap: anywhere; }
