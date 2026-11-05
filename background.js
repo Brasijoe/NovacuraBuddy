@@ -32,6 +32,7 @@ importScripts(
   "lib/cl-service.js",
   "lib/update-check.js",
   "lib/flow-deps.js",
+  "lib/event-triggers.js",
   "lib/flow-documentation.js",
   "lib/permission-check.js",
   "lib/permission-set-compare.js",
@@ -564,7 +565,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         });
         return;
       }
-      const { masterPassword, fields, token, report, code, result: _result, ...safeMessage } = message;
+      const { masterPassword, fields, token, accessKey: _accessKey, report, code, result: _result, ...safeMessage } = message;
       log("Message:", message.type, fields ? { ...safeMessage, fields: { ...fields, secretPayload: "[redacted]" } } : safeMessage, report ? { report: report.id } : "");
       const masterKey = () => instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
       switch (message.type) {
@@ -933,6 +934,34 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_FLOW_INDEX": {
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
           return sendResponse({ ok: true, index: await buildFlowIndex(designerTabState ? designerTabState.orgId : lastOrgId) });
+        }
+        case "ET_FLOW_AUTOMATIONS": { // Event Triggers: automations of the open Flow organisation with an active webhook (read-only)
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          const orgId = designerTabState ? designerTabState.orgId : lastOrgId;
+          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: the automations are read from Flow.");
+          const flowFetch = boundFlowFetch();
+          const [scan, environments, accessKeys] = await Promise.all([
+            linkScan(orgId), FlowEnvironments.listEnvironments({ flowFetch, orgId }), EventTriggers.listAccessKeys({ flowFetch, orgId }).catch(() => [])
+          ]);
+          const onProgress = (current, total) => chrome.runtime.sendMessage({ type: "ET_PROGRESS", current, total }).catch(() => {});
+          const automations = await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments, onProgress });
+          return sendResponse({ ok: true, orgId, automations, accessKeys, environments });
+        }
+        case "ET_IFS_LISTS": { // Event Triggers: the queues and events of an IFS instance (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const [queues, events] = await Promise.all([EventTriggers.listQueues(client), EventTriggers.listEvents(client)]);
+          return sendResponse({ ok: true, queues, events });
+        }
+        case "ET_PLAN": { // Event Triggers: what would be created and what exists already (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, plan: await EventTriggers.plan(client, message.input) });
+        }
+        case "ET_LINK": { // Event Triggers: creates routing address, routing rule and event action (writes to IFS; only creates)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          log("ET_LINK:", message.baseUrl, message.input.automationName, message.input.eventLuName, message.input.eventId);
+          const results = await EventTriggers.link(client, { ...message.input, accessKey: message.accessKey });
+          log("ET_LINK done:", JSON.stringify(results.map((r) => [r.step, r.status])));
+          return sendResponse({ ok: true, results });
         }
         case "PC_TARGETS": { // permission check: the IFS users (read-only)
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });

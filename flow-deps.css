@@ -29,6 +29,7 @@
 .fd-node.is-active { outline: 2px solid var(--accent); }
 .fd-node-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
 .fd-node-value { font-weight: 600; overflow-wrap: anywhere; }
+.fd-node-warn { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: #b45309; }
 .fd-node-sub { font-size: 11px; color: var(--ink-muted); overflow-wrap: anywhere; }
 .fd-type-event { border-left-color: #8b5cf6; }
 .fd-type-eventAction { border-left-color: var(--accent-orange); }

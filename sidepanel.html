@@ -52,6 +52,7 @@
           <div class="tab-menu-row"><button id="tab-flow-docs" class="tab-item" role="tab">Documentation <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Creates documentation of the flow open in the Designer tab for people and LLMs: what it does, its steps, every asset it uses (recursively), which flows use it and, if you want, which IFS events call it. Download the LLM file and give it to an LLM."></span></div>
           <div class="tab-menu-row"><button id="tab-step-recorder" class="tab-item" role="tab">Step Recorder <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Records what you do in the Flow web client (app.novacura.com): every click, input and selection becomes a numbered step with a screenshot and a ready sentence in German, English or French. Pause to skip private screens; password fields are never captured."></span></div>
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
+          <div class="tab-menu-row"><button id="tab-event-triggers" class="tab-item" role="tab">Event Triggers <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Triggers a Flow automation from an IFS event. Pick an automation with an active webhook, the IFS instance and an event; the tab then creates the routing address (pointing at the automation), the routing rule (application message, the event as message function, the queue) and the event action in IFS. Nothing is created before you confirm the preview, existing objects are reused and nothing is ever deleted."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
           <div class="tab-menu-row"><button id="tab-commit-chain" class="tab-item" role="tab">Commit Dependencies</button><span class="info-tip" data-tip="Commits the open flow and everything it uses, bottom to top: modules and sub-flows first, then the flows that use them, each pointing at the new versions below. You see what needs a commit first and can undo every commit. Optionally deploys afterwards."></span></div>
         </div>
@@ -378,6 +379,33 @@
       <div id="lfWork" class="lf-work" hidden></div>
     </section>
 
+    <section id="panel-event-triggers" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> the calls follow what the IFS web client sends but are not yet tried live end to end.</span></div>
+      <div class="section-head"><h2>Automation</h2><span class="info-tip" data-tip="The automations of the Flow organisation open in the Designer tab that have a webhook switched on in at least one environment. The endpoint is the webhook URL of that environment (Dev, Test or Prod). The routing address in IFS will call it."></span></div>
+      <button id="etLoadBtn" class="btn-primary fd-scan-btn">Load automations</button>
+      <div id="etHint" class="empty-state" hidden></div>
+      <div id="etFlowFields" hidden>
+        <select id="etAutomation"></select>
+        <select id="etEndpoint"></select>
+        <p id="etEndpointInfo" class="list-count"></p>
+        <label class="fd-default">HTTP method <select id="etMethod" data-plain><option>POST</option><option>GET</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select> <span class="info-tip" data-tip="The method the routing address uses to call the webhook. Flow fixes one per automation (POST also works for a GET automation)."></span></label>
+        <div class="section-head"><h3>Access key</h3><span class="info-tip" data-tip="The key the automation's webhook expects, sent as the x-api-key header. Flow shows a key only once when it is created, so it can't be read back: paste it here. The keys known for this package and environment are listed to help you find the right one. The key is only sent to your IFS instance and is never stored."></span></div>
+        <input id="etKey" type="password" autocomplete="off" placeholder="Access key…" />
+        <p id="etKeyHint" class="list-count"></p>
+      </div>
+      <div class="section-head"><h2>IFS</h2><span class="info-tip" data-tip="The IFS instance (from Basic Data) that gets the routing address, rule and event action. It defaults to the instance selected in the other tabs."></span></div>
+      <select id="etInstance"></select>
+      <div id="etIfsFields" hidden>
+        <select id="etEvent"></select>
+        <div class="section-head"><h3>Queue</h3><span class="info-tip" data-tip="The IFS Connect queue the application message is put in. The routing rule reads from the same queue. NOTIFICATIONS is the default."></span></div>
+        <select id="etQueue"></select>
+      </div>
+      <button id="etPlanBtn" class="btn-primary fd-scan-btn" disabled>Preview</button>
+      <div id="etPlan" hidden></div>
+      <button id="etLinkBtn" class="btn-primary fd-scan-btn" hidden>Link automation</button>
+      <div id="etResult" hidden></div>
+    </section>
+
     <section id="panel-permission-check" role="tabpanel" hidden>
       <div class="banner banner-warning"><span><strong>WIP:</strong> applying permissions is not yet fully verified against a live IFS; Read Only grants are not supported.</span></div>
       <div class="section-head"><h2>Projections the open flow calls</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every module and sub-flow it uses, and lists the IFS projections they call. Nothing is changed in Flow or IFS."></span></div>
@@ -506,6 +534,7 @@
     <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
     <script src="panels/permission-check.js"></script>
+    <script src="panels/event-triggers.js"></script>
     <script src="lib/permission-set-compare.js"></script>
     <script src="panels/permission-set-compare.js"></script>
     <script src="sidepanel.js"></script>

@@ -65,6 +65,18 @@ function nodeSubLabel(node) {
   }
 }
 
+/** What is switched off on an event action or routing rule: it will not fire. */
+function nodeWarnings(node) {
+  const d = node.data;
+  const out = [];
+  if (node.type === "eventAction") {
+    if (d.enabled === false) out.push("Not enabled");
+    if (d.published === false) out.push("Not published");
+  }
+  if (node.type === "routingRule" && d.enabled === false) out.push("Not enabled");
+  return out;
+}
+
 function renderValueTree(value) {
   const wrap = document.createElement("div");
   wrap.className = "tree";
@@ -124,6 +136,12 @@ function renderChain(chain) {
       subEl.className = "fd-node-sub";
       subEl.textContent = sub;
       el.appendChild(subEl);
+    }
+    for (const text of nodeWarnings(node)) {
+      const warn = document.createElement("span");
+      warn.className = "fd-node-warn";
+      warn.textContent = text;
+      el.appendChild(warn);
     }
     el.onclick = () => {
       const open = card.querySelector(".fd-detail");
