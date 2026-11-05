@@ -41,6 +41,7 @@
         </div>
         <div class="section-head"><h2 id="fdGroupHead">Endpoints</h2></div>
         <div id="fdGroupHint" class="empty-state" hidden></div>
+        <label class="fd-only-enabled"><input type="checkbox" id="fdOnlyEnabled" /> Show only enabled <span class="info-tip" data-tip="Hides every chain that contains an event action or routing rule that is not enabled."></span></label>
         <div class="fd-filter"><input id="fdFilter" type="search" placeholder="Filter…" aria-label="Filter" /></div>
         <ul id="fdGroupList" class="fd-group-list"></ul>
       </aside>
@@ -57,6 +58,7 @@
 
     <script src="lib/flow-deps.js"></script>
     <script src="lib/flow-deps-export.js"></script>
+    <script src="lib/ifs-links.js"></script>
     <script src="panels/common.js"></script>
     <script src="panels/info-tip.js"></script>
     <script src="flow-deps.js"></script>

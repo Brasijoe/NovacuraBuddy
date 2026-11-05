@@ -19,6 +19,11 @@ const TYPE_LABELS = {
 const NOT_FLOW = "__notflow__";
 const NOT_FOUND = "__notfound__";
 const GROUP_MODE_KEY = "flowDepsGroupMode";
+const ONLY_ENABLED_KEY = "flowDepsOnlyEnabled";
+let onlyEnabled = false;
+try { onlyEnabled = localStorage.getItem(ONLY_ENABLED_KEY) === "1"; } catch { /* per-viewer convenience only */ }
+/** A chain is disabled when its event action or routing rule is switched off. */
+const chainDisabled = (c) => c.nodes.some((n) => (n.type === "eventAction" || n.type === "routingRule") && n.data.enabled === false);
 
 let result = null;
 let selectedGroup = ALL;
@@ -116,7 +121,7 @@ function renderValueTree(value) {
 }
 
 // Layers of a chain, top to bottom. The automation at the end is drawn once per block.
-const STAGE_OF = { event: 0, pageCommand: 0, eventAction: 0, workflow: 1, routingRule: 2, routingAddress: 2 };
+const STAGE_OF = { event: 0, pageCommand: 0, eventAction: 1, workflow: 2, routingRule: 3, routingAddress: 4 };
 
 function makeNode(node, onPick) {
   const el = document.createElement("button");
@@ -141,11 +146,24 @@ function makeNode(node, onPick) {
     warn.textContent = text;
     el.appendChild(warn);
   }
+  const ifsUrl = IfsLinks.ifsObjectUrl(baseUrl, node.type, node.data);
+  if (ifsUrl) {
+    // A link inside a button is invalid HTML, so the card carries a small clickable label that opens IFS in a new tab.
+    const link = document.createElement("span");
+    link.className = "fd-ifs-link";
+    link.setAttribute("role", "link");
+    link.tabIndex = 0;
+    link.textContent = "Open in IFS ↗";
+    const open = (e) => { e.stopPropagation(); e.preventDefault(); window.open(ifsUrl, "_blank", "noopener"); };
+    link.onclick = open;
+    link.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") open(e); };
+    el.appendChild(link);
+  }
   el.onclick = () => onPick(el, node);
   return el;
 }
 
-const STAGE_LABELS = ["IFS event", "Workflow", "Routing", "Novacura"];
+const STAGE_LABELS = ["IFS event", "Event action", "Workflow", "Routing rule", "Routing address", "Novacura"];
 
 /** One automation: chains are columns, layers are rows (a layer no chain uses has no row), the automation once at the bottom. */
 function renderBlock(block) {
@@ -211,40 +229,79 @@ function renderBlock(block) {
     detailHost.appendChild(panel);
   };
 
-  const cols = block.chains.length;
-  const grid = document.createElement("div");
-  grid.className = "fd-stage-grid";
-  grid.style.setProperty("--cols", String(cols));
-  const arrow = () => { const a = document.createElement("div"); a.className = "fd-arrow"; a.textContent = "▼"; return a; };
-  const stages = [0, 1, 2].filter((st) => block.chains.some((c) => c.nodes.some((n) => STAGE_OF[n.type] === st)));
-  stages.forEach((st, rowIndex) => {
-    if (rowIndex) { const sep = document.createElement("div"); sep.className = "fd-row-sep"; grid.appendChild(sep); }
+  // One box per distinct object, however many chains pass through it; an object that leads to several follow-ups
+  // gets several outgoing arrows. Rows are the layers, arrows run from the middle of one box to the middle of the next.
+  const stageOf = (n) => (STAGE_OF[n.type] === undefined ? 5 : STAGE_OF[n.type]);
+  const nodeId = (n) => `${n.type}|${JSON.stringify(n.data && Object.fromEntries(Object.entries(n.data).filter(([k]) => k !== "raw")))}`;
+  const unique = new Map();
+  const edges = new Map();
+  for (const chain of block.chains) {
+    let prev = null;
+    for (const n of chain.nodes) {
+      const id = nodeId(n);
+      if (!unique.has(id)) unique.set(id, n);
+      if (prev && prev !== id) edges.set(`${prev}>${id}`, [prev, id]);
+      prev = id;
+    }
+  }
+  const graph = document.createElement("div");
+  graph.className = "fd-graph";
+  const els = new Map();
+  const placed = new Map();
+  const stages = [0, 1, 2, 3, 4, 5].filter((st) => [...unique.values()].some((n) => stageOf(n) === st));
+  for (const st of stages) {
+    const row = document.createElement("div");
+    row.className = "fd-layer";
     const label = document.createElement("div");
     label.className = "fd-rowlabel";
     label.textContent = STAGE_LABELS[st];
-    grid.appendChild(label);
-    for (const chain of block.chains) {
-      const cell = document.createElement("div");
-      cell.className = "fd-cell";
-      const nodes = chain.nodes.filter((n) => STAGE_OF[n.type] === st);
-      nodes.forEach((n, i) => {
-        if (i || (st > 0 && rowIndex)) cell.appendChild(arrow());
-        cell.appendChild(makeNode(n, pick));
-      });
-      grid.appendChild(cell);
+    const nodesBox = document.createElement("div");
+    nodesBox.className = "fd-layer-nodes";
+    // Order a layer by where its predecessors sit, so arrows cross as little as possible.
+    const inLayer = [...unique].filter(([, n]) => stageOf(n) === st);
+    const rank = (id) => { const from = [...edges.values()].filter(([, t]) => t === id).map(([f]) => placed.get(f)).filter((v) => v !== undefined); return from.length ? from.reduce((a, b) => a + b, 0) / from.length : Infinity; };
+    inLayer.sort((a, b) => rank(a[0]) - rank(b[0]));
+    inLayer.forEach(([id], i) => placed.set(id, i));
+    for (const [id, n] of inLayer) {
+      const el = makeNode(n, pick);
+      els.set(id, el);
+      nodesBox.appendChild(el);
     }
-  });
-  const end = block.chains[0].nodes[block.chains[0].nodes.length - 1];
-  if (end && end.type === "endpoint") {
-    if (stages.length) { const sep = document.createElement("div"); sep.className = "fd-row-sep"; grid.appendChild(sep); }
-    const label = document.createElement("div");
-    label.className = "fd-rowlabel";
-    label.textContent = STAGE_LABELS[3];
-    const target = document.createElement("div");
-    target.className = "fd-cell fd-target";
-    target.append(arrow(), makeNode(end, pick));
-    grid.append(label, target);
+    row.append(label, nodesBox);
+    graph.appendChild(row);
   }
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "fd-edges");
+  svg.innerHTML = `<defs><marker id="fdHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>`;
+  graph.appendChild(svg);
+  const drawEdges = () => {
+    svg.querySelectorAll("line").forEach((l) => l.remove());
+    const g = graph.getBoundingClientRect();
+    if (!g.width) return; // collapsed or not laid out yet
+    svg.setAttribute("width", String(g.width));
+    svg.setAttribute("height", String(g.height));
+    const box = (el) => { const r = el.getBoundingClientRect(); return { cx: r.left - g.left + r.width / 2, cy: r.top - g.top + r.height / 2, hw: r.width / 2, hh: r.height / 2 }; };
+    // Distance factor from a box's middle to its border along the direction of travel.
+    const edgeT = (b, dx, dy) => Math.min(dx ? b.hw / Math.abs(dx) : Infinity, dy ? b.hh / Math.abs(dy) : Infinity);
+    for (const [from, to] of edges.values()) {
+      const a = box(els.get(from)), z = box(els.get(to));
+      const dx = z.cx - a.cx, dy = z.cy - a.cy;
+      if (!dx && !dy) continue;
+      const ta = edgeT(a, dx, dy), tz = edgeT(z, dx, dy);
+      if (ta + tz >= 1) continue; // boxes touch
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", String(a.cx + dx * ta));
+      line.setAttribute("y1", String(a.cy + dy * ta));
+      line.setAttribute("x2", String(z.cx - dx * tz));
+      line.setAttribute("y2", String(z.cy - dy * tz));
+      line.setAttribute("marker-end", "url(#fdHead)");
+      svg.appendChild(line);
+    }
+  };
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(drawEdges).observe(graph);
+  requestAnimationFrame(drawEdges);
+  const grid = graph;
   scroll.append(grid, detailHost);
   card.appendChild(scroll);
   return card;
@@ -255,6 +312,12 @@ function chainText(chain) {
 }
 
 function groupEntries() {
+  const all = groupEntriesAll();
+  if (!onlyEnabled) return all;
+  return all.map(([key, label, chains, sub]) => [key, label, chains.filter((c) => !chainDisabled(c)), sub]).filter(([key, , chains]) => key === ALL || chains.length);
+}
+
+function groupEntriesAll() {
   const entries = groupMode === "package" && flowIndex ? [] : [[ALL, "All chains", result.chains]];
   if (groupMode === "package" && flowIndex) {
     const byPackage = FlowDeps.groupChainsByPackage(result.chains, flowIndex);
@@ -307,6 +370,7 @@ function render() {
   const needle = document.getElementById("fdFilter").value.trim().toLowerCase();
   const matches = (key, chains) => !needle || key.toLowerCase().includes(needle) || chains.some((c) => chainText(c).includes(needle));
   const entries = groupEntries().filter(([key, label, chains, sub]) => key === ALL || matches(`${label} ${sub || ""}`, chains));
+  if (!entries.length) entries.push([ALL, "Nothing to show", []]); // every chain filtered out
   if (!entries.some(([key]) => key === selectedGroup)) selectedGroup = entries[0][0];
 
   const list = document.getElementById("fdGroupList");
@@ -447,6 +511,13 @@ async function main() {
   document.getElementById("fdRescanBtn").onclick = scan;
   document.getElementById("fdExportBtn").onclick = exportForLlm;
   document.getElementById("fdFilter").addEventListener("input", () => result && render());
+  const onlyBox = document.getElementById("fdOnlyEnabled");
+  onlyBox.checked = onlyEnabled;
+  onlyBox.addEventListener("change", () => {
+    onlyEnabled = onlyBox.checked;
+    try { localStorage.setItem(ONLY_ENABLED_KEY, onlyEnabled ? "1" : "0"); } catch { /* per-viewer convenience only */ }
+    if (result) render();
+  });
   for (const btn of document.querySelectorAll("[data-group-mode]")) btn.onclick = () => setGroupMode(btn.dataset.groupMode);
   setGroupMode(groupMode);
   if (params.get("scan") === "1") {

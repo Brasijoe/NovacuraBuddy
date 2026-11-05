@@ -98,3 +98,15 @@
 .fd-group-name { display: flex; flex-direction: column; min-width: 0; }
 .fd-group-sub { font-size: 11px; font-weight: 400; color: var(--ink-muted); overflow-wrap: anywhere; }
 .fd-actions { display: flex; align-items: center; gap: var(--space-2); }
+.fd-ifs-link { margin-top: 3px; font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.fd-ifs-link:hover, .fd-ifs-link:focus-visible { text-decoration: underline; outline: none; }
+
+/* One box per object; arrows are drawn by flow-deps.js from middle to middle. */
+.fd-graph { position: relative; display: grid; gap: 56px; min-width: min-content; }
+.fd-layer { display: grid; grid-template-columns: 96px 1fr; align-items: start; gap: 0 12px; position: relative; z-index: 1; }
+.fd-layer-nodes { display: flex; gap: 0 28px; }
+.fd-layer-nodes .fd-node { width: 230px; max-width: 230px; }
+.fd-edges { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; color: var(--ink-muted); overflow: visible; }
+.fd-edges line { stroke: currentColor; stroke-width: 1.5; }
+
+.fd-only-enabled { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
