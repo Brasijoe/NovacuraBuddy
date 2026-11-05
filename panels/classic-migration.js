@@ -500,6 +500,7 @@ cmEl("cmRunBtn").addEventListener("click", async () => {
         const blockers = cmService.groupWarningsBySeverity(emitted.warnings).blockers.length;
         const verb = pushed.updated ? "Updated" : "Saved";
         row.status(blockers ? `${verb}, ${blockers} need${blockers === 1 ? "s" : ""} attention` : emitted.warnings.length ? `${verb}, ${emitted.warnings.length} FYI` : verb, blockers ? "warn" : "ok");
+        if (pushed.updated) row.detail(["Existing asset updated (saved, not committed). Reload the flow in the Designer and commit it there to make it a new version."]);
         row.summary(emitted);
         row.warnings(emitted.warnings);
       } catch (e) {
