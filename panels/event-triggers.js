@@ -175,6 +175,7 @@ etEl("etLinkBtn").addEventListener("click", async () => {
   const btn = etEl("etLinkBtn");
   btn.disabled = true;
   btn.textContent = "Linking…";
+  et.eventId = etInput().eventId;
   const response = await actionOrShowError({ type: "ET_LINK", baseUrl: etEl("etInstance").value, input: etInput(), accessKey: etEl("etKey").value });
   btn.disabled = false;
   btn.hidden = true;
@@ -188,7 +189,7 @@ etEl("etLinkBtn").addEventListener("click", async () => {
     out.append(p);
   }
   // Direct links to the routing address and rule in IFS (created or reused).
-  const links = [["routingAddress", "routing address", et.plan && et.plan.addressName, { addressName: et.plan && et.plan.addressName }], ["routingRule", "routing rule", et.plan && et.plan.ruleName, { ruleName: et.plan && et.plan.ruleName }]];
+  const links = [["routingAddress", "routing address", et.plan && et.plan.addressName, { addressName: et.plan && et.plan.addressName }], ["routingRule", "routing rule", et.plan && et.plan.ruleName, { ruleName: et.plan && et.plan.ruleName }], ["eventAction", "event action of", et.eventId, { eventId: et.eventId }]];
   for (const [type, label, name, data] of links) {
     const url = name && IfsLinks.ifsObjectUrl(etEl("etInstance").value, type, data);
     if (!url) continue;
