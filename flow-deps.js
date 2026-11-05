@@ -300,10 +300,6 @@ async function loadFlowIndex() {
     ? `Webhook addresses could not be read for ${wi.failures.length} of ${wi.checked} automation(s) (first: ${wi.failures[0]}); their names may be missing.`
     : "");
   hint.hidden = !hint.textContent;
-  // The reason must not hide in the sidebar: without Flow the names stay as endpoint addresses.
-  const warn = document.getElementById("fdFlowWarn");
-  warn.textContent = flowIndexError ? `Package and automation names could not be read from Flow: ${flowIndexError}` : "";
-  warn.hidden = !flowIndexError;
 }
 
 function render() {
