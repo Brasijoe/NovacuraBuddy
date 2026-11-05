@@ -944,8 +944,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             linkScan(orgId), FlowEnvironments.listEnvironments({ flowFetch, orgId }), EventTriggers.listAccessKeys({ flowFetch, orgId }).catch(() => [])
           ]);
           const onProgress = (current, total) => chrome.runtime.sendMessage({ type: "ET_PROGRESS", current, total }).catch(() => {});
-          const automations = await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments, onProgress });
-          return sendResponse({ ok: true, orgId, automations, accessKeys, environments });
+          const { automations, checked, failures } = await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments, onProgress });
+          return sendResponse({ ok: true, orgId, automations, accessKeys, environments, checked, failures });
         }
         case "ET_IFS_LISTS": { // Event Triggers: the queues and events of an IFS instance (read-only)
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
