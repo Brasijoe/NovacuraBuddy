@@ -306,8 +306,9 @@
           <ul id="ftPackages" class="ft-list"></ul>
           <p class="api-hint">App Library assets go back to the App Library.</p>
         </div>
-        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Modules that are created or updated are committed as a new version; flows are saved with all their steps (commit them in the Designer)."></span></div>
+        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Modules that are created or updated are committed as a new version; flows are saved but not committed (commit them in the Designer and move the parent flow to the new version)."></span></div>
         <ul id="ftAssets" class="ft-tree"></ul>
+        <p class="api-hint">Update existing makes the flow match the file: steps and arrows that are not in the file are deleted. Flows are saved, not committed: commit them in the Designer afterwards and move the parent flow to the new version.</p>
         <div id="ftIfsBox" class="ft-ifs" hidden>
           <label class="api-field">IFS instance for "Generate from IFS" <select id="ftIfs"></select></label>
           <span class="api-hint">IFS modules picked for "Generate from IFS" are generated fresh from this instance, exactly like Create module in the Projection Tracker tab.</span>
