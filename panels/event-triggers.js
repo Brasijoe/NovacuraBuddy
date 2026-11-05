@@ -68,7 +68,7 @@ async function etLoadAutomations() {
   et.orgId = response.orgId;
   et.automations = response.automations;
   et.accessKeys = response.accessKeys;
-  if (!et.automations.length) { etEl("etFlowFields").hidden = true; return etHint("No automation of this organisation has a webhook switched on."); }
+  if (!et.automations.length) { etEl("etFlowFields").hidden = true; return etHint("No automation of this organisation has a webhook switched on, or its settings could not be read from Flow."); }
   etHint("");
   const select = etEl("etAutomation");
   select.innerHTML = "";
