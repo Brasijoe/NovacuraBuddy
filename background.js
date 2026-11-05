@@ -1270,8 +1270,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "FD_LAST_RESULT": {
           const key = FLOW_DEPS_PREFIX + IfsInstances.normalizeBaseUrl(message.baseUrl);
           const { [key]: result = null } = await chrome.storage.local.get(key);
-          // The side panel only needs the headline; the full result can be too large for a message.
-          return sendResponse({ ok: true, result: result && { scannedAt: result.scannedAt, modules: result.modules.map((m) => ({ status: m.status })) } });
+          return sendResponse({ ok: true, result });
         }
         case "GET_UPDATE_INFO": {
           // Fire and forget: a fresh result lands in storage and the panel's onChanged listener re-renders the banner.
