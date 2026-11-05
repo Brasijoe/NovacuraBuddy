@@ -475,7 +475,16 @@ async function buildFlowIndex(orgId) {
       log("FD_FLOW_INDEX: products of", pkg.name, "failed:", e.message);
     }
   }
-  return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products };
+  // The exact webhook URL of every automation (from its settings, per environment): the sure way to tell which
+  // automation a run.novacura.com URL belongs to. Failure only costs this exact match.
+  let webhooks = [];
+  try {
+    const environments = await FlowEnvironments.listEnvironments({ flowFetch, orgId });
+    webhooks = (await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments })).webhooks;
+  } catch (e) {
+    log("FD_FLOW_INDEX: webhook settings failed:", e.message);
+  }
+  return { orgId, packages: scan.packages.map(({ id, name }) => ({ id, name })), assets, products, webhooks };
 }
 
 
