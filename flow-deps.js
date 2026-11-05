@@ -22,8 +22,8 @@ const GROUP_MODE_KEY = "flowDepsGroupMode";
 
 let result = null;
 let selectedGroup = ALL;
-let groupMode = "endpoint"; // or "package"
-try { if (localStorage.getItem(GROUP_MODE_KEY) === "package") groupMode = "package"; } catch { /* per-viewer convenience only */ }
+let groupMode = "package"; // or "endpoint"
+try { if (localStorage.getItem(GROUP_MODE_KEY) === "endpoint") groupMode = "endpoint"; } catch { /* per-viewer convenience only */ }
 let flowIndex = null; // packages + assets of the open Flow organisation, loaded on first use
 let flowIndexError = "";
 
@@ -145,20 +145,34 @@ function makeNode(node, onPick) {
   return el;
 }
 
-/** One block: chains as columns, layers as rows (an unused layer has no row), the automation once at the bottom. */
+const STAGE_LABELS = ["IFS event", "Workflow", "Routing", "Novacura"];
+
+/** One automation: chains are columns, layers are rows (a layer no chain uses has no row), the automation once at the bottom. */
 function renderBlock(block) {
-  const card = document.createElement("div");
-  card.className = "fd-chain";
+  const card = document.createElement("section");
+  card.className = "fd-auto";
   const head = document.createElement("div");
-  head.className = "fd-block-head";
-  const title = document.createElement("strong");
+  head.className = "fd-auto-head";
+  const tag = document.createElement("span");
+  tag.className = "fd-tag fd-tag-flow";
+  tag.textContent = block.target ? "Automation" : "Endpoint";
+  const title = document.createElement("h3");
   title.textContent = block.title;
-  const meta = document.createElement("span");
-  meta.className = "fd-node-sub";
-  meta.textContent = `${block.urls.join(" · ")}${block.urls.length ? " · " : ""}${block.chains.length} chain(s)`;
-  head.append(title, meta);
+  const url = document.createElement("span");
+  url.className = "fd-url";
+  url.textContent = block.urls.join(" · ");
+  head.append(tag, title);
+  if (block.target && block.target.packageName) {
+    const pkg = document.createElement("span");
+    pkg.className = "fd-auto-pkg";
+    pkg.textContent = `Package: ${block.target.packageName}`;
+    head.appendChild(pkg);
+  }
+  if (block.urls.length) head.appendChild(url);
   card.appendChild(head);
 
+  const scroll = document.createElement("div");
+  scroll.className = "fd-scroll";
   const detailHost = document.createElement("div");
   const pick = (el, node) => {
     const open = detailHost.firstChild;
@@ -177,34 +191,42 @@ function renderBlock(block) {
     detailHost.appendChild(panel);
   };
 
-  const stages = [0, 1, 2].filter((st) => block.chains.some((c) => c.nodes.some((n) => STAGE_OF[n.type] === st)));
+  const cols = block.chains.length;
   const grid = document.createElement("div");
   grid.className = "fd-stage-grid";
-  grid.style.gridTemplateColumns = `repeat(${block.chains.length}, minmax(160px, 1fr))`;
-  for (const st of stages) {
+  grid.style.setProperty("--cols", String(cols));
+  const arrow = () => { const a = document.createElement("div"); a.className = "fd-arrow"; a.textContent = "▼"; return a; };
+  const stages = [0, 1, 2].filter((st) => block.chains.some((c) => c.nodes.some((n) => STAGE_OF[n.type] === st)));
+  stages.forEach((st, rowIndex) => {
+    if (rowIndex) { const sep = document.createElement("div"); sep.className = "fd-row-sep"; grid.appendChild(sep); }
+    const label = document.createElement("div");
+    label.className = "fd-rowlabel";
+    label.textContent = STAGE_LABELS[st];
+    grid.appendChild(label);
     for (const chain of block.chains) {
       const cell = document.createElement("div");
       cell.className = "fd-cell";
       const nodes = chain.nodes.filter((n) => STAGE_OF[n.type] === st);
       nodes.forEach((n, i) => {
-        if (i) { const arrow = document.createElement("span"); arrow.className = "fd-arrow"; arrow.textContent = "↓"; cell.appendChild(arrow); }
+        if (i || (st > 0 && rowIndex)) cell.appendChild(arrow());
         cell.appendChild(makeNode(n, pick));
       });
       grid.appendChild(cell);
     }
-  }
-  card.appendChild(grid);
+  });
   const end = block.chains[0].nodes[block.chains[0].nodes.length - 1];
   if (end && end.type === "endpoint") {
-    const bottom = document.createElement("div");
-    bottom.className = "fd-bottom";
-    const arrow = document.createElement("span");
-    arrow.className = "fd-arrow";
-    arrow.textContent = "↓";
-    bottom.append(arrow, makeNode(block.target ? { type: "endpoint", data: end.data } : end, pick));
-    card.appendChild(bottom);
+    if (stages.length) { const sep = document.createElement("div"); sep.className = "fd-row-sep"; grid.appendChild(sep); }
+    const label = document.createElement("div");
+    label.className = "fd-rowlabel";
+    label.textContent = STAGE_LABELS[3];
+    const target = document.createElement("div");
+    target.className = "fd-cell fd-target";
+    target.append(arrow(), makeNode(end, pick));
+    grid.append(label, target);
   }
-  card.appendChild(detailHost);
+  scroll.append(grid, detailHost);
+  card.appendChild(scroll);
   return card;
 }
 
@@ -213,7 +235,7 @@ function chainText(chain) {
 }
 
 function groupEntries() {
-  const entries = [[ALL, "All chains", result.chains]];
+  const entries = groupMode === "package" && flowIndex ? [] : [[ALL, "All chains", result.chains]];
   if (groupMode === "package" && flowIndex) {
     const byPackage = FlowDeps.groupChainsByPackage(result.chains, flowIndex);
     for (const [key, chains] of Object.entries(byPackage.groups).sort(([a], [b]) => a.localeCompare(b))) entries.push([key, key, chains]);
@@ -253,7 +275,7 @@ function render() {
   const needle = document.getElementById("fdFilter").value.trim().toLowerCase();
   const matches = (key, chains) => !needle || key.toLowerCase().includes(needle) || chains.some((c) => chainText(c).includes(needle));
   const entries = groupEntries().filter(([key, label, chains]) => key === ALL || matches(label, chains));
-  if (!entries.some(([key]) => key === selectedGroup)) selectedGroup = ALL;
+  if (!entries.some(([key]) => key === selectedGroup)) selectedGroup = entries[0][0];
 
   const list = document.getElementById("fdGroupList");
   list.innerHTML = "";
@@ -275,10 +297,26 @@ function render() {
 
   const [, label, chains] = entries.find(([key]) => key === selectedGroup);
   const shown = selectedGroup === ALL ? chains.filter((c) => !needle || chainText(c).includes(needle)) : chains;
+  const blocks = FlowDeps.groupChainsByAutomation(shown, flowIndex);
+  const packageView = groupMode === "package" && flowIndex;
   document.getElementById("fdGroupTitle").textContent = `${label} (${shown.length})`;
+  document.getElementById("fdGroupTitle").hidden = !!packageView;
   const container = document.getElementById("fdChains");
   container.innerHTML = "";
-  const blocks = FlowDeps.groupChainsByAutomation(shown, groupMode === "package" ? flowIndex : flowIndex);
+  if (packageView) {
+    const head = document.createElement("div");
+    head.className = "fd-pkg-head";
+    const tag = document.createElement("span");
+    tag.className = "fd-tag";
+    tag.textContent = "Package";
+    const name = document.createElement("h2");
+    name.textContent = label;
+    const count = document.createElement("span");
+    count.className = "fd-muted";
+    count.textContent = `${blocks.length} automation(s) · ${shown.length} chain(s)`;
+    head.append(tag, name, count);
+    container.appendChild(head);
+  }
   for (const block of blocks) container.appendChild(renderBlock(block));
 }
 
