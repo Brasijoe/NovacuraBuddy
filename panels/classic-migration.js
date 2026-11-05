@@ -161,6 +161,17 @@ function cmRenderFlows() {
       ftChip(s.assetKind === "application" ? "Flow" : "Component", "info", s.assetKind === "application" ? "A top-level flow (user flow)" : "A reusable component (fragment / machine flow)"),
       ftChip(`${s.itemCount} steps`, "muted"),
       s.environmentOrigin ? ftChip(s.environmentOrigin, "muted", "Classic environment it was exported from") : null);
+    const preview = document.createElement("button");
+    preview.type = "button";
+    preview.className = "btn-ghost cm-preview-btn";
+    preview.textContent = "Preview";
+    preview.title = "Translate this flow and show its summary and warnings. Nothing is created.";
+    preview.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const flow = cmDecoded.flows.find((f) => f.versionIdentifier === vid);
+      if (flow) cmPreviewFlow(flow, s.name || "(unnamed)");
+    });
+    row.append(preview);
     box.append(row);
   }
   if (cmDecoded.cyclic.length) box.append(ftChip(`${cmDecoded.cyclic.length} flows include each other in a cycle`, "warn"));
@@ -346,6 +357,87 @@ cmEl("cmOrg").addEventListener("change", () => cmOrgChanged());
 cmEl("cmRefreshBtn").addEventListener("click", cmRefresh);
 cmEl("cmPackage").addEventListener("change", cmUpdateRun);
 
+/* --- warnings and summary --- */
+
+/** Warnings split like the Electron app: "Needs attention" (blockers, open) and "For your information" (collapsed). */
+function cmWarningGroups(warnings) {
+  const wrap = document.createElement("div");
+  if (!warnings.length) return wrap;
+  const { blockers, fyis } = cmService.groupWarningsBySeverity(warnings);
+  const group = (title, list, cls, open) => {
+    if (!list.length) return;
+    const d = document.createElement("details");
+    d.className = `cm-warning-group ${cls}`;
+    d.open = open;
+    const sum = document.createElement("summary");
+    sum.textContent = `${title} (${list.length})`;
+    const pre = document.createElement("pre");
+    pre.className = "cm-notes";
+    pre.textContent = list.join("\n");
+    d.append(sum, pre);
+    wrap.append(d);
+  };
+  group("Needs attention", blockers, "blocker", true);
+  group("For your information", fyis, "fyi", false);
+  return wrap;
+}
+
+function cmSummaryBlock(emitted) {
+  const s = cmService.summarizeEmitted(emitted.data);
+  const box = document.createElement("div");
+  box.className = "cm-summary";
+  const row = (label, value, sub) => {
+    const r = document.createElement("div");
+    r.className = sub ? "cm-summary-row cm-summary-sub" : "cm-summary-row";
+    r.append(Object.assign(document.createElement("span"), { textContent: label }), Object.assign(document.createElement("strong"), { textContent: String(value) }));
+    box.append(r);
+  };
+  row("Connect steps", s.steps);
+  row("Connect arrows", s.arrows);
+  row("Modules used", s.modules);
+  for (const [type, n] of s.stepsByType) row(type, n, true);
+  return box;
+}
+
+async function cmIfsContext(baseUrl, cache) {
+  if (!baseUrl) return null;
+  if (cache.ifs) return cache.ifs;
+  const t = await actionOrShowError({ type: "CM_IFS_TOKEN", baseUrl, masterPassword: masterPasswordOf() });
+  if (!t) throw new Error("Could not get an IFS token (unlock the saved credentials first).");
+  cache.ifs = { baseUrl, token: t.token };
+  return cache.ifs;
+}
+
+/** Translates one flow without creating anything (no target, so no modules are committed) and shows
+ *  its summary and warnings, like the Electron app did before "Create in Connect". */
+async function cmPreviewFlow(flow, name) {
+  const box = cmEl("cmPreview");
+  box.hidden = false;
+  box.innerHTML = "";
+  const title = document.createElement("div");
+  title.className = "cm-preview-title";
+  title.textContent = `Preview: ${name}`;
+  box.append(title);
+  const status = document.createElement("p");
+  status.className = "api-hint";
+  status.textContent = "Translating…";
+  box.append(status);
+  try {
+    const svc = await cmLoadService();
+    const cache = {};
+    const ifs = await cmIfsContext(cmEl("cmInstance").value, cache);
+    const ctx = { rest: cmRest, userId: cmUserId, ifs };
+    const emitted = await svc.emitFlow(ctx, { flow, connectorMapping: cmCurrentMapping(false), restProjects: cmRestProjects, includedWorkflows: {} });
+    status.remove();
+    box.append(cmSummaryBlock(emitted));
+    const w = cmWarningGroups(emitted.warnings);
+    if (emitted.warnings.length) box.append(w);
+    else box.append(Object.assign(document.createElement("p"), { className: "api-hint", textContent: "No warnings." }));
+  } catch (e) {
+    status.textContent = e.message;
+  }
+}
+
 /* --- run --- */
 
 function cmResultRow(name) {
@@ -361,6 +453,10 @@ function cmResultRow(name) {
   cmEl("cmResults").append(row);
   return {
     status(text, tone) { head.querySelectorAll(".ft-chip").forEach((c) => c.remove()); head.append(ftChip(text, tone)); },
+    warnings(lines) {
+      if (lines.length) row.append(cmWarningGroups(lines));
+    },
+    summary(emitted) { row.append(cmSummaryBlock(emitted)); },
     detail(lines) {
       if (!lines.length) return;
       const d = document.createElement("details");
@@ -395,18 +491,16 @@ cmEl("cmRunBtn").addEventListener("click", async () => {
       const row = cmResultRow(flow.name);
       row.status("Translating…", "info");
       try {
-        if (baseUrl && !ifs) {
-          const t = await actionOrShowError({ type: "CM_IFS_TOKEN", baseUrl, masterPassword: masterPasswordOf() });
-          if (!t) throw new Error("Could not get an IFS token (unlock the saved credentials first).");
-          ifs = { baseUrl, token: t.token };
-        }
+        if (baseUrl && !ifs) ifs = await cmIfsContext(baseUrl, {});
         const emitted = await svc.emitFlow(ctx, { flow, connectorMapping, restProjects: cmRestProjects, includedWorkflows: included, target: { orgId, packageId } });
         row.status("Saving…", "info");
         const kind = (cmDecoded.summaries.find((s) => s.versionIdentifier === flow.versionIdentifier) || {}).assetKind || "component";
         const pushed = await svc.pushFlow(ctx, { orgId, packageId, name: flow.name, kind }, emitted);
         included[flow.versionIdentifier] = { name: flow.name, assetId: pushed.itemId, assetVersion: pushed.assetVersion };
-        row.status(emitted.warnings.length ? `Saved with ${emitted.warnings.length} warnings` : "Saved", emitted.warnings.length ? "warn" : "ok");
-        row.detail(emitted.warnings);
+        const blockers = cmService.groupWarningsBySeverity(emitted.warnings).blockers.length;
+        row.status(blockers ? `Saved, ${blockers} need${blockers === 1 ? "s" : ""} attention` : emitted.warnings.length ? `Saved, ${emitted.warnings.length} FYI` : "Saved", blockers ? "warn" : "ok");
+        row.summary(emitted);
+        row.warnings(emitted.warnings);
       } catch (e) {
         row.status("Failed", "warn");
         row.detail([e.message]);

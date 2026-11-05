@@ -906,3 +906,11 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-rest { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; background: var(--surface-raised); font-size: 12px; }
 .cm-rest-hint { color: var(--accent-red); }
 .cm-rest-file { font-size: 12px; max-width: 100%; }
+.cm-preview-title { font-weight: 600; font-size: 13px; }
+.cm-preview-btn { flex: 0 0 auto; }
+.cm-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12px; margin: 6px 0; }
+.cm-summary-row { display: flex; justify-content: space-between; gap: 8px; }
+.cm-summary-sub { padding-left: 12px; color: var(--text-muted, #667); }
+.cm-warning-group { margin-top: 4px; font-size: 12px; }
+.cm-warning-group.blocker > summary { color: var(--accent-red); font-weight: 600; }
+.cm-warning-group.fyi > summary { color: var(--text-muted, #667); }
