@@ -225,18 +225,21 @@ async function cmRenderConnectors() {
       row.append(runAs);
     }
     select.addEventListener("change", cmSaveMapping);
-    if (ref.typeName === "rest") {
+    // The Classic type name of a REST connector is not known for sure, so every connector that is not a
+    // database or e-mail connector gets the optional REST project (.ncrcp) picker.
+    if (ref.typeName !== "database" && ref.typeName !== "email") {
       const file = document.createElement("input");
       file.type = "file";
       file.accept = ".ncrcp";
       file.title = "Optional: the Classic REST project (.ncrcp) of this connector";
+      file.className = "cm-rest-file";
+      if (cmRestProjects[ref.name]) { row.append(ftChip(`${cmRestProjects[ref.name].operations.length} REST endpoints`, "ok")); file.hidden = true; }
       file.addEventListener("change", async () => {
         if (!file.files[0]) return;
         try {
           const svc = await cmLoadService();
           cmRestProjects[ref.name] = await svc.decodeRestProjectFile(new Uint8Array(await file.files[0].arrayBuffer()));
-          row.append(ftChip(`${cmRestProjects[ref.name].operations.length} REST endpoints`, "ok"));
-          file.hidden = true;
+          cmRenderConnectors();
         } catch (e) {
           showError(`.ncrcp: ${e.message}`, true);
         }
