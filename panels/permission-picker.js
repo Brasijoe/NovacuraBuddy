@@ -4,7 +4,22 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
   const select = document.createElement("select");
   const sets = document.createElement("div");
   sets.className = "checklist";
-  container.append(select, sets);
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "Search permission sets…";
+  search.setAttribute("aria-label", "Search permission sets");
+  search.hidden = true;
+  container.append(select, search, sets);
+
+  /** Real-time filter; ticked sets stay ticked (and selected) while hidden. */
+  function applyFilter() {
+    const terms = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    for (const label of sets.querySelectorAll("label")) {
+      const text = label.textContent.toLowerCase();
+      label.hidden = !terms.every((t) => text.includes(t));
+    }
+  }
+  search.oninput = applyFilter;
 
   (async () => {
     const response = await send({ type: "LIST_INSTANCES" });
@@ -24,6 +39,8 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
     const token = ++selectToken;
     onChange(false);
     sets.textContent = "";
+    search.value = "";
+    search.hidden = true;
     if (!select.value) return;
     sets.textContent = "Loading permission sets…";
     const response = await send({ type: "PERMISSION_SETS", baseUrl: select.value, masterPassword: "" });
@@ -41,6 +58,7 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
       label.append(box, document.createTextNode(` ${ps.name}`));
       sets.appendChild(label);
     }
+    search.hidden = !response.sets.length;
     onChange(true);
   };
 
