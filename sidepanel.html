@@ -78,7 +78,7 @@
 
       <main>
         <details id="trackedSection" class="tracker-section" open>
-          <summary><h2>Tracked projections</h2><span class="info-tip" data-tip="Projections the selected instance's pages called, newest first. The switch adds the projection's Flow module to the open flow, creating the module first if it doesn't exist yet. Switching off removes it from the flow; the module itself stays."></span><span class="list-count" id="listCount"></span></summary>
+          <summary><h2>Tracked projections</h2><span class="info-tip" data-tip="Projections the selected instance's pages called, newest first. The switch adds the projection's Flow module to the open flow, creating the module first if it doesn't exist yet. Switching off removes it from the flow; the module itself stays. ⟳ (shown while a module is on) refreshes it: it regenerates the module from the projection as it is on IFS now, commits a new module version and updates the open flow. Switching off and on again only re-uses the old version."></span><span class="list-count" id="listCount"></span></summary>
           <div class="list-toolbar">
             <button id="clearTraceBtn" class="btn-ghost" title="Clear the traced projection list for this instance">Clear</button>
           </div>
@@ -352,7 +352,7 @@
     </section>
 
     <section id="panel-permission-check" role="tabpanel" hidden>
-      <div class="banner banner-warning"><span><strong>WIP:</strong> the comparison is read-only and untested against a live IFS; adding permissions is not built yet.</span></div>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> applying permissions is not yet fully verified against a live IFS; Read Only grants are not supported.</span></div>
       <div class="section-head"><h2>Projections the open flow calls</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every module and sub-flow it uses, and lists the IFS projections they call. Nothing is changed in Flow or IFS."></span></div>
       <button id="pcScanBtn" class="btn-primary fd-scan-btn">Scan open flow</button>
       <div id="pcHint" class="empty-state" hidden></div>
@@ -420,6 +420,7 @@
     <script src="lib/qr-deploy.js"></script>
     <script src="panels/common.js"></script>
     <script src="panels/info-tip.js"></script>
+    <script src="panels/combobox.js"></script>
     <script src="panels/tracker.js"></script>
     <script src="lib/settings-backup.js"></script>
     <script src="panels/basic-data.js"></script>
