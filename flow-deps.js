@@ -341,7 +341,7 @@ function render() {
   const blocks = FlowDeps.groupChainsByAutomation(shown, flowIndex);
   const packageView = groupMode === "package" && flowIndex;
   document.getElementById("fdGroupTitle").textContent = `${label} (${shown.length})`;
-  document.getElementById("fdGroupTitle").hidden = !!packageView;
+  document.getElementById("fdGroupTitleRow").hidden = !!packageView;
   const container = document.getElementById("fdChains");
   container.innerHTML = "";
   if (packageView) {
