@@ -225,26 +225,50 @@ async function cmRenderConnectors() {
       row.append(runAs);
     }
     select.addEventListener("change", cmSaveMapping);
-    // The Classic type name of a REST connector is not known for sure, so every connector that is not a
-    // database or e-mail connector gets the optional REST project (.ncrcp) picker.
-    if (ref.typeName !== "database" && ref.typeName !== "email") {
+    if (ref.typeName === "rest") {
+      row.dataset.rest = "1";
+      // Same rule as the Electron app: a mapped REST connector needs its Classic REST project (.ncrcp);
+      // without it the calls would only become unresolved markers. Unmapped rows stay optional.
+      const pick = document.createElement("div");
+      pick.className = "cm-rest";
+      const label = document.createElement("div");
+      label.className = "cm-rest-label";
+      const loaded = cmRestProjects[ref.name];
+      const sync = () => {
+        const mapped = !!select.value;
+        label.textContent = `REST project (.ncrcp) for "${ref.name}"${mapped ? " (required)" : ""}: real endpoints, input and output for this connector's calls`;
+        hint.hidden = !mapped || !!cmRestProjects[ref.name];
+        cmUpdateRun();
+      };
+      const hint = document.createElement("div");
+      hint.className = "cm-rest-hint";
+      hint.textContent = "REST project required: upload the .ncrcp file for this connector. It is not remembered between runs.";
+      const status = document.createElement("div");
+      status.className = "cm-rest-status";
       const file = document.createElement("input");
       file.type = "file";
       file.accept = ".ncrcp";
-      file.title = "Optional: the Classic REST project (.ncrcp) of this connector";
       file.className = "cm-rest-file";
-      if (cmRestProjects[ref.name]) { row.append(ftChip(`${cmRestProjects[ref.name].operations.length} REST endpoints`, "ok")); file.hidden = true; }
+      if (loaded) status.append(ftChip(`${loaded.operations.length} endpoint${loaded.operations.length === 1 ? "" : "s"} loaded`, "ok"));
       file.addEventListener("change", async () => {
         if (!file.files[0]) return;
+        status.textContent = "";
         try {
           const svc = await cmLoadService();
           cmRestProjects[ref.name] = await svc.decodeRestProjectFile(new Uint8Array(await file.files[0].arrayBuffer()));
-          cmRenderConnectors();
+          status.textContent = "";
+          status.append(ftChip(`${file.files[0].name}: ${cmRestProjects[ref.name].operations.length} endpoint(s) loaded`, "ok"));
         } catch (e) {
-          showError(`.ncrcp: ${e.message}`, true);
+          delete cmRestProjects[ref.name];
+          status.textContent = "";
+          status.append(ftChip(`Could not read the REST project: ${e.message}`, "warn"));
         }
+        sync();
       });
-      row.append(file);
+      select.addEventListener("change", sync);
+      pick.append(label, file, status, hint);
+      row.append(pick);
+      sync();
     }
     box.append(row);
   }
@@ -281,9 +305,16 @@ function cmCurrentMapping(rawIds) {
   return out;
 }
 
+/** Mapped REST connectors that still lack their .ncrcp. */
+function cmMissingRestUploads() {
+  return [...cmEl("cmConnectors").querySelectorAll(".cm-connector[data-rest]")].filter((row) => row.querySelector("select").value && !cmRestProjects[row.dataset.name]);
+}
+
 function cmUpdateRun() {
-  const ok = cmDecoded && cmRest && !cmBusy && cmEl("cmPackage").value && cmSelectedFlows().length;
+  const ok = cmDecoded && cmRest && !cmBusy && !cmMissingRestUploads().length && cmEl("cmPackage").value && cmSelectedFlows().length;
   cmEl("cmRunBtn").disabled = !ok;
+  const missing = cmDecoded ? cmMissingRestUploads().length : 0;
+  cmEl("cmRunHint").hidden = !missing;
 }
 
 /* --- loading the file --- */

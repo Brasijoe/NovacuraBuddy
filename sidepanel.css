@@ -903,4 +903,6 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-card .cm-flows, .cm-card .cm-connectors, .cm-card .cm-results { margin: 0; }
 .cm-connector { padding: 6px 0; border-top: 1px solid var(--surface-raised); }
 .cm-connector:first-child { border-top: 0; padding-top: 0; }
-.cm-rest-file { flex: 1 1 100%; font-size: 12px; }
+.cm-rest { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; background: var(--surface-raised); font-size: 12px; }
+.cm-rest-hint { color: var(--accent-red); }
+.cm-rest-file { font-size: 12px; max-width: 100%; }
