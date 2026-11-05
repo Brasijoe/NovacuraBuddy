@@ -11,7 +11,7 @@ tools for deploying IFS objects and moving flows between packages and environmen
 The side panel groups its tabs into three menus. Hover the ⓘ icons in the panel for a short explanation of each tab and section.
 
 **IFS Functions**
-- **Projection Tracker** (main tab) – lists the IFS projections your IFS pages call on the selected instance. Switch one on to create its Flow module and add it to the flow open in the Designer tab. You can also search projections you haven't opened yet.
+- **Projection Tracker** (main tab) – lists the IFS projections your IFS pages call on the selected instance. Switch one on to create its Flow module and add it to the flow open in the Designer tab. You can also search projections you haven't opened yet. A ⟳ button on every switched-on module refreshes it: regenerates the module from the projection as it is on IFS now, commits a new module version and updates the open flow.
 - **Traffic Recorder** – records IFS projection calls with requests and responses. Filter them in the viewer, drop redundant ones and create a Flow asset from the rest.
 - **Quick Reports** – SQL Quick Reports kept in your GitHub repo. Deploy one to an IFS instance with permission sets, then create its Flow module.
 - **Custom LUs** – design Custom Logical Units with attributes and deploy them to an IFS instance, or add attributes to existing LUs.
