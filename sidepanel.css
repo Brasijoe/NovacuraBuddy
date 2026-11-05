@@ -891,5 +891,28 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-result { border: 1px solid var(--border, #d0d4dc); border-radius: 6px; padding: 6px 8px; }
 .cm-notes { white-space: pre-wrap; font-size: 11px; max-height: 160px; overflow: auto; margin: 4px 0 0; }
 .cm-runas { flex: 1 1 100%; font-size: 12px; }
+
+/* Flow Classic Migration: one card per step, spaced apart, nothing crossing */
+.cm-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: var(--space-3, 12px); }
+.cm-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--surface-raised); border-radius: 8px; }
+.cm-card.is-disabled { opacity: 0.55; }
+.cm-card .section-head:has(> h2) { margin-bottom: 0; }
+.cm-card h2 { font-size: 13px; }
+.cm-card select, .cm-card input[type=file] { width: 100%; min-width: 0; box-sizing: border-box; }
+.cm-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.cm-card .cm-flows, .cm-card .cm-connectors, .cm-card .cm-results { margin: 0; }
+.cm-connector { padding: 6px 0; border-top: 1px solid var(--surface-raised); }
+.cm-connector:first-child { border-top: 0; padding-top: 0; }
+.cm-rest { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; background: var(--surface-raised); font-size: 12px; }
+.cm-rest-hint { color: var(--accent-red); }
+.cm-rest-file { font-size: 12px; max-width: 100%; }
+.cm-preview-title { font-weight: 600; font-size: 13px; }
+.cm-preview-btn { flex: 0 0 auto; }
+.cm-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12px; margin: 6px 0; }
+.cm-summary-row { display: flex; justify-content: space-between; gap: 8px; }
+.cm-summary-sub { padding-left: 12px; color: var(--text-muted, #667); }
+.cm-warning-group { margin-top: 4px; font-size: 12px; }
+.cm-warning-group.blocker > summary { color: var(--accent-red); font-weight: 600; }
+.cm-warning-group.fyi > summary { color: var(--text-muted, #667); }
 #resetPasswordBox { flex-wrap: wrap; }
 #resetPasswordBox span { flex: 1 1 100%; }
