@@ -1,7 +1,7 @@
 // Event Triggers tab: link a Flow automation (webhook endpoint) to an IFS event. Creates the routing
 // address, routing rule and event action in IFS (lib/event-triggers.js, background ET_* messages).
 // Preview first (read-only), then a second click creates; existing objects are reused, nothing is deleted.
-const et = { orgId: null, automations: [], accessKeys: [], ifsFor: null, events: [], planned: false };
+const et = { plan: null, orgId: null, automations: [], accessKeys: [], ifsFor: null, events: [], planned: false };
 
 const etEl = (id) => document.getElementById(id);
 
@@ -164,6 +164,7 @@ etEl("etPlanBtn").addEventListener("click", async () => {
   const response = await actionOrShowError({ type: "ET_PLAN", baseUrl, input: etInput() });
   if (!response) return;
   et.planned = true;
+  et.plan = response.plan;
   etRenderPlan(response.plan, etEl("etInstance").selectedOptions[0].textContent);
   etEl("etLinkBtn").hidden = false;
   etEl("etLinkBtn").textContent = "Confirm and link automation";
@@ -185,6 +186,16 @@ etEl("etLinkBtn").addEventListener("click", async () => {
     const p = document.createElement("p");
     p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : "failed — " + r.error}`;
     out.append(p);
+  }
+  // Direct link to the routing address in IFS (created or reused).
+  const url = et.plan && IfsLinks.ifsObjectUrl(etEl("etInstance").value, "routingAddress", { addressName: et.plan.addressName });
+  if (url) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = `Open routing address ${et.plan.addressName} in IFS ↗`;
+    out.appendChild(a);
   }
   out.hidden = false;
 });

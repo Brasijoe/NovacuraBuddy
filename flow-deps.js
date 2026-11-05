@@ -141,6 +141,19 @@ function makeNode(node, onPick) {
     warn.textContent = text;
     el.appendChild(warn);
   }
+  const ifsUrl = IfsLinks.ifsObjectUrl(baseUrl, node.type, node.data);
+  if (ifsUrl) {
+    // A link inside a button is invalid HTML, so the card carries a small clickable label that opens IFS in a new tab.
+    const link = document.createElement("span");
+    link.className = "fd-ifs-link";
+    link.setAttribute("role", "link");
+    link.tabIndex = 0;
+    link.textContent = "Open in IFS ↗";
+    const open = (e) => { e.stopPropagation(); e.preventDefault(); window.open(ifsUrl, "_blank", "noopener"); };
+    link.onclick = open;
+    link.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") open(e); };
+    el.appendChild(link);
+  }
   el.onclick = () => onPick(el, node);
   return el;
 }
