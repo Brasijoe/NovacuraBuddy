@@ -253,9 +253,9 @@ async function setGroupMode(mode) {
   selectedGroup = ALL;
   try { localStorage.setItem(GROUP_MODE_KEY, mode); } catch { /* per-viewer convenience only */ }
   for (const btn of document.querySelectorAll("[data-group-mode]")) btn.classList.toggle("is-active", btn.dataset.groupMode === mode);
-  if (mode === "package" && !flowIndex) await loadFlowIndex();
+  if (!flowIndex) await loadFlowIndex(); // names of automations and packages come from Flow in both views
   if (groupMode !== mode) return; // switched again while Flow was answering
-  document.getElementById("fdGroupHint").hidden = mode !== "package" || !flowIndexError;
+  document.getElementById("fdGroupHint").hidden = !flowIndexError;
   document.getElementById("fdGroupHead").textContent = mode === "package" && flowIndex ? "Flow packages" : "Endpoints";
   if (result && result.chains.length) render();
 }
