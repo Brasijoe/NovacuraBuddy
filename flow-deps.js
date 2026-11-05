@@ -275,8 +275,8 @@ async function loadFlowIndex() {
   flowIndexError = response.ok ? "" : response.error;
   const wi = response.ok && response.index.webhookInfo;
   const stale = response.ok && response.index.stale;
-  hint.textContent = flowIndexError || (stale ? `Flow can't be read right now (${stale.reason}). Showing the names last read from Flow on ${new Date(stale.savedAt).toLocaleString()}.` : wi
-    ? `Webhook addresses read from Flow: ${(response.index.webhooks || []).length} for ${wi.checked} automation(s)${wi.failures.length ? `, ${wi.failures.length} failed (first: ${wi.failures[0]})` : ""}.`
+  hint.textContent = flowIndexError || (stale ? `Flow can't be read right now (${stale.reason}). Showing the names last read from Flow on ${new Date(stale.savedAt).toLocaleString()}.` : wi && wi.failures.length
+    ? `Webhook addresses could not be read for ${wi.failures.length} of ${wi.checked} automation(s) (first: ${wi.failures[0]}); their names may be missing.`
     : "");
   hint.hidden = !hint.textContent;
   // The reason must not hide in the sidebar: without Flow the names stay as endpoint addresses.
