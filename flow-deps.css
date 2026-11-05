@@ -90,3 +90,8 @@
 .fd-auto-head .fd-tag { font-size: 18px; font-weight: 700; text-transform: none; letter-spacing: normal; }
 .fd-auto-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
 .fd-auto-head .fd-url, .fd-auto-head .fd-auto-pkg, .fd-auto-head .fd-node-warn { flex-basis: 100%; }
+
+.fd-auto-head-click { cursor: pointer; position: relative; padding-left: 40px; }
+.fd-collapse { position: absolute; left: 10px; top: 10px; width: 22px; height: 22px; padding: 0; line-height: 1; border: 1px solid var(--surface-raised); border-radius: 6px; background: var(--surface); color: var(--ink-muted); }
+.fd-auto.is-collapsed .fd-scroll { display: none; }
+.fd-auto.is-collapsed .fd-auto-head { border-bottom: 0; }

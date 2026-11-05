@@ -175,6 +175,19 @@ function renderBlock(block) {
     miss.textContent = "No automation in Flow has this webhook address";
     head.appendChild(miss);
   }
+  // Collapse / expand this automation (click the heading).
+  const toggle = document.createElement("button");
+  toggle.className = "fd-collapse";
+  toggle.setAttribute("aria-label", "Collapse or expand this automation");
+  toggle.setAttribute("aria-expanded", "true");
+  toggle.textContent = "▾";
+  head.prepend(toggle);
+  head.classList.add("fd-auto-head-click");
+  head.onclick = () => {
+    const collapsed = card.classList.toggle("is-collapsed");
+    toggle.textContent = collapsed ? "▸" : "▾";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  };
   card.appendChild(head);
 
   const scroll = document.createElement("div");
