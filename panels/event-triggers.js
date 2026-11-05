@@ -187,14 +187,17 @@ etEl("etLinkBtn").addEventListener("click", async () => {
     p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : "failed — " + r.error}`;
     out.append(p);
   }
-  // Direct link to the routing address in IFS (created or reused).
-  const url = et.plan && IfsLinks.ifsObjectUrl(etEl("etInstance").value, "routingAddress", { addressName: et.plan.addressName });
-  if (url) {
+  // Direct links to the routing address and rule in IFS (created or reused).
+  const links = [["routingAddress", "routing address", et.plan && et.plan.addressName, { addressName: et.plan && et.plan.addressName }], ["routingRule", "routing rule", et.plan && et.plan.ruleName, { ruleName: et.plan && et.plan.ruleName }]];
+  for (const [type, label, name, data] of links) {
+    const url = name && IfsLinks.ifsObjectUrl(etEl("etInstance").value, type, data);
+    if (!url) continue;
     const a = document.createElement("a");
     a.href = url;
     a.target = "_blank";
     a.rel = "noopener";
-    a.textContent = `Open routing address ${et.plan.addressName} in IFS ↗`;
+    a.textContent = `Open ${label} ${name} in IFS ↗`;
+    a.style.display = "block";
     out.appendChild(a);
   }
   out.hidden = false;
