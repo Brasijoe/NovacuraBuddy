@@ -640,7 +640,10 @@ let FindPetsByTagsSet = Queryable.Create<RestQueryTranslation, Pet, text>(restTr
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function addPet(input: PetRequest, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/pet`, restJsonBody(input), headers));
+    let __body = PostResponse(`/pet`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -657,7 +660,10 @@ function addPet(input: PetRequest, headers: Header* = []): Pet {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function updatePet(input: PetRequest, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(PutResponse(`/pet`, restJsonBody(input), headers));
+    let __body = PutResponse(`/pet`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -673,7 +679,10 @@ function updatePet(input: PetRequest, headers: Header* = []): Pet {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function findPetsByStatus(status: text, headers: Header* = []): Pet* {
-    let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }])}`, headers));
+    let __body = GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }])}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet*>(null);
+    let __raw = JSON.deserialize<{}*>(__body);
     return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
 }
 
@@ -688,7 +697,10 @@ function findPetsByStatus(status: text, headers: Header* = []): Pet* {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function findPetsByTags(tags: text*, headers: Header* = []): Pet* {
-    let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval())}`, headers));
+    let __body = GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval())}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet*>(null);
+    let __raw = JSON.deserialize<{}*>(__body);
     return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
 }
 
@@ -704,7 +716,10 @@ function findPetsByTags(tags: text*, headers: Header* = []): Pet* {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getPetById(petId: number, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/pet/{restPath(petId)}`, headers));
+    let __body = GetResponse(`/pet/{restPath(petId)}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -721,7 +736,10 @@ function getPetById(petId: number, headers: Header* = []): Pet {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function updatePetWithForm(petId: number, name: text? = null, status: text? = null, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/pet/{restPath(petId)}{restQueryString([new RestParam { name: 'name', value: restText(name) }] & [new RestParam { name: 'status', value: restText(status) }])}`, '', headers));
+    let __body = PostResponse(`/pet/{restPath(petId)}{restQueryString([new RestParam { name: 'name', value: restText(name) }] & [new RestParam { name: 'status', value: restText(status) }])}`, '', headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -766,7 +784,10 @@ function uploadFile(petId: number, body: binary, additionalMetadata: text? = nul
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getInventory(headers: Header* = []): {} {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/store/inventory`, headers));
+    let __body = GetResponse(`/store/inventory`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<{}>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<{}>(__raw);
 }
 
@@ -782,7 +803,10 @@ function getInventory(headers: Header* = []): {} {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function placeOrder(input: OrderRequest, headers: Header* = []): Order {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/store/order`, restJsonBody(input), headers));
+    let __body = PostResponse(`/store/order`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Order>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
 }
 
@@ -798,7 +822,10 @@ function placeOrder(input: OrderRequest, headers: Header* = []): Order {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getOrderById(orderId: number, headers: Header* = []): Order {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/store/order/{restPath(orderId)}`, headers));
+    let __body = GetResponse(`/store/order/{restPath(orderId)}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Order>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
 }
 
@@ -828,7 +855,10 @@ function deleteOrder(orderId: number, headers: Header* = []) {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function createUser(input: UserRequest, headers: Header* = []): User {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/user`, restJsonBody(input), headers));
+    let __body = PostResponse(`/user`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<User>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<User>(__raw);
 }
 
@@ -841,7 +871,10 @@ function createUser(input: UserRequest, headers: Header* = []): User {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function createUsersWithListInput(input: UserRequest*, headers: Header* = []): User {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/user/createWithList`, restJsonBody(input), headers));
+    let __body = PostResponse(`/user/createWithList`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<User>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<User>(__raw);
 }
 
@@ -884,7 +917,10 @@ function logoutUser(headers: Header* = []): text {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getUserByName(username: text, headers: Header* = []): User {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/user/{restPath(username)}`, headers));
+    let __body = GetResponse(`/user/{restPath(username)}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<User>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<User>(__raw);
 }
 
