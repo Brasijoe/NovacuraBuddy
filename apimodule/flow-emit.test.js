@@ -270,7 +270,7 @@ test("comments: full documents functions, data sources and the header; short and
   assert.match(full.code, / \*  @returns Order\* — 200 OK\n \*  @error 429 Too Many Requests\. Slow down\.\n/);
   assert.match(full.code, /\/\*\* Data source for GET \/orders: List orders\.\n \*  Rows: Order\.\n/);
   assert.match(full.code, / \*  Example: return select \* from ListOrdersSet;\n \*\/\nlet ListOrdersSet/);
-  assert.match(full.code, /\tid: number,  \/\/ required; whole number\n/);
+  assert.match(full.code, /\t\/\*\* required; whole number \*\/\r?\n\tid: number,/);
 
   const short = generateModule(buildModel(spec), { moduleName: "Shop", source, now: NOW, comments: "short" });
   assert.match(short.code, /\/\*\* GET \/orders — List orders\. \*\/\nfunction listOrders/);
@@ -278,7 +278,7 @@ test("comments: full documents functions, data sources and the header; short and
   const off = generateModule(buildModel(spec), { moduleName: "Shop", source, now: NOW, comments: "off" });
   assert.doesNotMatch(off.code, /\/\*\* GET|Data source for/);
   // Comments never change the code itself.
-  const strip = (code) => code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/  \/\/ [^\n]*/g, "").replace(/\n{2,}/g, "\n");
+  const strip = (code) => code.replace(/^[ \t]+\/\*[^\n]*\*\/\r?\n/gm, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/  \/\/ [^\n]*/g, "").replace(/\n{2,}/g, "\n");
   assert.equal(strip(full.code), strip(off.code));
   assert.equal(strip(short.code), strip(off.code));
 });
