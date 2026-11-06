@@ -452,91 +452,132 @@ module Order_status {
 
 /** Request body variant: `optional` fields may be left out. */
 type CategoryRequest = {
-	optional id: number,  // whole number; e.g. 1
-	optional name: text,  // e.g. "Dogs"
+	/** whole number; e.g. 1 */
+	optional id: number,
+	/** e.g. "Dogs" */
+	optional name: text,
 }
 
 /** Request body variant: `optional` fields may be left out. */
 type TagRequest = {
-	optional id: number,  // whole number
+	/** whole number */
+	optional id: number,
 	optional name: text,
 }
 
 /** Request body variant: `optional` fields may be left out; required: name, photoUrls. */
 type PetRequest = {
-	optional id: number,  // whole number; e.g. 10
-	name: text,  // required; e.g. "doggie"
+	/** whole number; e.g. 10 */
+	optional id: number,
+	/** required; e.g. "doggie" */
+	name: text,
 	optional category: CategoryRequest,
-	photoUrls: text*,  // required
+	/** required */
+	photoUrls: text*,
 	optional tags: TagRequest*,
-	optional status: Pet_status.Value,  // pet status in the store
+	/** pet status in the store */
+	optional status: Pet_status.Value,
 }
 
 type Category = {
-	id: number? = null,  // whole number; e.g. 1
-	name: text? = null,  // e.g. "Dogs"
+	/** whole number; e.g. 1 */
+	id: number? = null,
+	/** e.g. "Dogs" */
+	name: text? = null,
 }
 
 type Tag = {
-	id: number? = null,  // whole number
+	/** whole number */
+	id: number? = null,
 	name: text? = null,
 }
 
 type Pet = {
-	id: number? = null,  // whole number; e.g. 10
-	name: text,  // required; e.g. "doggie"
+	/** whole number; e.g. 10 */
+	id: number? = null,
+	/** required; e.g. "doggie" */
+	name: text,
 	category: Category,
-	photoUrls: text*,  // required
+	/** required */
+	photoUrls: text*,
 	tags: Tag*,
-	status: Pet_status.Value,  // pet status in the store
+	/** pet status in the store */
+	status: Pet_status.Value,
 }
 
 type ApiResponse = {
-	code: number? = null,  // whole number
+	/** whole number */
+	code: number? = null,
 	"type": text? = null,
 	message: text? = null,
 }
 
 /** Request body variant: `optional` fields may be left out. */
 type OrderRequest = {
-	optional id: number,  // whole number; e.g. 10
-	optional petId: number,  // whole number; e.g. 198772
-	optional quantity: number,  // whole number; e.g. 7
-	optional shipDate: datetime,  // ISO 8601 date-time
-	optional status: Order_status.Value,  // e.g. "approved" — Order Status
+	/** whole number; e.g. 10 */
+	optional id: number,
+	/** whole number; e.g. 198772 */
+	optional petId: number,
+	/** whole number; e.g. 7 */
+	optional quantity: number,
+	/** ISO 8601 date-time */
+	optional shipDate: datetime,
+	/** e.g. "approved" — Order Status */
+	optional status: Order_status.Value,
 	optional complete: boolean,
 }
 
 type Order = {
-	id: number? = null,  // whole number; e.g. 10
-	petId: number? = null,  // whole number; e.g. 198772
-	quantity: number? = null,  // whole number; e.g. 7
-	shipDate: datetime? = null,  // ISO 8601 date-time
-	status: Order_status.Value,  // e.g. "approved" — Order Status
+	/** whole number; e.g. 10 */
+	id: number? = null,
+	/** whole number; e.g. 198772 */
+	petId: number? = null,
+	/** whole number; e.g. 7 */
+	quantity: number? = null,
+	/** ISO 8601 date-time */
+	shipDate: datetime? = null,
+	/** e.g. "approved" — Order Status */
+	status: Order_status.Value,
 	complete: boolean? = null,
 }
 
 /** Request body variant: `optional` fields may be left out. */
 type UserRequest = {
-	optional id: number,  // whole number; e.g. 10
-	optional username: text,  // e.g. "theUser"
-	optional firstName: text,  // e.g. "John"
-	optional lastName: text,  // e.g. "James"
-	optional email: text,  // e.g. "john@email.com"
-	optional password: text,  // e.g. "12345"
-	optional phone: text,  // e.g. "12345"
-	optional userStatus: number,  // whole number; e.g. 1 — User Status
+	/** whole number; e.g. 10 */
+	optional id: number,
+	/** e.g. "theUser" */
+	optional username: text,
+	/** e.g. "John" */
+	optional firstName: text,
+	/** e.g. "James" */
+	optional lastName: text,
+	/** e.g. "john@email.com" */
+	optional email: text,
+	/** e.g. "12345" */
+	optional password: text,
+	/** e.g. "12345" */
+	optional phone: text,
+	/** whole number; e.g. 1 — User Status */
+	optional userStatus: number,
 }
 
 type User = {
-	id: number? = null,  // whole number; e.g. 10
-	username: text? = null,  // e.g. "theUser"
-	firstName: text? = null,  // e.g. "John"
-	lastName: text? = null,  // e.g. "James"
-	email: text? = null,  // e.g. "john@email.com"
-	password: text? = null,  // e.g. "12345"
-	phone: text? = null,  // e.g. "12345"
-	userStatus: number? = null,  // whole number; e.g. 1 — User Status
+	/** whole number; e.g. 10 */
+	id: number? = null,
+	/** e.g. "theUser" */
+	username: text? = null,
+	/** e.g. "John" */
+	firstName: text? = null,
+	/** e.g. "James" */
+	lastName: text? = null,
+	/** e.g. "john@email.com" */
+	email: text? = null,
+	/** e.g. "12345" */
+	password: text? = null,
+	/** e.g. "12345" */
+	phone: text? = null,
+	/** whole number; e.g. 1 — User Status */
+	userStatus: number? = null,
 }
 
 /* ---------- Enum mappings ---------- */
