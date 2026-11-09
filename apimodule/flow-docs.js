@@ -5,7 +5,7 @@
    examples, constraints, responses), never from guessing.
 
      /** … *\/   above a declaration (OData style)
-     // …       after a field's comma, on the same line
+     /** … *\/   also above each field and enum value
    ============================================================ */
 (function (global) {
   const MAX_DESCRIPTION = 1500; // one description in a doc block
