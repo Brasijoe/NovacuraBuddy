@@ -9,6 +9,7 @@ importScripts(
   "lib/flow-connect-rest.js",
   "lib/tracking.js",
   "lib/flow-designer-tab.js",
+  "lib/module-merge.js",
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
   "lib/flow-links.js",
@@ -38,6 +39,7 @@ importScripts(
   "lib/permission-check.js",
   "lib/permission-set-compare.js",
   "lib/module-compare.js",
+  "lib/connector-labels.js",
   "apimodule/api-module-service.js"
 );
 
@@ -317,11 +319,12 @@ async function handleCreateModule({ baseUrl, projectionName, masterPassword }) {
   });
   log("Generated FlowScript source (", code.length, "bytes) — finding or creating the module asset...");
   // IFS's own spelling of the name (callers may pass any case, e.g. QuickReport<id> from Quick Reports).
-  const asset = await FlowModules.findOrCreateModule({ flowFetch, orgId: tab.orgId, packageId, projectionName: inputs.projectionName });
+  const existingAsset = await FlowModules.findExistingModule({ flowFetch, orgId: tab.orgId, packageId, projectionName: inputs.projectionName });
+  const asset = existingAsset || await FlowModules.createModuleAsset({ flowFetch, orgId: tab.orgId, packageId, projectionName: inputs.projectionName });
   log("Module asset id =", asset.id, "— committing module code...");
-  const newBranch = await FlowModules.commitModuleCode({ flowFetch, orgId: tab.orgId, packageId, assetId: asset.id, flowScriptCode: code });
-  log("CREATE_MODULE done: assetId=", asset.id, "headVersionId=", newBranch.headVersionId);
-  return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || inputs.projectionName };
+  const { branch: newBranch, report: mergeReport } = await FlowModules.commitMergedModuleCode({ flowFetch, orgId: tab.orgId, packageId, assetId: asset.id, flowScriptCode: code, isNew: !existingAsset });
+  log("CREATE_MODULE done: assetId=", asset.id, "headVersionId=", newBranch.headVersionId, mergeReport ? ModuleMerge.describeReport(mergeReport) : "");
+  return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || inputs.projectionName, mergeReport };
 }
 
 /** CL_FLOW_PROPERTIES_MODULE: one org-level FlowProperties module (outside any package) with the
@@ -802,7 +805,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const packageId = await resolvePackageIdFor(tab);
           log("API_CREATE_MODULE start:", message.moduleName, "(", (message.code || "").length, "bytes )");
           const saved = await ApiModuleService.saveModule({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, moduleName: message.moduleName, code: message.code, log });
-          return sendResponse({ ok: true, result: await handleActivateModule(saved) });
+          return sendResponse({ ok: true, result: { ...(await handleActivateModule(saved)), mergeText: saved.mergeReport ? ModuleMerge.describeReport(saved.mergeReport) : "", mergeWarnings: saved.mergeReport ? saved.mergeReport.warnings : [] } });
         }
         case "FT_EXPORT": {
           const generator = `NovacuraBuddy ${chrome.runtime.getManifest().version}`;
@@ -1267,6 +1270,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             .sort((a, b) => String(b.scannedAt).localeCompare(String(a.scannedAt)))[0];
           return sendResponse({ ok: true, marks: hit ? { ...hit.flows[message.itemId], scan: { orgId: hit.orgId, packageId: hit.packageId, baseUrl: hit.baseUrl } } : null });
         }
+        case "CL_FLOW_CONNECTORS": { // the Designer's content script: which connector each step of the open flow uses (read-only)
+          const designer = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          return sendResponse({ ok: true, steps: ConnectorLabels.stepConnectors(designer) });
+        }
         case "MC_PAGE_PROBE": { // read-only look at how the Designer page draws its canvas (for placing the marks)
           const [res] = await chrome.scripting.executeScript({ target: { tabId: _sender.tab.id }, world: "MAIN", func: designerPageProbe });
           return sendResponse({ ok: true, text: res && res.result });
@@ -1298,7 +1305,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "MC_UPDATE": { // user-clicked per module: commits the regenerated code, the same calls as Create module
           const flowFetch = boundFlowFetch();
           log("MC_UPDATE:", message.assetId, "in org", message.orgId, "package", message.packageId || "(App Library)");
-          const branch = await FlowModules.commitModuleCode({ flowFetch, orgId: message.orgId, packageId: message.packageId || null, assetId: message.assetId, flowScriptCode: message.code });
+          const { branch, report: mergeReport } = await FlowModules.commitMergedModuleCode({ flowFetch, orgId: message.orgId, packageId: message.packageId || null, assetId: message.assetId, flowScriptCode: message.code, isNew: false });
+          if (mergeReport) log("MC_UPDATE custom code merge:", ModuleMerge.describeReport(mergeReport) || "no custom blocks", mergeReport.warnings);
           // The stored scan now shows this module as up to date.
           const key = moduleCompareKey(message);
           const { [key]: stored = null } = await chrome.storage.local.get(key);

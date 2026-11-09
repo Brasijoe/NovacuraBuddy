@@ -134,12 +134,12 @@
       const valueDoc = (v) => {
         const i = schema.enum.findIndex((x) => x !== null && String(x) === v);
         const text = fullDocs && i >= 0 && valueDocs[i] ? FlowDocs.oneLine(valueDocs[i], docBase) : "";
-        return text ? `  // ${text}` : "";
+        return text ? `    /** ${text.replace(/\*\//g, "* /")} */\n` : "";
       };
       const head = [
         `module ${name} {`,
         `    type Namespace = '${namespace}.${name}'`,
-        ...members.map((m) => `    type ${m.member} = Enum<Namespace, ${lit(m.value)}>;${valueDoc(m.value)}`),
+        ...members.map((m) => `${valueDoc(m.value)}    type ${m.member} = Enum<Namespace, ${lit(m.value)}>;`),
         "",
         `    type Value = ${members.map((m) => m.member).join(" | ")};`,
         `    let values: Value* = [${members.map((m) => m.member).join(", ")}];`,
@@ -177,7 +177,7 @@
         const t = typeOf(rawPropSchema, `${hint.replace(/Request$/, "")}_${prop}`, mode, `${name}.${prop}`, ownDescription || propSchema.description);
         const isRequired = required.includes(prop);
         const scalar = !t.endsWith("*") && /^(text|number|boolean|datetime|binary)$/.test(t);
-        // The `//` goes after the comma, so it never swallows it.
+        // Doc comment on the line above the field, so module search indexes it.
         let comment = "";
         if (fullDocs) {
           const { $ref, ...siblings } = rawPropSchema || {};
@@ -186,12 +186,12 @@
             listEnum: !/\.Value\*?$/.test(t) // enum values Flow only knows as text/number
           });
           const text = FlowDocs.describe(facts, ownDescription, docBase);
-          if (text) comment = `  // ${text}`;
+          if (text) comment = `\t/** ${text.replace(/\*\//g, "* /")} */\n`;
         }
         if (mode === "request") {
-          fieldLines.push(`\t${isRequired ? "" : "optional "}${fieldLabel(prop)}: ${t},${comment}`);
+          fieldLines.push(`${comment}\t${isRequired ? "" : "optional "}${fieldLabel(prop)}: ${t},`);
         } else {
-          fieldLines.push(`\t${fieldLabel(prop)}: ${t}${scalar && !isRequired ? "? = null" : ""},${comment}`);
+          fieldLines.push(`${comment}\t${fieldLabel(prop)}: ${t}${scalar && !isRequired ? "? = null" : ""},`);
           fields.push({ name: prop, type: t });
         }
       }

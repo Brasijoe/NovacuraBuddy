@@ -16,6 +16,7 @@
         <span class="dot" id="designerDot"></span>
         <span id="currentInstanceName">No instance selected</span>
       </div>
+      <label class="topbar-toggle" title="Shows the connector name above every step that uses one in the Flow Designer"><input type="checkbox" id="clToggle" checked /> Connector labels</label>
       <span id="lockStatus" class="status" hidden></span>
     </header>
 
@@ -253,7 +254,7 @@
         <div class="deploy-actions">
           <button id="apiPreviewBtn">Preview code</button>
           <button id="apiCreateBtn" class="btn-primary">Create module</button>
-          <span class="info-tip" data-tip="Saves the module in the package of the flow open in the Designer tab and activates it in that flow. Base URL and authentication stay in the Flow connector, not in the module."></span>
+          <span class="info-tip" data-tip="Saves the module in the package of the flow open in the Designer tab and activates it in that flow. Base URL and authentication stay in the Flow connector, not in the module. Creating the module again keeps your own code in // @custom-add and // @custom-replace blocks (see the guide in docs/api-module-custom-code.md)."></span>
         </div>
         <p id="apiCreateHint" class="api-hint" hidden></p>
         <div id="apiPreview" class="api-preview" hidden>
@@ -306,9 +307,8 @@
           <ul id="ftPackages" class="ft-list"></ul>
           <p class="api-hint">App Library assets go back to the App Library.</p>
         </div>
-        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Modules that are created or updated are committed as a new version; flows are saved but not committed (commit them in the Designer and move the parent flow to the new version)."></span></div>
+        <div class="section-head"><h2>What happens in the target</h2><span class="info-tip" data-tip="Everything the import touches, as a dependency tree. For each module or sub-flow pick Use existing as-is, Update existing, Create new or Generate from IFS; those options only appear when the target already has a match in the package or App Library. Modules that are created or updated are committed as a new version; flows are saved with all their steps (commit them in the Designer)."></span></div>
         <ul id="ftAssets" class="ft-tree"></ul>
-        <p class="api-hint">Update existing makes the flow match the file: steps and arrows that are not in the file are deleted. Flows are saved, not committed: commit them in the Designer afterwards and move the parent flow to the new version.</p>
         <div id="ftIfsBox" class="ft-ifs" hidden>
           <label class="api-field">IFS instance for "Generate from IFS" <select id="ftIfs"></select></label>
           <span class="api-hint">IFS modules picked for "Generate from IFS" are generated fresh from this instance, exactly like Create module in the Projection Tracker tab.</span>
@@ -376,8 +376,8 @@
       </div>
 
       <div class="cm-card">
-        <label class="cm-field">If a flow with the same name already exists in the package <span class="info-tip" data-tip="Create new: a second asset with the same name is created next to the existing one. Update: the existing asset gets the new translation as its saved content (its steps are replaced, committed versions stay); close that flow in the Designer first (an open Designer tab with unsaved edits would overwrite it), then reload it and commit it there to make it a new version. "Update and commit" also commits it as a new version and then checks that all steps are still there; it is experimental because commits made by the extension have blanked flows before. Try it on a copy first."></span>
-          <select id="cmExisting" data-plain><option value="new">Create a new asset</option><option value="update">Update the existing asset (save only)</option><option value="update-commit">Update and commit as new version (experimental)</option></select></label>
+        <label class="cm-field">If a flow with the same name already exists in the package <span class="info-tip" data-tip="Create new: a second asset with the same name is created next to the existing one. Overwrite: the existing asset is made to match the translation exactly (steps and arrows that are no longer in it are removed, nothing is appended, so importing twice never duplicates anything). Close that flow in the Designer first (an open Designer tab with unsaved edits would overwrite it), then reload it. Overwrite and commit also commits it as a new version and checks that all steps are still there; that part is experimental because commits made by the extension have blanked flows before. Try it on a copy first."></span>
+          <select id="cmExisting" data-plain><option value="new">Create a new asset</option><option value="update">Overwrite the existing asset (save only)</option><option value="update-commit">Overwrite and commit as new version (experimental)</option></select></label>
         <button id="cmRunBtn" class="btn-primary fd-scan-btn" disabled>Migrate selected flows</button>
         <p id="cmRunHint" class="api-hint" hidden>Upload a REST project (.ncrcp) for every mapped REST connector before continuing.</p>
         <p class="api-hint">Flows are created and their steps saved, but not committed. Open each in the Designer to check it, then commit (or use Commit Dependencies).</p>

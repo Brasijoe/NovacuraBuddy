@@ -128,3 +128,14 @@ initLinkedFlowsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
 setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshCommitChainState(); }, 5000);
+
+
+// Connector labels in the Flow Designer on/off (content/designer.js reads the same setting).
+{
+  const clToggle = document.getElementById("clToggle");
+  chrome.storage.local.get("clLabelsOff").then(({ clLabelsOff }) => { clToggle.checked = !clLabelsOff; });
+  clToggle.addEventListener("change", () => chrome.storage.local.set({ clLabelsOff: !clToggle.checked }));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.clLabelsOff) clToggle.checked = !changes.clLabelsOff.newValue;
+  });
+}

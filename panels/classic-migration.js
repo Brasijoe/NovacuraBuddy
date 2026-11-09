@@ -9,6 +9,7 @@ let cmRest = null;
 let cmUserId = "";
 let cmOrgConnectors = []; // [{ id, name, type }] of the picked organisation
 let cmRestProjects = {}; // Classic connector name -> { operations }
+let cmRestSpecs = {}; // Classic connector name -> { moduleName, code, basePath, signatures, title, source } (optional OpenAPI spec)
 let cmBusy = false;
 let cmLoadedOnce = false;
 const cmEl = (id) => document.getElementById(id);
@@ -277,12 +278,113 @@ async function cmRenderConnectors() {
         sync();
       });
       select.addEventListener("change", sync);
-      pick.append(label, file, status, hint);
+      pick.append(label, file, status, hint, cmSpecPicker(ref.name));
       row.append(pick);
       sync();
     }
     box.append(row);
   }
+}
+
+/* --- optional OpenAPI spec per REST connector --- */
+
+/** Builds the module (API Modules generator) for a parsed spec document and remembers it for the
+ *  connector. Every operation is generated; the migration only calls the ones its flows use. */
+function cmUseSpecDoc(connectorName, doc, source) {
+  const version = ApiSpecLoad.detectSpecVersion(doc);
+  const model = ApiSpecModel.buildModel(version.kind === "swagger2" ? ApiSwagger2ToOas3.convertSwagger2(doc) : doc);
+  if (!model.operations.length) throw new Error("The API description has no operations (paths).");
+  const moduleName = ApiFlowTypes.toIdentifier(ApiSpecModel.pascal(model.title || connectorName) || "Api");
+  const result = ApiFlowEmit.generateModule(model, {
+    moduleName,
+    source,
+    specVersion: `${version.kind === "swagger2" ? "Swagger" : "OpenAPI"} ${version.version}`,
+    generatorVersion: chrome.runtime.getManifest().version,
+    comments: "short"
+  });
+  cmRestSpecs[connectorName] = { moduleName: result.moduleName, code: result.code, basePath: result.basePath, signatures: result.signatures, title: model.title, source };
+  return cmRestSpecs[connectorName];
+}
+
+/** Fetches a spec URL like the API Modules tab (docs pages and swagger-config are followed). */
+async function cmFetchSpecDoc(url) {
+  let current = url;
+  for (let hop = 0; hop < 4; hop++) {
+    const response = await actionOrShowError({ type: "API_FETCH_SPEC", url: current, masterPassword: masterPasswordOf() });
+    if (!response) throw new Error("Could not load the URL.");
+    const step = ApiSpecLoad.resolveFetched(response.result, jsyaml);
+    if (step.doc) return { doc: step.doc, source: response.result.url };
+    current = step.next;
+    try {
+      if (!(await chrome.permissions.contains({ origins: [new URL(current).origin + "/*"] }))) throw new Error(`The API description is at ${current}. Paste that URL and click Load again to allow access to it.`);
+    } catch (e) {
+      throw e instanceof TypeError ? new Error(`Not a valid URL: ${current}`) : e;
+    }
+  }
+  throw new Error("Gave up following links to the API description. Use the raw openapi.json / .yaml.");
+}
+
+function cmSpecPicker(connectorName) {
+  const box = document.createElement("div");
+  box.className = "cm-spec";
+  const label = document.createElement("div");
+  label.className = "cm-rest-label";
+  label.textContent = "OpenAPI / Swagger spec (optional): calls are made through a module generated from it ";
+  const tip = document.createElement("span");
+  tip.className = "info-tip";
+  tip.dataset.tip = "With a spec, the API Modules generator builds a FlowScript module for this API (committed to the target package, reused by name on the next import). Each Classic REST call is matched to the spec operation by method and path from the .ncrcp (or by its name) and becomes a script step calling that module function, with the Classic inputs passed as parameters. Calls that cannot be matched, return a file or text, or read response headers (e.g. a login reading Set-Cookie) stay as REST connector calls, and the result notes say which. Without a spec nothing changes.";
+  label.append(tip);
+  const status = document.createElement("div");
+  status.className = "cm-rest-status";
+  const show = (text, tone) => { status.textContent = ""; if (text) status.append(ftChip(text, tone)); };
+  const loaded = cmRestSpecs[connectorName];
+  if (loaded) show(`${loaded.title}: ${loaded.signatures.length} operation(s), module ${loaded.moduleName}`, "ok");
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = ".json,.yaml,.yml";
+  file.className = "cm-rest-file";
+  file.addEventListener("change", async () => {
+    if (!file.files[0]) return;
+    try {
+      const spec = cmUseSpecDoc(connectorName, ApiSpecLoad.parseSpecText(await file.files[0].text(), jsyaml), file.files[0].name);
+      show(`${file.files[0].name}: ${spec.signatures.length} operation(s), module ${spec.moduleName}`, "ok");
+    } catch (e) {
+      delete cmRestSpecs[connectorName];
+      show(`Could not use the spec: ${e.message}`, "warn");
+    }
+  });
+  const urlRow = document.createElement("div");
+  urlRow.className = "cm-spec-url";
+  const url = document.createElement("input");
+  url.type = "url";
+  url.placeholder = "or a spec / docs URL (https://…)";
+  const load = document.createElement("button");
+  load.className = "btn-ghost";
+  load.textContent = "Load";
+  load.addEventListener("click", async () => {
+    const value = url.value.trim();
+    if (!value) return;
+    // The permission prompt must come first, while the click is still a user gesture.
+    try {
+      await chrome.permissions.request({ origins: [new URL(value).origin + "/*"] });
+    } catch (e) { /* fetchSpec reports a bad URL */ }
+    show("Loading…", "info");
+    try {
+      const { doc, source } = await cmFetchSpecDoc(value);
+      const spec = cmUseSpecDoc(connectorName, doc, source);
+      show(`${spec.title}: ${spec.signatures.length} operation(s), module ${spec.moduleName}`, "ok");
+    } catch (e) {
+      delete cmRestSpecs[connectorName];
+      show(`Could not use the spec: ${e.message}`, "warn");
+    }
+  });
+  const clear = document.createElement("button");
+  clear.className = "btn-ghost";
+  clear.textContent = "Remove";
+  clear.addEventListener("click", () => { delete cmRestSpecs[connectorName]; file.value = ""; url.value = ""; show("", ""); });
+  urlRow.append(url, load, clear);
+  box.append(label, file, urlRow, status);
+  return box;
 }
 
 async function cmSaveMapping() {
@@ -336,6 +438,7 @@ cmEl("cmFile").addEventListener("change", async () => {
   cmHint("");
   cmEl("cmResults").innerHTML = "";
   cmRestProjects = {};
+  cmRestSpecs = {};
   try {
     const svc = await cmLoadService();
     const instances = (await send({ type: "LIST_INSTANCES" })).instances || [];
@@ -427,7 +530,7 @@ async function cmPreviewFlow(flow, name) {
     const cache = {};
     const ifs = await cmIfsContext(cmEl("cmInstance").value, cache);
     const ctx = { rest: cmRest, userId: cmUserId, ifs };
-    const emitted = await svc.emitFlow(ctx, { flow, connectorMapping: cmCurrentMapping(false), restProjects: cmRestProjects, includedWorkflows: {} });
+    const emitted = await svc.emitFlow(ctx, { flow, connectorMapping: cmCurrentMapping(false), restProjects: cmRestProjects, restSpecs: cmRestSpecs, includedWorkflows: {} });
     status.remove();
     box.append(cmSummaryBlock(emitted));
     const w = cmWarningGroups(emitted.warnings);
@@ -492,16 +595,16 @@ cmEl("cmRunBtn").addEventListener("click", async () => {
       row.status("Translating…", "info");
       try {
         if (baseUrl && !ifs) ifs = await cmIfsContext(baseUrl, {});
-        const emitted = await svc.emitFlow(ctx, { flow, connectorMapping, restProjects: cmRestProjects, includedWorkflows: included, target: { orgId, packageId } });
+        const emitted = await svc.emitFlow(ctx, { flow, connectorMapping, restProjects: cmRestProjects, restSpecs: cmRestSpecs, includedWorkflows: included, target: { orgId, packageId } });
         row.status("Saving…", "info");
         const kind = (cmDecoded.summaries.find((s) => s.versionIdentifier === flow.versionIdentifier) || {}).assetKind || "component";
         const pushed = await svc.pushFlow(ctx, { orgId, packageId, name: flow.name, kind }, emitted, { updateExisting: cmEl("cmExisting").value !== "new", commit: cmEl("cmExisting").value === "update-commit" });
         included[flow.versionIdentifier] = { name: flow.name, assetId: pushed.itemId, assetVersion: pushed.assetVersion };
         const blockers = cmService.groupWarningsBySeverity(emitted.warnings).blockers.length;
-        const verb = pushed.committed ? "Updated and committed" : pushed.updated ? "Updated" : "Saved";
+        const verb = pushed.committed ? "Overwritten and committed" : pushed.updated ? (pushed.unchanged ? "Already up to date" : "Overwritten") : "Saved";
         row.status(blockers ? `${verb}, ${blockers} need${blockers === 1 ? "s" : ""} attention` : emitted.warnings.length ? `${verb}, ${emitted.warnings.length} FYI` : verb, blockers ? "warn" : "ok");
-        if (pushed.committed) row.detail(["Existing asset updated and committed as a new version (steps verified after the commit). Reload the flow in the Designer."]);
-        else if (pushed.updated) row.detail(["Existing asset updated (saved, not committed). Reload the flow in the Designer and commit it there to make it a new version."]);
+        if (pushed.committed) row.detail(["Existing asset overwritten and committed as a new version (steps verified after the commit). Reload the flow in the Designer."]);
+        else if (pushed.updated) row.detail(["Existing asset overwritten (saved, not committed). Reload the flow in the Designer and commit it there to make it a new version."]);
         row.summary(emitted);
         row.warnings(emitted.warnings);
       } catch (e) {
