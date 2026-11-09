@@ -498,10 +498,10 @@ cmEl("cmRunBtn").addEventListener("click", async () => {
         const pushed = await svc.pushFlow(ctx, { orgId, packageId, name: flow.name, kind }, emitted, { updateExisting: cmEl("cmExisting").value !== "new", commit: cmEl("cmExisting").value === "update-commit" });
         included[flow.versionIdentifier] = { name: flow.name, assetId: pushed.itemId, assetVersion: pushed.assetVersion };
         const blockers = cmService.groupWarningsBySeverity(emitted.warnings).blockers.length;
-        const verb = pushed.committed ? "Updated and committed" : pushed.updated ? "Updated" : "Saved";
+        const verb = pushed.committed ? "Overwritten and committed" : pushed.updated ? (pushed.unchanged ? "Already up to date" : "Overwritten") : "Saved";
         row.status(blockers ? `${verb}, ${blockers} need${blockers === 1 ? "s" : ""} attention` : emitted.warnings.length ? `${verb}, ${emitted.warnings.length} FYI` : verb, blockers ? "warn" : "ok");
-        if (pushed.committed) row.detail(["Existing asset updated and committed as a new version (steps verified after the commit). Reload the flow in the Designer."]);
-        else if (pushed.updated) row.detail(["Existing asset updated (saved, not committed). Reload the flow in the Designer and commit it there to make it a new version."]);
+        if (pushed.committed) row.detail(["Existing asset overwritten and committed as a new version (steps verified after the commit). Reload the flow in the Designer."]);
+        else if (pushed.updated) row.detail(["Existing asset overwritten (saved, not committed). Reload the flow in the Designer and commit it there to make it a new version."]);
         row.summary(emitted);
         row.warnings(emitted.warnings);
       } catch (e) {
