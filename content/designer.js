@@ -366,7 +366,7 @@ function mcPlace() {
 // (Database, REST, PowerShell ...); steps without one get nothing. Read-only like the marks: the
 // connectors come from the flow's designer data (background, CL_FLOW_CONNECTORS), the labels are
 // drawn on our own layer. Switched on/off from the side panel or the pill in the Designer.
-const cl = { key: null, steps: [], off: false, error: null, loaded: false, targets: new Map(), shown: 0 };
+const cl = { key: null, steps: [], off: true, error: null, loaded: false, targets: new Map(), shown: 0 };
 
 function clLocate() {
   cl.targets = new Map();
@@ -464,8 +464,9 @@ function clSetOff(off) {
   cl.off = !!off;
   clRefresh(true);
 }
-chrome.storage.local.get("clLabelsOff").then(({ clLabelsOff }) => clSetOff(clLabelsOff));
-chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.clLabelsOff) clSetOff(changes.clLabelsOff.newValue); });
+// Off until switched on (the setting is stored as clLabelsOn, so the default is off).
+chrome.storage.local.get("clLabelsOn").then(({ clLabelsOn }) => clSetOff(!clLabelsOn));
+chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.clLabelsOn) clSetOff(!changes.clLabelsOn.newValue); });
 // The flow's connectors can change while it is edited and saved: read them again now and then.
 setInterval(() => { if (!document.hidden) clRefresh(true); }, 30000);
 setInterval(() => {
