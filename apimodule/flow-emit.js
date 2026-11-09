@@ -197,14 +197,20 @@
       } else if (respType.endsWith("*")) {
         const mapper = registry.recordMapperName(respType.slice(0, -1));
         body = [
-          `    let __raw = JSON.deserialize<{}*>(${call});`,
+          `    let __body = ${call};`,
+          `    if isNull(__body, '') = '':`,
+          `        return unsafeCast<${respType}>(null);`,
+          `    let __raw = JSON.deserialize<{}*>(__body);`,
           mapper ? `    return unsafeCast<${respType}>(__raw.map(r => Record.mapValues(r, ${mapper})).eval());` : `    return unsafeCast<${respType}>(__raw);`
         ].join("\n");
         returnType = `: ${respType}`;
       } else {
         const mapper = registry.isRecord(respType) ? registry.recordMapperName(respType) : null;
         body = [
-          `    let __raw = JSON.deserialize<{}>(${call});`,
+          `    let __body = ${call};`,
+          `    if isNull(__body, '') = '':`,
+          `        return unsafeCast<${respType}>(null);`,
+          `    let __raw = JSON.deserialize<{}>(__body);`,
           mapper ? `    return unsafeCast<${respType}>(Record.mapValues(__raw, ${mapper}));` : `    return unsafeCast<${respType}>(__raw);`
         ].join("\n");
         returnType = `: ${respType}`;

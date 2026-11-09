@@ -12,6 +12,8 @@ test("basePathFromServers keeps only the path, with server variables filled in",
   assert.equal(basePathFromServers([{ url: "/api/v3/" }]), "api/v3");
   assert.equal(basePathFromServers([{ url: "https://x.test" }]), "");
   assert.equal(basePathFromServers([{ url: "https://{host}/{ver}/rest", variables: { host: { default: "a.test" }, ver: { default: "v2" } } }]), "v2/rest");
+  assert.equal(basePathFromServers([{ url: "{systemBaseUri}/identityprovider" }]), "identityprovider");
+  assert.equal(basePathFromServers([{ url: "{systemBaseUri}" }]), "");
   assert.equal(basePathFromServers([]), "");
   assert.equal(basePathFromServers(undefined), "");
 });

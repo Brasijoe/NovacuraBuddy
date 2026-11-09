@@ -452,91 +452,132 @@ module Order_status {
 
 /** Request body variant: `optional` fields may be left out. */
 type CategoryRequest = {
-	optional id: number,  // whole number; e.g. 1
-	optional name: text,  // e.g. "Dogs"
+	/** whole number; e.g. 1 */
+	optional id: number,
+	/** e.g. "Dogs" */
+	optional name: text,
 }
 
 /** Request body variant: `optional` fields may be left out. */
 type TagRequest = {
-	optional id: number,  // whole number
+	/** whole number */
+	optional id: number,
 	optional name: text,
 }
 
 /** Request body variant: `optional` fields may be left out; required: name, photoUrls. */
 type PetRequest = {
-	optional id: number,  // whole number; e.g. 10
-	name: text,  // required; e.g. "doggie"
+	/** whole number; e.g. 10 */
+	optional id: number,
+	/** required; e.g. "doggie" */
+	name: text,
 	optional category: CategoryRequest,
-	photoUrls: text*,  // required
+	/** required */
+	photoUrls: text*,
 	optional tags: TagRequest*,
-	optional status: Pet_status.Value,  // pet status in the store
+	/** pet status in the store */
+	optional status: Pet_status.Value,
 }
 
 type Category = {
-	id: number? = null,  // whole number; e.g. 1
-	name: text? = null,  // e.g. "Dogs"
+	/** whole number; e.g. 1 */
+	id: number? = null,
+	/** e.g. "Dogs" */
+	name: text? = null,
 }
 
 type Tag = {
-	id: number? = null,  // whole number
+	/** whole number */
+	id: number? = null,
 	name: text? = null,
 }
 
 type Pet = {
-	id: number? = null,  // whole number; e.g. 10
-	name: text,  // required; e.g. "doggie"
+	/** whole number; e.g. 10 */
+	id: number? = null,
+	/** required; e.g. "doggie" */
+	name: text,
 	category: Category,
-	photoUrls: text*,  // required
+	/** required */
+	photoUrls: text*,
 	tags: Tag*,
-	status: Pet_status.Value,  // pet status in the store
+	/** pet status in the store */
+	status: Pet_status.Value,
 }
 
 type ApiResponse = {
-	code: number? = null,  // whole number
+	/** whole number */
+	code: number? = null,
 	"type": text? = null,
 	message: text? = null,
 }
 
 /** Request body variant: `optional` fields may be left out. */
 type OrderRequest = {
-	optional id: number,  // whole number; e.g. 10
-	optional petId: number,  // whole number; e.g. 198772
-	optional quantity: number,  // whole number; e.g. 7
-	optional shipDate: datetime,  // ISO 8601 date-time
-	optional status: Order_status.Value,  // e.g. "approved" — Order Status
+	/** whole number; e.g. 10 */
+	optional id: number,
+	/** whole number; e.g. 198772 */
+	optional petId: number,
+	/** whole number; e.g. 7 */
+	optional quantity: number,
+	/** ISO 8601 date-time */
+	optional shipDate: datetime,
+	/** e.g. "approved" — Order Status */
+	optional status: Order_status.Value,
 	optional complete: boolean,
 }
 
 type Order = {
-	id: number? = null,  // whole number; e.g. 10
-	petId: number? = null,  // whole number; e.g. 198772
-	quantity: number? = null,  // whole number; e.g. 7
-	shipDate: datetime? = null,  // ISO 8601 date-time
-	status: Order_status.Value,  // e.g. "approved" — Order Status
+	/** whole number; e.g. 10 */
+	id: number? = null,
+	/** whole number; e.g. 198772 */
+	petId: number? = null,
+	/** whole number; e.g. 7 */
+	quantity: number? = null,
+	/** ISO 8601 date-time */
+	shipDate: datetime? = null,
+	/** e.g. "approved" — Order Status */
+	status: Order_status.Value,
 	complete: boolean? = null,
 }
 
 /** Request body variant: `optional` fields may be left out. */
 type UserRequest = {
-	optional id: number,  // whole number; e.g. 10
-	optional username: text,  // e.g. "theUser"
-	optional firstName: text,  // e.g. "John"
-	optional lastName: text,  // e.g. "James"
-	optional email: text,  // e.g. "john@email.com"
-	optional password: text,  // e.g. "12345"
-	optional phone: text,  // e.g. "12345"
-	optional userStatus: number,  // whole number; e.g. 1 — User Status
+	/** whole number; e.g. 10 */
+	optional id: number,
+	/** e.g. "theUser" */
+	optional username: text,
+	/** e.g. "John" */
+	optional firstName: text,
+	/** e.g. "James" */
+	optional lastName: text,
+	/** e.g. "john@email.com" */
+	optional email: text,
+	/** e.g. "12345" */
+	optional password: text,
+	/** e.g. "12345" */
+	optional phone: text,
+	/** whole number; e.g. 1 — User Status */
+	optional userStatus: number,
 }
 
 type User = {
-	id: number? = null,  // whole number; e.g. 10
-	username: text? = null,  // e.g. "theUser"
-	firstName: text? = null,  // e.g. "John"
-	lastName: text? = null,  // e.g. "James"
-	email: text? = null,  // e.g. "john@email.com"
-	password: text? = null,  // e.g. "12345"
-	phone: text? = null,  // e.g. "12345"
-	userStatus: number? = null,  // whole number; e.g. 1 — User Status
+	/** whole number; e.g. 10 */
+	id: number? = null,
+	/** e.g. "theUser" */
+	username: text? = null,
+	/** e.g. "John" */
+	firstName: text? = null,
+	/** e.g. "James" */
+	lastName: text? = null,
+	/** e.g. "john@email.com" */
+	email: text? = null,
+	/** e.g. "12345" */
+	password: text? = null,
+	/** e.g. "12345" */
+	phone: text? = null,
+	/** whole number; e.g. 1 — User Status */
+	userStatus: number? = null,
 }
 
 /* ---------- Enum mappings ---------- */
@@ -599,7 +640,10 @@ let FindPetsByTagsSet = Queryable.Create<RestQueryTranslation, Pet, text>(restTr
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function addPet(input: PetRequest, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/pet`, restJsonBody(input), headers));
+    let __body = PostResponse(`/pet`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -616,7 +660,10 @@ function addPet(input: PetRequest, headers: Header* = []): Pet {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function updatePet(input: PetRequest, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(PutResponse(`/pet`, restJsonBody(input), headers));
+    let __body = PutResponse(`/pet`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -632,7 +679,10 @@ function updatePet(input: PetRequest, headers: Header* = []): Pet {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function findPetsByStatus(status: text, headers: Header* = []): Pet* {
-    let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }])}`, headers));
+    let __body = GetResponse(`/pet/findByStatus{restQueryString([new RestParam { name: 'status', value: restText(status) }])}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet*>(null);
+    let __raw = JSON.deserialize<{}*>(__body);
     return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
 }
 
@@ -647,7 +697,10 @@ function findPetsByStatus(status: text, headers: Header* = []): Pet* {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function findPetsByTags(tags: text*, headers: Header* = []): Pet* {
-    let __raw = JSON.deserialize<{}*>(GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval())}`, headers));
+    let __body = GetResponse(`/pet/findByTags{restQueryString(tags.map(v => new RestParam { name: 'tags', value: restText(v) }).eval())}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet*>(null);
+    let __raw = JSON.deserialize<{}*>(__body);
     return unsafeCast<Pet*>(__raw.map(r => Record.mapValues(r, recordMapperForPet)).eval());
 }
 
@@ -663,7 +716,10 @@ function findPetsByTags(tags: text*, headers: Header* = []): Pet* {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getPetById(petId: number, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/pet/{restPath(petId)}`, headers));
+    let __body = GetResponse(`/pet/{restPath(petId)}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -680,7 +736,10 @@ function getPetById(petId: number, headers: Header* = []): Pet {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function updatePetWithForm(petId: number, name: text? = null, status: text? = null, headers: Header* = []): Pet {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/pet/{restPath(petId)}{restQueryString([new RestParam { name: 'name', value: restText(name) }] & [new RestParam { name: 'status', value: restText(status) }])}`, '', headers));
+    let __body = PostResponse(`/pet/{restPath(petId)}{restQueryString([new RestParam { name: 'name', value: restText(name) }] & [new RestParam { name: 'status', value: restText(status) }])}`, '', headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Pet>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Pet>(Record.mapValues(__raw, recordMapperForPet));
 }
 
@@ -725,7 +784,10 @@ function uploadFile(petId: number, body: binary, additionalMetadata: text? = nul
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getInventory(headers: Header* = []): {} {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/store/inventory`, headers));
+    let __body = GetResponse(`/store/inventory`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<{}>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<{}>(__raw);
 }
 
@@ -741,7 +803,10 @@ function getInventory(headers: Header* = []): {} {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function placeOrder(input: OrderRequest, headers: Header* = []): Order {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/store/order`, restJsonBody(input), headers));
+    let __body = PostResponse(`/store/order`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Order>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
 }
 
@@ -757,7 +822,10 @@ function placeOrder(input: OrderRequest, headers: Header* = []): Order {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getOrderById(orderId: number, headers: Header* = []): Order {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/store/order/{restPath(orderId)}`, headers));
+    let __body = GetResponse(`/store/order/{restPath(orderId)}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<Order>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<Order>(Record.mapValues(__raw, recordMapperForOrder));
 }
 
@@ -787,7 +855,10 @@ function deleteOrder(orderId: number, headers: Header* = []) {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function createUser(input: UserRequest, headers: Header* = []): User {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/user`, restJsonBody(input), headers));
+    let __body = PostResponse(`/user`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<User>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<User>(__raw);
 }
 
@@ -800,7 +871,10 @@ function createUser(input: UserRequest, headers: Header* = []): User {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function createUsersWithListInput(input: UserRequest*, headers: Header* = []): User {
-    let __raw = JSON.deserialize<{}>(PostResponse(`/user/createWithList`, restJsonBody(input), headers));
+    let __body = PostResponse(`/user/createWithList`, restJsonBody(input), headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<User>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<User>(__raw);
 }
 
@@ -843,7 +917,10 @@ function logoutUser(headers: Header* = []): text {
  *  Any non-2xx status raises an error carrying the status and the response text.
  */
 function getUserByName(username: text, headers: Header* = []): User {
-    let __raw = JSON.deserialize<{}>(GetResponse(`/user/{restPath(username)}`, headers));
+    let __body = GetResponse(`/user/{restPath(username)}`, headers);
+    if isNull(__body, '') = '':
+        return unsafeCast<User>(null);
+    let __raw = JSON.deserialize<{}>(__body);
     return unsafeCast<User>(__raw);
 }
 

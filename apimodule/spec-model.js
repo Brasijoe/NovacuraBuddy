@@ -54,6 +54,9 @@
     for (const [name, v] of Object.entries(server.variables || {})) {
       url = url.split(`{${name}}`).join(v && v.default != null ? String(v.default) : "");
     }
+    // A leading undefined `{var}` (e.g. `{systemBaseUri}/identityprovider`) stands for the host
+    // and is never part of the path; the connector supplies the host.
+    url = url.replace(/^\{[^}/]*\}(?=\/|$)/, "");
     let pathPart = url;
     const m = url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]*(\/.*)?$/i);
     if (m) pathPart = m[1] || "";

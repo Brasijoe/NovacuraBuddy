@@ -294,12 +294,16 @@ async function apiCreate() {
   if (!statuses) return;
   const existing = statuses.statuses[result.moduleName];
   if (existing && existing.status !== "not_created" && existing.status !== "no_designer"
-    && !confirm(`A module named ${result.moduleName} already exists in this package. Replace its code with the generated module?`)) {
+    && !confirm(`A module named ${result.moduleName} already exists in this package. Generate it again? Your own code inside // @custom-add and // @custom-replace blocks is kept; other manual edits are replaced.`)) {
     return;
   }
   const response = await actionOrShowError({ type: "API_CREATE_MODULE", moduleName: result.moduleName, code: result.code });
   if (!response) return;
-  showNotice(`Module ${result.moduleName} saved (${result.functionCount} functions, ${result.queryableCount} data sources) and activated in this flow.`);
+  const mergeText = (response.result && response.result.mergeText) || "";
+  const mergeWarnings = (response.result && response.result.mergeWarnings) || [];
+  showNotice(`Module ${result.moduleName} saved (${result.functionCount} functions, ${result.queryableCount} data sources) and activated in this flow.`
+    + (mergeText ? ` Custom code: ${mergeText}.` : ""));
+  if (mergeWarnings.length) showError(`Custom code merge:\n${mergeWarnings.join("\n")}`, true);
 }
 
 function initApiModulesPanel() {

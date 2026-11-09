@@ -126,7 +126,7 @@ test("a nested record with enums is mapped through its own mapper, sequences thr
   assert.equal(r.responseMapping("text"), null);
 });
 
-test("full comments: type doc, a trailing field comment after the comma, enum doc with values and uses", () => {
+test("full comments: type doc, a doc comment above each field, enum doc with values and uses", () => {
   const r = createTypeRegistry(modelOf({
     Order: {
       type: "object", description: "A transport <b>order</b>.", required: ["date"],
@@ -143,11 +143,16 @@ test("full comments: type doc, a trailing field comment after the comma, enum do
   assert.equal(decl(r, "Order"), [
     "/** A transport order. */",
     "type Order = {",
-    "\tid: number? = null,  // read-only, set by the API; whole number — Set by the server.",
-    "\tdate: datetime,  // required; date (YYYY-MM-DD) — Pick-up date.",
-    "\tdivision: Order_division.Value,  // 'T': European, see codelist (https://api.example.com/codelist).",
-    "\tlevel: number? = null,  // one of 1 | 2 | 3",
-    '\tcity: text? = null,  // max 35 characters; e.g. "Kempten"',
+    "\t/** read-only, set by the API; whole number — Set by the server. */",
+    "\tid: number? = null,",
+    "\t/** required; date (YYYY-MM-DD) — Pick-up date. */",
+    "\tdate: datetime,",
+    "\t/** 'T': European, see codelist (https://api.example.com/codelist). */",
+    "\tdivision: Order_division.Value,",
+    "\t/** one of 1 | 2 | 3 */",
+    "\tlevel: number? = null,",
+    '\t/** max 35 characters; e.g. "Kempten" */',
+    "\tcity: text? = null,",
     "}"
   ].join("\n"));
   const enumText = decl(r, "Order_division");
@@ -156,12 +161,12 @@ test("full comments: type doc, a trailing field comment after the comma, enum do
   assert.match(enumText, / \*  Used by: Order\.division\./);
 });
 
-test("enum value descriptions from x-enum-descriptions sit after the member's semicolon", () => {
+test("enum value descriptions from x-enum-descriptions sit as doc comments above the member", () => {
   const r = createTypeRegistry(modelOf({
     Mode: { type: "string", enum: ["P", "Z"], "x-enum-descriptions": ["PDF", "ZPL label printer"] }
   }));
   r.typeOf({ $ref: "#/components/schemas/Mode" });
   const text = decl(r, "Mode");
-  assert.match(text, /type P = Enum<Namespace, 'P'>;  \/\/ PDF\n/);
-  assert.match(text, /type Z = Enum<Namespace, 'Z'>;  \/\/ ZPL label printer\n/);
+  assert.match(text, /\/\*\* PDF \*\/\n    type P = Enum<Namespace, 'P'>;/);
+  assert.match(text, /\/\*\* ZPL label printer \*\/\n    type Z = Enum<Namespace, 'Z'>;/);
 });
