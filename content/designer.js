@@ -59,6 +59,8 @@ function mcEnsureHost() {
     :host { all: initial; }
     .layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; }
     .outline { position: fixed; border: 2px solid; border-radius: 8px; box-sizing: border-box; pointer-events: none; }
+    .cl-row { position: fixed; display: flex; gap: 3px; flex-wrap: nowrap; overflow: hidden; pointer-events: none; }
+    .cl-chip { height: 14px; padding: 0 6px; border-radius: 7px; color: #fff; font: 600 9.5px/14px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: auto; cursor: help; }
     .badge { position: fixed; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; color: #fff; font: 700 11px/18px system-ui, sans-serif; text-align: center; pointer-events: auto; cursor: help; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
     .panel { position: fixed; right: 16px; bottom: 16px; width: 340px; max-height: 50vh; display: flex; flex-direction: column; background: #fff; color: #141635; border: 1px solid #d9dcef; border-radius: 12px; box-shadow: 0 8px 28px rgba(20,22,53,.22); font: 13px/1.4 system-ui, sans-serif; z-index: 2147483001; pointer-events: auto; }
     .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eceef8; cursor: pointer; }
@@ -197,6 +199,7 @@ function mcDiagnostics() {
 mc.canvas = null; // { canvas: rect, texts: [{ text, left, top, width, height }] }
 addEventListener("novacura-buddy-canvas-texts", (e) => {
   try { mc.canvas = JSON.parse(e.detail); } catch { return; }
+  if (cl.steps.length && !cl.off) { clLocate(); mcPlace(); }
   if (!mc.marks || mc.hidden) return;
   const missingBefore = mc.marks.steps.filter((st) => !(mc.targets.get(st.id) || []).length).length;
   mcLocate();
@@ -331,7 +334,9 @@ function mcPlace() {
   const panel = mc.root.querySelector(".panel");
   const dialog = mcDialogOpen();
   if (panel) panel.style.visibility = dialog ? "hidden" : "";
-  if (!mc.marks || mc.hidden || mc.marksOff || dialog) return;
+  if (dialog) return;
+  clPlace();
+  if (!mc.marks || mc.hidden || mc.marksOff) return;
   for (const step of mc.marks.steps) {
     const color = MC_COLORS[step.severity] || MC_COLORS.minor;
     for (const target of mc.targets.get(step.id) || []) {
@@ -352,6 +357,79 @@ function mcPlace() {
     }
   }
 }
+
+// --- Connector labels -----------------------------------------------------------------------
+// A small colour-coded label with the connector name above every step that uses a connector
+// (Database, REST, PowerShell ...); steps without one get nothing. Read-only like the marks: the
+// connectors come from the flow's designer data (background, CL_FLOW_CONNECTORS), the labels are
+// drawn on our own layer. Switched on/off from the side panel or the pill in the Designer.
+const cl = { key: null, steps: [], off: false, targets: new Map() };
+
+function clLocate() {
+  cl.targets = new Map();
+  if (cl.off || !cl.steps.length) return;
+  const roots = mcRoots();
+  for (const step of cl.steps) {
+    const found = mcFindTargets(step, roots);
+    cl.targets.set(step.id, found.length ? found : mcCanvasTargets(step));
+  }
+}
+
+function clPlace() {
+  if (cl.off || !cl.steps.length) return;
+  for (const step of cl.steps) {
+    for (const target of cl.targets.get(step.id) || []) {
+      if (!target.canvasText && !target.isConnected) continue;
+      const r = mcRect(target);
+      if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue;
+      if (mcCovered(r.left + r.width / 2, r.top + r.height / 2)) continue;
+      const row = document.createElement("div");
+      row.className = "cl-row";
+      Object.assign(row.style, { left: `${r.left}px`, top: `${r.top - 17}px`, maxWidth: `${Math.max(r.width, 90)}px` });
+      for (const c of step.connectors) {
+        const chip = document.createElement("span");
+        chip.className = "cl-chip";
+        chip.textContent = c.name;
+        chip.title = `Connector: ${c.name}${c.type ? ` (${c.type})` : ""}`;
+        chip.style.background = c.color;
+        row.append(chip);
+      }
+      mc.layer.append(row);
+    }
+  }
+}
+
+async function clRefresh(force) {
+  const m = MC_DESIGNER_URL_RE.exec(location.href);
+  const key = m ? `${m[1]}/${m[2]}` : null;
+  if (!force && key === cl.key) return;
+  cl.key = key;
+  cl.steps = [];
+  cl.targets = new Map();
+  if (m && !cl.off) {
+    const res = await chrome.runtime.sendMessage({ type: "CL_FLOW_CONNECTORS", orgId: m[1], itemId: m[2] }).catch(() => null);
+    if (cl.key !== key) return;
+    cl.steps = res && res.ok ? res.steps : [];
+  }
+  clLocate();
+  mcEnsureHost();
+  mcPlace();
+}
+
+function clSetOff(off) {
+  cl.off = !!off;
+  clRefresh(true);
+}
+chrome.storage.local.get("clLabelsOff").then(({ clLabelsOff }) => clSetOff(clLabelsOff));
+chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.clLabelsOff) clSetOff(changes.clLabelsOff.newValue); });
+// The flow's connectors can change while it is edited and saved: read them again now and then.
+setInterval(() => { if (!document.hidden) clRefresh(true); }, 30000);
+setInterval(() => {
+  clRefresh(false);
+  if (cl.off || !cl.steps.length) return;
+  clLocate();
+  mcPlace();
+}, 1000);
 
 function mcStepText(step) {
   return [`${MC_SEVERITY[step.severity] || ""} — ${step.label}`,
@@ -493,7 +571,7 @@ async function mcFocusPending() {
   }
 }
 mcFocusPending();
-setInterval(() => { if (mc.marks && !mc.hidden) mcPlace(); }, 300);
+setInterval(() => { if ((mc.marks && !mc.hidden) || (!cl.off && cl.steps.length)) mcPlace(); }, 300);
 
 // --- PL/SQL test script ---------------------------------------------------------------------
 // While a Database step's window is open, a button next to it turns the step's PL/SQL and the test
