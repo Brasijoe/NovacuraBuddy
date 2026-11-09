@@ -8,6 +8,7 @@
 (function (global) {
   const IfsInstances = typeof require === "function" ? require("../lib/ifs-instances.js") : global.IfsInstances;
   const FlowModules = typeof require === "function" ? require("../lib/flow-modules.js") : global.FlowModules;
+  const ModuleMerge = typeof require === "function" ? require("../lib/module-merge.js") : global.ModuleMerge;
 
   /** GETs `url` and returns its text. A URL on a Basic Data IFS instance is fetched with that
    *  instance's IFS token (never a separate login); any other URL goes out with the browser's own
@@ -47,10 +48,12 @@
       throw new Error(`"${moduleName}" is not a valid module name (letters, digits and _ only, not starting with a digit) — nothing was changed.`);
     }
     if (typeof code !== "string" || !code.trim()) throw new Error("No module code was generated — nothing was changed.");
-    const asset = await FlowModules.findOrCreateModule({ flowFetch, orgId, packageId, projectionName: moduleName });
-    if (log) log("API module asset id =", asset.id, "— committing", code.length, "bytes of module code...");
-    const newBranch = await FlowModules.commitModuleCode({ flowFetch, orgId, packageId, assetId: asset.id, flowScriptCode: code });
-    return { assetId: asset.id, headVersionId: newBranch.headVersionId, projectionName: asset.name || moduleName };
+    const existing = await FlowModules.findExistingModule({ flowFetch, orgId, packageId, projectionName: moduleName });
+    const asset = existing || await FlowModules.createModuleAsset({ flowFetch, orgId, packageId, projectionName: moduleName });
+    if (log) log("API module asset id =", asset.id, existing ? "(existing)" : "(new)", "— committing", code.length, "bytes of module code...");
+    const { branch, report } = await FlowModules.commitMergedModuleCode({ flowFetch, orgId, packageId, assetId: asset.id, flowScriptCode: code, isNew: !existing });
+    if (log && report) log("Custom code merge:", ModuleMerge.describeReport(report) || "no custom blocks", report.warnings);
+    return { assetId: asset.id, headVersionId: branch.headVersionId, projectionName: asset.name || moduleName, mergeReport: report };
   }
 
   const api = { fetchSpec, saveModule };
