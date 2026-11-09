@@ -893,3 +893,5 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-runas { flex: 1 1 100%; font-size: 12px; }
 #resetPasswordBox { flex-wrap: wrap; }
 #resetPasswordBox span { flex: 1 1 100%; }
+
+.topbar-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 12px; color: var(--ink-muted); cursor: pointer; white-space: nowrap; }

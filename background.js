@@ -38,6 +38,7 @@ importScripts(
   "lib/permission-check.js",
   "lib/permission-set-compare.js",
   "lib/module-compare.js",
+  "lib/connector-labels.js",
   "apimodule/api-module-service.js"
 );
 
@@ -1266,6 +1267,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             .filter((e) => e.orgId === message.orgId && e.flows && e.flows[message.itemId])
             .sort((a, b) => String(b.scannedAt).localeCompare(String(a.scannedAt)))[0];
           return sendResponse({ ok: true, marks: hit ? { ...hit.flows[message.itemId], scan: { orgId: hit.orgId, packageId: hit.packageId, baseUrl: hit.baseUrl } } : null });
+        }
+        case "CL_FLOW_CONNECTORS": { // the Designer's content script: which connector each step of the open flow uses (read-only)
+          const designer = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          return sendResponse({ ok: true, steps: ConnectorLabels.stepConnectors(designer) });
         }
         case "MC_PAGE_PROBE": { // read-only look at how the Designer page draws its canvas (for placing the marks)
           const [res] = await chrome.scripting.executeScript({ target: { tabId: _sender.tab.id }, world: "MAIN", func: designerPageProbe });
