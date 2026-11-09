@@ -12,8 +12,34 @@ const els = {
   save: document.getElementById("saveBtn"),
   saved: document.getElementById("savedNote"),
   saveHint: document.getElementById("saveHint"),
-  deployForm: document.getElementById("deployForm")
+  deployForm: document.getElementById("deployForm"),
+  prefixRow: document.getElementById("prefixRow"),
+  prefixInput: document.getElementById("prefixInput")
 };
+
+// Prefix for new Custom LU names (new + import modes only); remembered in extension storage.
+const LU_PREFIX_KEY = "luNamePrefix";
+let luPrefix = CustomLuModel.DEFAULT_LU_PREFIX;
+const prefixApplies = () => mode === "new" || mode === "import";
+const prefixedName = (b) => (prefixApplies() && !b.nameLocked ? CustomLuModel.applyPrefix(luPrefix, b.name) : String(b.name || "").trim());
+
+async function initPrefix() {
+  if (!prefixApplies()) return;
+  els.prefixRow.hidden = false;
+  try {
+    const stored = await chrome.storage.local.get(LU_PREFIX_KEY);
+    if (typeof stored[LU_PREFIX_KEY] === "string") luPrefix = stored[LU_PREFIX_KEY];
+  } catch { /* keep the default */ }
+  els.prefixInput.value = luPrefix;
+  els.prefixInput.oninput = () => {
+    const clean = CustomLuModel.cleanPrefix(els.prefixInput.value);
+    if (clean !== els.prefixInput.value) els.prefixInput.value = clean;
+    luPrefix = clean;
+    chrome.storage.local.set({ [LU_PREFIX_KEY]: clean }).catch(() => {});
+    render();
+  };
+  render();
+}
 
 const TYPE_OPTIONS = CustomLuModel.TYPES.map((t) => [t, CustomLuModel.TYPE_LABELS[t]]);
 const EXISTING_NOTE = "Deleting or changing attributes must be done in IFS.";
@@ -64,7 +90,8 @@ function rowsFor(b, lu) {
 /** The definition deploy/save sends: in Existing mode only the new rows (deploy skips what IFS has). */
 function definitionOf(b) {
   const attributes = b.attributes.filter((a) => (mode === "existing" ? !a.locked : true));
-  const lu = CustomLuModel.normalizeLu({ name: b.name, prompt: b.prompt, attributes });
+  const typed = String(b.name || "").trim();
+  const lu = CustomLuModel.normalizeLu({ name: prefixedName(b), prompt: String(b.prompt || "").trim() || typed, attributes });
   if (b.fill && b.rows.length) lu.rows = rowsFor(b, lu); // row data goes to deploy only, never to the library
   return lu;
 }
@@ -109,6 +136,14 @@ function typeSelect(attr, disabled, onPick) {
   return select;
 }
 
+function refreshFinalName(b, index) {
+  const note = els.blocks.querySelector(`.lu-final[data-block="${index}"]`);
+  if (!note) return;
+  const finalName = prefixedName(b);
+  note.textContent = finalName && finalName !== String(b.name).trim() ? `Created as ${finalName}` : "";
+  note.hidden = !note.textContent;
+}
+
 function renderBlock(b, index) {
   const wrap = document.createElement("div");
   wrap.className = "lu-block";
@@ -124,11 +159,19 @@ function renderBlock(b, index) {
     head.appendChild(box);
   }
   head.append(
-    input(b.name, { placeholder: "LU name, e.g. CustomPageName", disabled: b.nameLocked, onInput: (v) => { b.name = v; } }),
+    input(b.name, { placeholder: "LU name, e.g. CustomPageName", disabled: b.nameLocked, onInput: (v) => { b.name = v; refreshFinalName(b, index); } }),
     input(b.prompt, { placeholder: "Prompt (defaults to the name)", disabled: b.nameLocked, onInput: (v) => { b.prompt = v; } })
   );
   if (b.source && b.source !== b.name) head.appendChild(document.createTextNode(` from property ${b.source}`));
   wrap.appendChild(head);
+
+  if (prefixApplies()) {
+    const final = document.createElement("p");
+    final.className = "lu-note lu-final";
+    final.dataset.block = String(index);
+    wrap.appendChild(final);
+    queueMicrotask(() => refreshFinalName(b, index));
+  }
 
   if (b.attributes.some((a) => a.locked)) {
     const note = document.createElement("p");
@@ -218,7 +261,7 @@ function lusToDeploy() {
   const chosen = activeBlocks();
   if (!chosen.length) { showError(mode === "import" ? "Tick at least one LU to deploy." : "Nothing to deploy yet.", true); return null; }
   const broken = chosen.filter((b) => problemsOf(b).length);
-  if (broken.length) { showError(`Fix the marked fields first (${broken.map((b) => b.name || "unnamed LU").join(", ")}).`, true); return null; }
+  if (broken.length) { showError(`Fix the marked fields first (${broken.map((b) => prefixedName(b) || "unnamed LU").join(", ")}).`, true); return null; }
   return chosen.map(definitionOf);
 }
 
@@ -315,4 +358,5 @@ function start() {
   }
 }
 
+initPrefix();
 start();

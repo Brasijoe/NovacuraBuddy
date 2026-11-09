@@ -16,6 +16,11 @@
     <div class="editor-grid">
       <section class="editor-main">
         <p id="modeHint" class="list-count"></p>
+        <div id="prefixRow" class="prefix-row" hidden>
+          <label for="prefixInput">LU name prefix</label>
+          <input id="prefixInput" type="text" maxlength="6" placeholder="none" autocomplete="off" />
+          <span class="info-tip" data-tip="Put in front of every new Custom LU name automatically (saved, deployed and imported). A name that already starts with it is left alone. Leave empty for no prefix. The setting is remembered on this computer."></span>
+        </div>
         <div id="importRow" hidden>
           <label class="btn-like">Choose Flow properties file (.json) <input id="importFile" type="file" accept=".json,application/json" hidden /></label>
         </div>
@@ -37,6 +42,7 @@
     <script src="lib/custom-lu-model.js"></script>
     <script src="lib/flow-properties.js"></script>
     <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
     <script src="panels/permission-picker.js"></script>
     <script src="panels/cl-deploy-form.js"></script>
     <script src="cl-editor.js"></script>
