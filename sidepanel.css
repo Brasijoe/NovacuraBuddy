@@ -906,6 +906,9 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .cm-rest { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 6px; background: var(--surface-raised); font-size: 12px; }
 .cm-rest-hint { color: var(--accent-red); }
 .cm-rest-file { font-size: 12px; max-width: 100%; }
+.cm-spec { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border, rgba(127,127,127,.25)); }
+.cm-spec-url { display: flex; gap: 6px; align-items: center; }
+.cm-spec-url input { flex: 1 1 auto; min-width: 0; font-size: 12px; }
 .cm-preview-title { font-weight: 600; font-size: 13px; }
 .cm-preview-btn { flex: 0 0 auto; }
 .cm-summary { display: flex; flex-direction: column; gap: 2px; font-size: 12px; margin: 6px 0; }

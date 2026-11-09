@@ -102,6 +102,8 @@
 
     const queryables = [];
     const functions = [];
+    // How to call each generated function (the Classic migration maps REST calls onto these).
+    const signatures = [];
 
     for (const op of ops) {
       const fnName = fnNames.get(op.id);
@@ -252,6 +254,24 @@
           errors.length ? "Any non-2xx status raises an error carrying the status and the response text." : null
         ]);
       };
+      signatures.push({
+        id: op.id,
+        operationId: op.operationId,
+        method: op.method,
+        path: op.path,
+        summary: op.summary || "",
+        fnName,
+        // Positional order of the function's arguments (the trailing `headers` is always last).
+        args: [
+          ...pathParams.map((p) => ({ name: p.name, arg: argNames.get(p.name), in: "path", optional: false })),
+          ...requiredQuery.map((p) => ({ name: p.name, arg: argNames.get(p.name), in: "query", optional: false })),
+          ...(bodyArg ? [{ name: bodyArg.split(":")[0], arg: bodyArg.split(":")[0], in: "body", optional: false }] : []),
+          ...requiredHeaders.map((p) => ({ name: p.name, arg: argNames.get(p.name), in: "header", optional: false })),
+          ...optionalQuery.map((p) => ({ name: p.name, arg: argNames.get(p.name), in: "query", optional: true })),
+          ...optionalHeaders.map((p) => ({ name: p.name, arg: argNames.get(p.name), in: "header", optional: true }))
+        ],
+        returnsJson: !!returnType && returnType !== ": text"
+      });
       const doc = comments === "full" ? fullDoc() : comments === "short" ? shortDoc : null;
       functions.push(`${doc ? doc + "\n" : ""}function ${fnName}(${args.join(", ")})${returnType} {\n${body}\n}`);
 
@@ -367,7 +387,9 @@
       moduleName,
       warnings,
       queryableCount: queryables.length,
-      functionCount: functions.length
+      functionCount: functions.length,
+      basePath: model.basePath,
+      signatures
     };
   }
 
