@@ -60,6 +60,9 @@ function mcEnsureHost() {
     .layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; }
     .outline { position: fixed; border: 2px solid; border-radius: 8px; box-sizing: border-box; pointer-events: none; }
     .cl-row { position: fixed; display: flex; gap: 3px; flex-wrap: nowrap; overflow: hidden; pointer-events: none; }
+    .cl-status { position: fixed; left: 16px; bottom: 16px; padding: 3px 10px; border-radius: 12px; background: #fff; color: #4b5068; border: 1px solid #d9dcef; font: 11.5px/1.4 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(20,22,53,.15); cursor: pointer; pointer-events: auto; z-index: 2147483001; max-width: 60vw; }
+    .cl-status.warn { border-color: #fd6e15; color: #a5470b; }
+    @media (prefers-color-scheme: dark) { .cl-status { background: #1b1d3a; color: #a9acc9; border-color: #33365c; } }
     .cl-chip { height: 14px; padding: 0 6px; border-radius: 7px; color: #fff; font: 600 9.5px/14px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: auto; cursor: help; }
     .badge { position: fixed; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; color: #fff; font: 700 11px/18px system-ui, sans-serif; text-align: center; pointer-events: auto; cursor: help; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
     .panel { position: fixed; right: 16px; bottom: 16px; width: 340px; max-height: 50vh; display: flex; flex-direction: column; background: #fff; color: #141635; border: 1px solid #d9dcef; border-radius: 12px; box-shadow: 0 8px 28px rgba(20,22,53,.22); font: 13px/1.4 system-ui, sans-serif; z-index: 2147483001; pointer-events: auto; }
@@ -363,7 +366,7 @@ function mcPlace() {
 // (Database, REST, PowerShell ...); steps without one get nothing. Read-only like the marks: the
 // connectors come from the flow's designer data (background, CL_FLOW_CONNECTORS), the labels are
 // drawn on our own layer. Switched on/off from the side panel or the pill in the Designer.
-const cl = { key: null, steps: [], off: false, targets: new Map() };
+const cl = { key: null, steps: [], off: false, error: null, loaded: false, targets: new Map(), shown: 0 };
 
 function clLocate() {
   cl.targets = new Map();
@@ -376,7 +379,9 @@ function clLocate() {
 }
 
 function clPlace() {
-  if (cl.off || !cl.steps.length) return;
+  cl.shown = 0;
+  clStatus();
+  if (cl.off) return;
   for (const step of cl.steps) {
     for (const target of cl.targets.get(step.id) || []) {
       if (!target.canvasText && !target.isConnected) continue;
@@ -395,8 +400,43 @@ function clPlace() {
         row.append(chip);
       }
       mc.layer.append(row);
+      cl.shown++;
     }
   }
+  clStatus();
+}
+
+/** A small pill bottom left: what the labels found (or why not), click copies the page info. */
+function clStatus() {
+  if (!mc.root) return;
+  let pill = mc.root.querySelector(".cl-status");
+  if (cl.off || !cl.key) { if (pill) pill.remove(); return; }
+  if (!pill) {
+    pill = document.createElement("div");
+    pill.className = "cl-status";
+    pill.title = "Click to copy what the connector labels see (to send to the developer)";
+    pill.onclick = async () => {
+      try { await navigator.clipboard.writeText(clDiagnostics()); pill.dataset.copied = "1"; setTimeout(() => delete pill.dataset.copied, 1500); } catch { /* ignore */ }
+    };
+    mc.root.append(pill);
+  }
+  const found = cl.steps.filter((st) => (cl.targets.get(st.id) || []).length).length;
+  pill.textContent = pill.dataset.copied ? "Copied" : cl.error ? `Connector labels: ${cl.error}` : !cl.loaded ? "Connector labels: reading the flow…"
+    : !cl.steps.length ? "Connector labels: no step uses a connector"
+    : `Connector labels: ${found} of ${cl.steps.length} steps found on the canvas`;
+  pill.classList.toggle("warn", !!cl.error || (cl.loaded && cl.steps.length > 0 && found < cl.steps.length));
+}
+
+function clDiagnostics() {
+  const texts = mc.canvas ? mc.canvas.texts : null;
+  return [
+    `NovacuraBuddy connector labels ${new Date().toISOString()}`,
+    `url: ${location.pathname}`,
+    `error: ${cl.error || "none"}, loaded: ${cl.loaded}, steps with a connector: ${cl.steps.length}`,
+    `canvas texts reported: ${texts ? texts.length : "none (canvas hook silent)"}`,
+    ...cl.steps.map((st) => `${st.label} (${st.id}) [${st.connectors.map((c) => c.name).join(", ")}] targets: ${(cl.targets.get(st.id) || []).length}`),
+    `canvas names: ${texts ? texts.slice(0, 40).map((t) => `"${t.text.slice(0, 30)}"`).join(" ") : ""}`
+  ].join("\n");
 }
 
 async function clRefresh(force) {
@@ -405,11 +445,15 @@ async function clRefresh(force) {
   if (!force && key === cl.key) return;
   cl.key = key;
   cl.steps = [];
+  cl.error = null;
+  cl.loaded = false;
   cl.targets = new Map();
   if (m && !cl.off) {
-    const res = await chrome.runtime.sendMessage({ type: "CL_FLOW_CONNECTORS", orgId: m[1], itemId: m[2] }).catch(() => null);
+    const res = await chrome.runtime.sendMessage({ type: "CL_FLOW_CONNECTORS", orgId: m[1], itemId: m[2] }).catch((e) => ({ ok: false, error: e.message }));
     if (cl.key !== key) return;
     cl.steps = res && res.ok ? res.steps : [];
+    cl.error = res && res.ok ? null : String((res && res.error) || "no answer from the extension").slice(0, 120);
+    cl.loaded = true;
   }
   clLocate();
   mcEnsureHost();
