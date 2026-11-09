@@ -11,3 +11,8 @@
 .lu-problems { margin: 0; padding-left: 18px; color: var(--accent-red, #b91c1c); font-size: 13px; }
 .lu-note { font-size: 13px; color: var(--ink-muted); margin: 0; }
 .btn-like { display: inline-block; cursor: pointer; padding: 6px 12px; border: 1px solid var(--surface-raised); border-radius: var(--radius-md); }
+.prefix-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+.prefix-row label { font-weight: 600; }
+.prefix-row input { width: 90px; }
+.lu-final { font-weight: 600; color: var(--ink); }
+.lu-final[hidden] { display: none; }
