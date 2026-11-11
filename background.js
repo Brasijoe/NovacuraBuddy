@@ -39,6 +39,7 @@ importScripts(
   "lib/permission-check.js",
   "lib/permission-set-compare.js",
   "lib/module-compare.js",
+  "lib/qr-usage.js",
   "lib/connector-labels.js",
   "apimodule/api-module-service.js"
 );
@@ -1262,6 +1263,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           if (!flowToken.get()) return sendResponse({ ok: false, error: "Open a Flow Designer tab (build.novacura.com) once so the extension can read the flow" });
           const r = await FlowStepSql.resolveSteps({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId, apps: message.versions || [], flowName: message.flowName || "", stepNames: message.stepNames || [] });
           return sendResponse({ ok: true, steps: r.steps, tried: r.tried, flowFound: r.flowFound });
+        }
+        // Quick Report usage scan: the results page runs QrUsage.runScan and calls these two read-only
+        // calls (plus MC_ASSETS / FT_PACKAGES for the lists).
+        case "QRU_FLOW": { // the Quick Report ids one flow calls
+          const d = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
+          return sendResponse({ ok: true, ids: QrUsage.findQuickReportIds(ModuleCompare.flowText(d)) });
+        }
+        case "QRU_NAMES": { // descriptions of the given Quick Report ids from IFS
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, names: await QrUsage.readNames(client.get, message.ids) });
         }
         case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
           const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);

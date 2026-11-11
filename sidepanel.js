@@ -19,6 +19,7 @@ function showTab(name) {
   document.getElementById("tabSubheader").textContent = openGroup ? `${openGroup.querySelector(".tab-group-btn").firstChild.textContent.trim()} › ${itemLabel}` : itemLabel;
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
+  if (name === "quick-reports") qruOnShow();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
   if (name === "flow-deps") fdOnShow();
   if (name === "flow-docs") fdocOnShow();
@@ -127,7 +128,7 @@ initFlowTransferPanel();
 initLinkedFlowsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshCommitChainState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshQruState(); refreshCommitChainState(); }, 5000);
 
 
 // Connector labels in the Flow Designer on/off (content/designer.js reads the same setting).

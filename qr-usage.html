@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Quick Report usage</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+    <link rel="stylesheet" href="qr-editor.css" />
+    <link rel="stylesheet" href="flow-deps.css" />
+    <link rel="stylesheet" href="module-compare.css" />
+    <link rel="stylesheet" href="qr-usage.css" />
+  </head>
+  <body class="qr-editor-page">
+    <div id="error" class="banner banner-error" hidden title="Click to dismiss"></div>
+
+    <header class="topbar fd-topbar">
+      <div>
+        <h1 id="quTitle">Quick Report usage</h1>
+        <p id="quSubtitle" class="list-count"></p>
+      </div>
+      <button id="quRescanBtn" class="btn-primary">Rescan</button>
+    </header>
+
+    <div class="cm-card qu-card" id="quScanCard">
+      <div class="section-head"><h2>1. Scan</h2><span class="info-tip" data-tip="Reads every flow of the organisation (all packages and the App Library) from Flow and looks for calls to the QuickReports module (QuickReport_&lt;id&gt;). The names come from the IFS instance chosen in the side panel. Read-only."></span></div>
+      <div id="quProgress" class="mc-progress" hidden>
+        <div class="fd-progress-bar"><div id="quProgressFill" class="fd-progress-fill"></div></div>
+        <ul id="quSteps" class="mc-steps"></ul>
+      </div>
+      <p id="quSummary" class="list-count"></p>
+    </div>
+
+    <div class="cm-card qu-card" id="quResultCard" hidden>
+      <div class="section-head"><h2>2. Quick Reports in use</h2><span class="info-tip" data-tip="One row per Quick Report that at least one flow calls. Quick Report is the function the flows call, IFS ID the Quick Report id in IFS, Name its description in IFS. Click a flow to open it in the Flow Designer."></span></div>
+      <input id="quFilter" type="search" placeholder="Filter by Quick Report, id, name or flow…" />
+      <div id="quEmpty" class="empty-state" hidden></div>
+      <table class="qu-table" id="quTable">
+        <thead><tr><th>Quick Report</th><th>IFS ID</th><th>Name</th><th>Used in flows</th></tr></thead>
+        <tbody id="quBody"></tbody>
+      </table>
+    </div>
+
+    <details id="quErrors" class="fd-errors" hidden>
+      <summary id="quErrorsSummary"></summary>
+      <ul id="quErrorList"></ul>
+    </details>
+
+    <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
+    <script src="lib/qr-usage.js"></script>
+    <script src="qr-usage.js"></script>
+  </body>
+</html>

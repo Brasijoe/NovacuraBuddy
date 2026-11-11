@@ -1,0 +1,14 @@
+/* Quick Report usage results page; layout tokens and cards come from sidepanel.css / flow-deps.css. */
+.qu-card { max-width: 1100px; margin-bottom: var(--space-3); }
+.qu-card .mc-progress { margin: 0; }
+.qu-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.qu-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); padding: 6px 10px; border-bottom: 2px solid var(--surface-raised); }
+.qu-table td { vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--surface-raised); overflow-wrap: anywhere; }
+.qu-table th:nth-child(1), .qu-table td:nth-child(1) { width: 22%; font-family: var(--font-mono); font-size: 12.5px; }
+.qu-table th:nth-child(2), .qu-table td:nth-child(2) { width: 12%; font-variant-numeric: tabular-nums; }
+.qu-table th:nth-child(3), .qu-table td:nth-child(3) { width: 26%; }
+.qu-flows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.qu-flows li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.qu-flows a { font-weight: 600; }
+.qu-pkg { color: var(--ink-muted); font-size: 11.5px; }
+.qu-noname { color: var(--ink-muted); }
