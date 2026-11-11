@@ -159,6 +159,16 @@
       <select id="qrModuleInstance"></select>
       <div id="qrModuleBox"></div>
       <hr class="section-divider" />
+      <div class="cm-card" id="qruCard">
+        <div class="section-head"><h2>Scan org for Quick Report usage</h2><span class="info-tip" data-tip="Reads every flow of a Flow organisation (all packages and the App Library) and lists the IFS Quick Reports they call through the QuickReports module: Quick Report, IFS id, name and the flows that use it, each flow linked to the Designer. The name comes from the IFS instance you choose. Read-only: nothing is written to Flow or IFS."></span></div>
+        <label class="cm-field">1. Organisation <select id="qruOrgSelect"></select></label>
+        <div id="qruOrgHint" class="empty-state" hidden></div>
+        <label class="cm-field">2. IFS instance (for the names) <select id="qruInstanceSelect"></select></label>
+        <button id="qruScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
+        <div id="qruHint" class="empty-state" hidden></div>
+        <p id="qruLast" class="list-count" hidden></p>
+      </div>
+      <hr class="section-divider" />
       <ul id="qrList" class="qr-list"></ul>
     </section>
 
@@ -543,6 +553,7 @@
     <script src="lib/custom-lu-model.js"></script>
     <script src="panels/cl-deploy-form.js"></script>
     <script src="panels/quick-reports.js"></script>
+    <script src="panels/qr-usage.js"></script>
     <script src="panels/custom-lus.js"></script>
     <script src="panels/flow-deps.js"></script>
     <script src="panels/update-banner.js"></script>
