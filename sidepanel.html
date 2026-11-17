@@ -462,7 +462,7 @@
       <select id="pscInstB" aria-label="Instance B"></select>
       <div class="section-head"><h3>Permission sets</h3><span class="info-tip" data-tip="All customer permission sets of both instances (IFS-delivered ones are left out). The tag says where each exists. Tick as many as you like; the filter only narrows the list, and All / None act on the visible rows."></span></div>
       <div class="search-row"><input id="pscFilter" placeholder="Filter permission sets…" autocomplete="off" /><button id="pscAll" class="btn-ghost">All</button><button id="pscNone" class="btn-ghost">None</button></div>
-      <div id="pscSets" class="checklist"></div>
+      <div id="pscSets" class="checklist" data-own-search="1"></div>
       <p id="pscCount" class="list-count"></p>
       <div class="section-head"><h3>Action</h3><span class="info-tip" data-tip="Merge: each instance gets the projections only the other has. Copy from reference: the target gets what the reference has, nothing is removed. Sync to reference: like copy, and can also remove what the reference does not have. The reference is the template instance. Action grants are compared but not changed yet."></span></div>
       <select id="pscMode" aria-label="Action">
