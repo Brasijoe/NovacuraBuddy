@@ -55,7 +55,7 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
       box.type = "checkbox";
       box.value = ps.id;
       box.checked = remembered.has(ps.id);
-      label.append(box, document.createTextNode(` ${ps.name}`));
+      label.append(box, document.createTextNode(` ${ps.name === ps.id ? ps.id : `${ps.id} - ${ps.name}`}`));
       sets.appendChild(label);
     }
     search.hidden = !response.sets.length;

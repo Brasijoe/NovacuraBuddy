@@ -38,7 +38,7 @@ function pscRenderSets() {
     input.checked = keep.has(s.id);
     input.onchange = pscCount;
     const where = s.A && s.B ? "both" : s.A ? "only A" : "only B";
-    label.append(input, document.createTextNode(` ${s.name === s.id ? s.id : `${s.id} — ${s.name}`} `));
+    label.append(input, document.createTextNode(` ${s.name === s.id ? s.id : `${s.id} - ${s.name}`} `));
     const tag = document.createElement("span");
     tag.className = "pc-sub";
     tag.textContent = `(${where})`;
