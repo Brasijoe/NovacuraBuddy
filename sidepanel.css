@@ -222,6 +222,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { border-color
 
 .instance-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .instance-form button[type="submit"] { align-self: flex-start; }
+.instance-form.is-editing { border: 1px solid var(--accent); border-radius: var(--radius-md); padding: var(--space-2); }
 
 /* ---------- search ---------- */
 .search-row { display: flex; gap: var(--space-2); }

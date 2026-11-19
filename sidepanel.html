@@ -495,6 +495,7 @@
     <section id="panel-basic-data" role="tabpanel" hidden>
       <div class="section-head"><h2>IFS instances</h2><span class="info-tip" data-tip="The IFS environments Novacura Buddy works with. Click one to select it for the Projection Tracker tab; Test asks IFS for a fresh token. Client secrets are encrypted with your master password and stay in this browser."></span></div>
       <ul id="instanceList" class="instance-list"></ul>
+      <div class="section-head"><h2 id="instanceFormTitle">Add instance</h2><span class="info-tip" data-tip="Fill in the fields to add an IFS environment. Click Edit on an instance above to change its name, URL, token endpoint or client ID; leave the client secret empty to keep the saved one. The master password is needed to check the connection."></span></div>
       <form id="instanceForm" class="instance-form">
         <input id="instanceName" placeholder="Name" required />
         <input id="instanceBaseUrl" placeholder="https://ifs.example.com" required />
@@ -502,7 +503,7 @@
         <input id="instanceClientId" placeholder="Client ID" required />
         <input id="instanceClientSecret" placeholder="Client secret" type="password" required />
         <div class="search-row"><input id="masterPassword" placeholder="Master password" type="password" required /><span class="info-tip" data-tip="Encrypts the saved IFS and GitHub secrets in this browser. You enter it once per browser session (Unlock at the top) to use them; it is never stored."></span></div>
-        <button type="submit" class="btn-primary">Add instance</button>
+        <div class="search-row"><button type="submit" class="btn-primary">Add instance</button><button type="button" id="instanceCancelEdit" class="btn-ghost" hidden>Cancel</button></div>
       </form>
       <hr class="section-divider" />
       <div class="section-head"><h2>GitHub (Quick Reports)</h2><span class="info-tip" data-tip="Quick Reports and Custom LUs are saved as files in this repo, each user in their own folder. The token needs read and write access to the repo's contents and is encrypted with your master password."></span></div>

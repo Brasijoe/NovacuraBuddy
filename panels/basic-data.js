@@ -29,6 +29,13 @@ async function refreshInstances() {
     };
     li.appendChild(testBtn);
 
+    const editBtn = document.createElement("button");
+    editBtn.textContent = "Edit";
+    editBtn.className = "btn-ghost";
+    editBtn.title = "Change name, URL, token endpoint, client ID or secret";
+    editBtn.onclick = (e) => { e.stopPropagation(); startEditInstance(instance); };
+    li.appendChild(editBtn);
+
     const renameBtn = document.createElement("button");
     renameBtn.textContent = "Rename";
     renameBtn.className = "btn-ghost";
@@ -84,6 +91,37 @@ async function refreshInstances() {
   updateCurrentInstanceLabel();
 }
 
+let editingBaseUrl = null;
+
+function setInstanceFormMode(instance) {
+  editingBaseUrl = instance ? instance.baseUrl : null;
+  const form = document.getElementById("instanceForm");
+  const secret = document.getElementById("instanceClientSecret");
+  document.getElementById("instanceFormTitle").textContent = instance ? `Edit instance: ${instance.name}` : "Add instance";
+  form.querySelector('button[type="submit"]').textContent = instance ? "Save changes" : "Add instance";
+  document.getElementById("instanceCancelEdit").hidden = !instance;
+  secret.required = !instance;
+  secret.placeholder = instance ? "Client secret (empty = keep saved)" : "Client secret";
+  form.classList.toggle("is-editing", !!instance);
+}
+
+function startEditInstance(instance) {
+  document.getElementById("instanceName").value = instance.name || "";
+  document.getElementById("instanceBaseUrl").value = instance.baseUrl;
+  document.getElementById("instanceTokenEndpoint").value = instance.tokenEndpoint || "";
+  document.getElementById("instanceClientId").value = instance.clientId || "";
+  document.getElementById("instanceClientSecret").value = "";
+  setInstanceFormMode(instance);
+  const form = document.getElementById("instanceForm");
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  document.getElementById("instanceName").focus();
+}
+
+document.getElementById("instanceCancelEdit").addEventListener("click", () => {
+  document.getElementById("instanceForm").reset();
+  setInstanceFormMode(null);
+});
+
 document.getElementById("instanceForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const baseUrl = document.getElementById("instanceBaseUrl").value;
@@ -106,8 +144,10 @@ document.getElementById("instanceForm").addEventListener("submit", async (e) => 
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   submitBtn.textContent = "Checking connection…";
+  const editing = editingBaseUrl;
   const response = await actionOrShowError({
-    type: "SAVE_INSTANCE",
+    type: editing ? "UPDATE_INSTANCE" : "SAVE_INSTANCE",
+    oldBaseUrl: editing,
     baseUrl,
     masterPassword: document.getElementById("masterPassword").value,
     fields: {
@@ -119,10 +159,12 @@ document.getElementById("instanceForm").addEventListener("submit", async (e) => 
     }
   });
   submitBtn.disabled = false;
-  submitBtn.textContent = "Add instance";
+  submitBtn.textContent = editing ? "Save changes" : "Add instance";
   if (!response) return;
-  showNotice("Connection OK — IFS accepted the credentials. Instance saved.");
+  showNotice(editing ? "Connection OK — changes saved." : "Connection OK — IFS accepted the credentials. Instance saved.");
+  if (editing && currentBaseUrl === editing) currentBaseUrl = new URL(baseUrl).origin;
   e.target.reset();
+  setInstanceFormMode(null);
   refreshInstances();
 });
 
