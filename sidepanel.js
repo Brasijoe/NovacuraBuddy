@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "classic-migration", "step-recorder", "module-compare", "linked-flows", "commit-chain", "permission-check", "event-triggers", "permission-sets", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "classic-migration", "step-recorder", "module-compare", "linked-flows", "commit-chain", "flow-analysis", "permission-check", "event-triggers", "permission-sets", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -27,6 +27,7 @@ function showTab(name) {
   if (name === "module-compare") mcOnShow();
   if (name === "step-recorder") srOnShow(); else if (typeof srOnHide === "function") srOnHide();
   if (name === "commit-chain") ccOnShow();
+  if (name === "flow-analysis") faOnShow();
   if (name === "classic-migration") cmOnShow();
   if (name === "event-triggers") etOnShow();
 }
@@ -128,7 +129,7 @@ initFlowTransferPanel();
 initLinkedFlowsPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshQruState(); refreshCommitChainState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshQruState(); refreshCommitChainState(); refreshFlowAnalysisState(); }, 5000);
 
 
 // Connector labels in the Flow Designer on/off (content/designer.js reads the same setting).

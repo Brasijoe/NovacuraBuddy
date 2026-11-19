@@ -925,3 +925,40 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 
 .topbar-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-size: 12px; color: var(--ink-muted); cursor: pointer; white-space: nowrap; }
 .combo + .list-search, .combo + .checklist { margin-top: 8px; }
+
+/* Flow Analysis tab */
+.fa-ctx { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.fa-ctx dt { color: var(--ink-muted); }
+.fa-ctx dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.fa-check { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.fa-title { font-size: 15px; margin: 0; }
+.fa-summary { margin: 0; font-size: 12px; color: var(--ink-muted); }
+.fa-asset { border: 1px solid var(--surface-raised); border-left: 3px solid var(--accent-orange); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fa-asset-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fa-asset-name { font-size: 13px; overflow-wrap: anywhere; }
+.fa-caret { width: 12px; color: var(--ink-muted); }
+.fa-kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-raised); color: var(--ink-muted); }
+.fa-count { font-size: 12px; color: var(--ink-muted); margin-left: auto; }
+.fa-asset-versions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--ink-muted); }
+.fa-initials { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: var(--accent-soft); color: #0a3a8a; font-size: 10px; font-weight: 700; }
+.fa-asset-body { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid var(--surface-raised); }
+.fa-sub { margin: 0; font-size: 12px; }
+.fa-step { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: rgba(127, 140, 160, 0.08); min-width: 0; }
+.fa-step-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.fa-tag { font-size: 11px; margin-left: auto; color: var(--ink-muted); }
+.fa-tag-added { color: var(--accent-green); }
+.fa-tag-removed { color: var(--accent-red); }
+.fa-change { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fa-path { font-weight: 600; font-size: 12px; overflow-wrap: anywhere; }
+.fa-values { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; }
+.fa-values code, .fa-code { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
+.fa-values code { overflow-wrap: anywhere; padding: 1px 5px; border-radius: 4px; }
+.fa-before { background: rgba(255, 51, 51, 0.14); }
+.fa-after { background: rgba(31, 157, 85, 0.16); }
+.fa-code { border: 1px solid var(--surface-raised); border-radius: 6px; overflow-x: auto; background: var(--surface); }
+.fa-line { display: flex; gap: 6px; white-space: pre; padding: 0 6px; min-width: max-content; }
+.fa-sign { width: 10px; flex: none; color: var(--ink-muted); }
+.fa-add { background: rgba(31, 157, 85, 0.16); }
+.fa-del { background: rgba(255, 51, 51, 0.14); }
+.fa-skip { padding: 2px 6px; font-style: italic; color: var(--ink-muted); }
+.fa-manual { display: flex; flex-direction: column; gap: 6px; }

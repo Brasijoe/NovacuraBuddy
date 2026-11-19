@@ -61,6 +61,7 @@
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
           <div class="tab-menu-row"><button id="tab-event-triggers" class="tab-item" role="tab">Event Triggers</button><span class="info-tip" data-tip="Triggers a Flow automation from an IFS event. Pick an automation with an active webhook, the IFS instance and an event; the tab then creates the routing address (pointing at the automation), the routing rule (application message, the event as message function, the queue) and the event action in IFS. Nothing is created before you confirm the preview, existing objects are reused and nothing is ever deleted."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
+          <div class="tab-menu-row"><button id="tab-flow-analysis" class="tab-item" role="tab">Flow Analysis <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Shows what changed in the open flow, and in everything it uses, since the version deployed on an environment (Test, Prod…): changed assets with their versions, changed steps, and field by field what differs, with a line diff for scripts. Read-only."></span></div>
           <div class="tab-menu-row"><button id="tab-commit-chain" class="tab-item" role="tab">Commit Dependencies</button><span class="info-tip" data-tip="Commits the open flow and everything it uses, bottom to top: modules and sub-flows first, then the flows that use them, each pointing at the new versions below. You see what needs a commit first and can undo every commit. Optionally deploys afterwards."></span></div>
         </div>
       </div>
@@ -502,6 +503,30 @@
       <div id="ccRoot" class="lf-work"></div>
     </section>
 
+    <section id="panel-flow-analysis" role="tabpanel" hidden>
+      <div class="cm-toolbar">
+        <span id="faSessionHint" class="api-hint" hidden></span>
+        <button id="faRefreshBtn" class="btn-ghost" title="Read the open flow and its assets again">&#8635; Refresh</button>
+      </div>
+      <div class="cm-card">
+        <div class="section-head"><h2>1. Open flow</h2><span class="info-tip" data-tip="The flow open in the Flow Designer tab, with the organisation and package. Together with every asset it uses (modules, components, sub-flows, at any depth) it is what gets compared."></span></div>
+        <dl id="faContext" class="fa-ctx" hidden>
+          <dt>Organisation</dt><dd id="faOrg"></dd>
+          <dt>Flow</dt><dd id="faFlow"></dd>
+          <dt>Package</dt><dd id="faPackage"></dd>
+        </dl>
+        <p id="faOpenHint" class="api-hint">Open an app, page or automation in the Flow Designer.</p>
+      </div>
+      <div class="cm-card" id="faEnvCard">
+        <div class="section-head"><h2>2. Compare with</h2><span class="info-tip" data-tip="The environment whose deployed version the open flow is compared with. Only reads: the deployed version, the versions of everything it uses, and their content. Nothing is changed or deployed."></span></div>
+        <label class="cm-field">Environment <select id="faEnv" disabled></select></label>
+        <label class="fa-check"><input type="checkbox" id="faIgnoreSys" checked /> Ignore _SYS packages <span class="info-tip" data-tip="Leaves out assets of packages whose name starts with _SYS (system packages)."></span></label>
+        <p id="faEnvNote" class="api-hint" hidden></p>
+        <button id="faCompareBtn" class="btn-primary" disabled>Compare with deployed version</button>
+      </div>
+      <div class="cm-card" id="faResult" hidden></div>
+    </section>
+
     <section id="panel-basic-data" role="tabpanel" hidden>
       <div class="section-head"><h2>IFS instances</h2><span class="info-tip" data-tip="The IFS environments Novacura Buddy works with. Click one to select it for the Projection Tracker tab; Test asks IFS for a fresh token. Client secrets are encrypted with your master password and stay in this browser."></span></div>
       <ul id="instanceList" class="instance-list"></ul>
@@ -571,6 +596,8 @@
     <script src="panels/classic-migration.js"></script>
     <script src="panels/linked-flows.js"></script>
     <script src="panels/commit-chain.js"></script>
+    <script src="lib/flow-analysis.js"></script>
+    <script src="panels/flow-analysis.js"></script>
     <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
     <script src="panels/permission-check.js"></script>

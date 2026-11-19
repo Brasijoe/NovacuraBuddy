@@ -16,6 +16,7 @@ importScripts(
   "lib/flow-step-sql.js",
   "lib/flow-commit-chain.js",
   "lib/flow-environments.js",
+  "lib/flow-analysis.js",
   "lib/flow-token.js",
   "lib/ifs-client.js",
   "lib/ifs-permissions.js",
@@ -945,6 +946,52 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "CC_PLAN": { // the tree of flows that use the open asset, bottom to top (read-only)
           const onProgress = (current, total, name) => chrome.runtime.sendMessage({ type: "CC_PROGRESS", orgId: message.orgId, current, total, name }).catch(() => {});
           return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log, onProgress }) });
+        }
+        // Flow Analysis (read-only): the open flow against the version deployed on an environment.
+        case "FA_ROOT": { // the open flow, the assets it uses (any depth) and the organisation's environments
+          const flowFetch = boundFlowFetch();
+          const designer = await FlowDesignerTab.getDesignerData({ flowFetch, orgId: message.orgId, itemId: message.itemId });
+          const scanResult = await linkScan(message.orgId);
+          const index = new Map(scanResult.assets.map((a) => [a.id, a]));
+          let packageId = null;
+          try { packageId = await FlowDesignerTab.resolvePackageId({ flowFetch, orgId: message.orgId, itemId: message.itemId }); } catch { /* global item */ }
+          let product = null;
+          if (packageId) {
+            const res = await flowFetch(`/admin/application/api/v2/organisations/${message.orgId}/packages/${packageId}/products/${message.itemId}`).catch(() => null);
+            product = res && res.ok ? await res.json().catch(() => null) : null;
+          }
+          const known = index.get(message.itemId) || {};
+          const pkg = (scanResult.packages || []).find((p) => p.id === packageId);
+          const assets = (designer.assets || []).map((r) => { const a = index.get(r.assetId) || {}; return { assetId: r.assetId, assetVersion: r.assetVersion, usedIndirectly: !!r.usedIndirectly, name: a.name || r.assetId, type: a.type || "", packageName: a.packageName || "" }; });
+          const environments = await FlowEnvironments.listEnvironments({ flowFetch, orgId: message.orgId });
+          const names = Object.fromEntries(scanResult.assets.map((a) => [a.id, { name: a.name, type: a.type }]));
+          return sendResponse({ ok: true, root: {
+            id: message.itemId, name: (product && product.name) || known.name || "", type: (product && product.type) || known.type || "", packageId, packageName: pkg ? pkg.name : "",
+            headVersionId: (product && product.mainBranch && product.mainBranch.headVersionId) || (known.mainBranch && known.mainBranch.headVersionId) || null
+          }, assets, environments: environments.filter((e) => e.type !== "dev"), names });
+        }
+        case "FA_DEPLOYED": { // the version of the flow deployed on one environment, and what it uses
+          const r = await FlowAnalysis.readDeployed({ flowFetch: boundFlowFetch(), orgId: message.orgId, packageId: message.packageId, productId: message.itemId, env: message.env, versionOverride: message.versionId || null });
+          return sendResponse({ ok: true, versionId: r.versionId, assets: r.assets, tried: r.tried });
+        }
+        case "FA_ASSET": { // one asset at two versions: its changed steps (flow, component) or code (module)
+          const flowFetch = boundFlowFetch();
+          const { orgId, assetId, fromVersion, toVersion, headVersionId, assetType: type } = message;
+          const out = { assetId, fromVersion, toVersion, steps: [], arrows: 0, root: [], code: null, tried: [] };
+          const infos = await FlowAnalysis.readVersionInfos({ flowFetch, orgId, itemId: assetId, versionIds: [fromVersion, toVersion].filter(Boolean) }).catch(() => ({}));
+          out.info = infos;
+          if (type === "module") {
+            const [a, b] = await Promise.all([fromVersion ? FlowAnalysis.readModuleCode({ flowFetch, orgId, itemId: assetId, versionId: fromVersion }) : "", toVersion ? FlowAnalysis.readModuleCode({ flowFetch, orgId, itemId: assetId, versionId: toVersion }) : ""]);
+            out.code = a === b ? [] : FlowAnalysis.collapsedDiff(a, b);
+            return sendResponse({ ok: true, result: out });
+          }
+          const [a, b] = await Promise.all([
+            fromVersion ? FlowAnalysis.readVersionDesigner({ flowFetch, orgId, itemId: assetId, versionId: fromVersion, headVersionId, tried: out.tried }) : null,
+            toVersion ? FlowAnalysis.readVersionDesigner({ flowFetch, orgId, itemId: assetId, versionId: toVersion, headVersionId, tried: out.tried }) : null
+          ]);
+          if ((fromVersion && !a) || (toVersion && !b)) { out.unreadable = true; return sendResponse({ ok: true, result: out }); }
+          Object.assign(out, FlowAnalysis.diffDesigners(a, b));
+          return sendResponse({ ok: true, result: out });
         }
         case "CC_SHAPE": { // read-only: how a designer item stores its content (key names, sizes, step types; no content)
           const d = await FlowDesignerTab.getDesignerData({ flowFetch: boundFlowFetch(), orgId: message.orgId, itemId: message.itemId });
