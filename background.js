@@ -660,6 +660,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           });
           return sendResponse({ ok: true });
         }
+        case "UPDATE_INSTANCE": {
+          const origin = new URL(message.baseUrl).origin + "/*";
+          if (!(await chrome.permissions.contains({ origins: [origin] }))) return sendResponse({ ok: false, error: `Permission for ${origin} was not granted — tracking for this instance won't work.` });
+          await instanceStore.updateInstance(message.oldBaseUrl, message.baseUrl, message.fields, await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword)));
+          return sendResponse({ ok: true });
+        }
         case "TEST_INSTANCE": {
           const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(message.masterPassword));
           instanceStore.clearIfsAuthToken(message.baseUrl); // always a real round-trip, never the cache

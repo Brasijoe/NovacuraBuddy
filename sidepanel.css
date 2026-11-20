@@ -222,6 +222,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { border-color
 
 .instance-form { display: flex; flex-direction: column; gap: var(--space-2); }
 .instance-form button[type="submit"] { align-self: flex-start; }
+.instance-form.is-editing { border: 1px solid var(--accent); border-radius: var(--radius-md); padding: var(--space-2); }
 
 /* ---------- search ---------- */
 .search-row { display: flex; gap: var(--space-2); }
@@ -962,3 +963,7 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .fa-del { background: rgba(255, 51, 51, 0.14); }
 .fa-skip { padding: 2px 6px; font-style: italic; color: var(--ink-muted); }
 .fa-manual { display: flex; flex-direction: column; gap: 6px; }
+.qr-ifs-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.qr-ifs-links:empty { display: none; }
+.qr-ifs-link { font-size: 12px; color: var(--accent, #0c65f4); text-decoration: none; }
+.qr-ifs-link:hover { text-decoration: underline; }
