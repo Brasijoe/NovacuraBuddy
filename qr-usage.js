@@ -70,6 +70,14 @@ function renderTable() {
       li.append(a, pkg);
       flows.append(li);
     }
+    if (sel.baseUrl) {
+      const url = IfsLinks.ifsObjectUrl(sel.baseUrl, "quickReport", { quickReportId: r.id });
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = " Open in IFS ↗"; a.className = "qu-ifs-link";
+        name.append(a);
+      }
+    }
     const cells = [r.functionName, r.id].map((t) => { const td = document.createElement("td"); td.textContent = t; return td; });
     const flowCell = document.createElement("td");
     flowCell.append(flows);
