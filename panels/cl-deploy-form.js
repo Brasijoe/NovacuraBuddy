@@ -19,7 +19,7 @@ function renderClDeployForm(container, getLus, { send, onError, onClose, moduleF
     flowPropertiesBox = document.createElement("input");
     flowPropertiesBox.type = "checkbox";
     label.append(flowPropertiesBox, " Create FlowProperties Asset");
-    label.title = "After the deploy, add the readable Set of every deployed LU to one org-level Flow module named FlowProperties.";
+    label.title = "After the deploy, add the readable Set of every deployed LU, with its create, update and delete functions, to one org-level Flow module named FlowProperties.";
     actions.appendChild(label);
   }
   if (onClose) {
