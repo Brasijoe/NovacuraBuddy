@@ -38,6 +38,7 @@ importScripts(
   "lib/event-triggers.js",
   "lib/flow-documentation.js",
   "lib/permission-check.js",
+  "lib/entity-check.js",
   "lib/permission-set-compare.js",
   "lib/module-compare.js",
   "lib/qr-usage.js",
@@ -1175,6 +1176,52 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const packageId = await resolvePackageIdFor(tab);
           const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
           return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
+        }
+        // Entity Check: which IFS projections a flow / package / organisation uses and whether IFS has them enabled.
+        case "EC_SCAN_CURRENT": { // the open flow and everything it uses; read-only
+          const tab = captureDesignerTab();
+          const packageId = await resolvePackageIdFor(tab);
+          const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
+          const flowName = pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : "Open flow";
+          const usage = new Map();
+          for (const a of Object.values(pkg.assets || {})) EntityCheck.addUsage(usage, FlowDocumentation.projectionNamesIn(a), a.name);
+          return sendResponse({ ok: true, flowName, usage: [...usage].map(([projection, where]) => ({ projection, where: [...where] })) });
+        }
+        case "EC_ASSETS": { // the assets of a package (and the App Library), or of the whole organisation
+          const flowFetch = boundFlowFetch();
+          const locations = [{ id: null, name: "App Library" }];
+          const packages = await FlowTransfer.listPackages({ flowFetch, orgId: message.orgId });
+          for (const p of packages) if (!message.packageId || p.id === message.packageId) locations.push({ id: p.id, name: p.name });
+          const assets = [];
+          for (const loc of locations) {
+            try {
+              for (const a of await FlowModules.listAssets({ flowFetch, orgId: message.orgId, packageId: loc.id })) assets.push({ id: a.id, name: a.name, type: a.type, packageName: loc.name, versionId: a.mainBranch ? a.mainBranch.headVersionId : null });
+            } catch (e) { log("EC_ASSETS: could not list", loc.name, e.message); }
+          }
+          return sendResponse({ ok: true, assets });
+        }
+        case "EC_ASSET": { // the projections one module or flow refers to; read-only
+          const flowFetch = boundFlowFetch();
+          let text;
+          if (message.assetType === "module") text = await FlowTransfer.readModuleSource({ flowFetch, orgId: message.orgId, assetId: message.assetId, versionId: message.versionId });
+          else text = ModuleCompare.flowText(await FlowDesignerTab.getDesignerData({ flowFetch, orgId: message.orgId, itemId: message.assetId }));
+          return sendResponse({ ok: true, names: EntityCheck.namesInText(text) });
+        }
+        case "EC_STATUS": { // the IFS state (Active) of the given projections; read-only
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, meta: await EntityCheck.readMeta(client, message.names || []) });
+        }
+        case "EC_SET": { // user-clicked per projection: switches Active in IFS (write, experimental), read back
+          if (!message.projection) return sendResponse({ ok: false, error: "No projection given." });
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          log("EC_SET:", message.projection, "->", !!message.active, "on", message.baseUrl);
+          const row = await EntityCheck.setActive(client, message.projection, !!message.active);
+          const grants = []; // enabling also grants the projection to the ticked permission sets
+          if (message.active) for (const role of message.roles || []) {
+            try { await IfsPermissions.grantProjection(client, message.projection, role); grants.push({ role, ok: true }); }
+            catch (e) { grants.push({ role, ok: false, error: e.message }); }
+          }
+          return sendResponse({ ok: true, row, grants });
         }
         case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
           const tab = captureDesignerTab();
