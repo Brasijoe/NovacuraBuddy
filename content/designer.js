@@ -805,7 +805,40 @@ function pinRead() {
   };
 }
 
+function pinFlowId() { const m = MC_DESIGNER_URL_RE.exec(location.pathname); return m ? m[2] : location.pathname; }
+
+const pinWait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Applies the step window that is open (the Designer's own Apply/OK button, as a click), then opens
+ *  the step named `title` by clicking it on the canvas. Nothing is saved to the flow by Buddy itself. */
+async function pinReopen(title) {
+  const win = ptDialogs().pop();
+  if (win) {
+    const btn = [...win.querySelectorAll("button")].find((b) => /^\s*(apply|ok|done|übernehmen)\s*$/i.test(b.textContent) && !b.disabled);
+    if (!btn) return { ok: false, error: "The open step has no Apply button Buddy can find; it was left open." };
+    btn.click();
+    for (let i = 0; i < 20 && ptDialogs().length; i++) await pinWait(150);
+  }
+  dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
+  await pinWait(300);
+  if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
+  const want = mcNorm(title).replace(/\s+/g, "");
+  const hit = mcCanvasNames().filter((t) => { const n = mcNorm(t.name).replace(/\s+/g, "").replace(/(…|\.\.\.)$/, ""); return n.length >= 3 && want.includes(n); })
+    .sort((a, b) => b.name.length - a.name.length)[0];
+  if (!hit) return { ok: false, error: `Step "${title}" is not on screen in the Designer. Scroll it into view and try again.` };
+  const r = mcCardRect(hit);
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const el = document.elementFromPoint(x, y);
+  if (!el) return { ok: false, error: "Could not reach the step on the canvas." };
+  const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
+  const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
+  for (let n = 1; n <= 2; n++) { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); }
+  fire("dblclick", { detail: 2 });
+  return { ok: true };
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== "PIN_READ") return;
-  try { sendResponse({ ok: true, step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
+  if (!message || (message.type !== "PIN_READ" && message.type !== "PIN_REOPEN")) return;
+  if (message.type === "PIN_REOPEN") { pinReopen(message.title).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message })); return true; }
+  try { sendResponse({ ok: true, flow: pinFlowId(), step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
 });
