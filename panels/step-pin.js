@@ -72,14 +72,6 @@ function initStepPinPanel() {
     if (st) { sp.on = st.on !== false; sp.size = st.size || 12; sp.pins = st.pins || []; }
     spRender();
   });
-  document.getElementById("spDumpBtn").addEventListener("click", async (e) => {
-    const b = e.currentTarget, old = b.textContent;
-    const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/*" });
-    const tab = tabs.find((t) => t.active) || tabs[0];
-    const res = tab ? await chrome.tabs.sendMessage(tab.id, { type: "PIN_DUMP" }).catch(() => null) : null;
-    try { await navigator.clipboard.writeText(res && res.text ? res.text : "No step window found."); b.textContent = res && res.text ? "Copied" : "No window"; } catch { b.textContent = "Copy failed"; }
-    setTimeout(() => { b.textContent = old; }, 2000);
-  });
   document.getElementById("spOn").addEventListener("change", (e) => { sp.on = e.target.checked; spSave(); spRender(); spPoll(); });
   document.getElementById("spSize").addEventListener("input", (e) => { sp.size = +e.target.value; spSave(); spRender(); });
   document.getElementById("spPinBtn").addEventListener("click", async () => {

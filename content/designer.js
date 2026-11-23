@@ -861,56 +861,7 @@ async function pinReopen(title) {
   return { ok: false, error: got === null ? `Selected "${title}" in the Designer, but its window did not open. Press Enter on the canvas.` : `Opened a different step ("${got}") instead of "${title}".` };
 }
 
-/** Without a step window: the Designer's bottom toolbar, every visible text input and the open overlays (search box and results),
- *  to find out how the step search works. Read-only. */
-function pinDumpPage() {
-  const lines = [];
-  const outline = (el, depth, budget) => {
-    if (lines.length >= budget || depth > 10) return;
-    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).filter(Boolean).join(" ").slice(0, 60);
-    const attrs = ["id", "role", "aria-label", "placeholder", "type", "title", "src"].filter((a) => el.getAttribute(a)).map((a) => `${a}="${el.getAttribute(a).slice(0, 50)}"`).join(" ");
-    const val = "value" in el && el.value ? ` value="${String(el.value).slice(0, 40)}"` : "";
-    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
-    lines.push(`${"  ".repeat(depth)}${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${attrs}${val} ${own}`.trimEnd());
-    for (const c of el.children) outline(c, depth + 1, budget);
-  };
-  const vis = (el) => { const r = el.getBoundingClientRect(); const c = getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
-  lines.push("== BOTTOM TOOLBAR (visible buttons/inputs in the lowest 140px) ==");
-  for (const el of document.querySelectorAll("button, input, [role=button], [role=textbox], [role=search]")) {
-    if (!vis(el) || (mc.host && mc.host.contains(el))) continue;
-    const r = el.getBoundingClientRect();
-    if (r.top < innerHeight - 140) continue;
-    const img = el.querySelector("img, svg, [style*='.svg']");
-    lines.push(`${el.tagName.toLowerCase()}.${(typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 3).join(".") : "")} aria-label="${el.getAttribute("aria-label") || ""}" title="${el.getAttribute("title") || ""}" placeholder="${el.getAttribute("placeholder") || ""}" text="${el.textContent.trim().slice(0, 40)}" img="${img ? (img.getAttribute("src") || img.getAttribute("style") || "svg").slice(0, 60) : ""}" at=${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`);
-  }
-  lines.push("== VISIBLE TEXT INPUTS ==");
-  for (const el of document.querySelectorAll("input, textarea, [contenteditable=true]")) if (vis(el) && !el.closest(".monaco-editor")) { const r = el.getBoundingClientRect(); lines.push(`${el.tagName.toLowerCase()} placeholder="${el.getAttribute("placeholder") || ""}" aria-label="${el.getAttribute("aria-label") || ""}" value="${(el.value || "").slice(0, 40)}" at=${Math.round(r.left)},${Math.round(r.top)}`); }
-  lines.push("== OVERLAYS ==");
-  for (const el of document.querySelectorAll(".cdk-overlay-container > *, .cdk-overlay-pane, [role=listbox], [role=menu], [role=dialog]")) if (vis(el) && !(mc.host && mc.host.contains(el))) outline(el, 0, 300);
-  return `URL: ${location.pathname}\n${lines.join("\n")}`;
-}
-
-/** A compact outline of the open step window (tags, classes, own text), for finding out how the Designer marks a step's name. Read-only. */
-function pinDump() {
-  const win = ptDialogs().pop();
-  if (!win) return pinDumpPage();
-  const lines = [];
-  const walk = (el, depth) => {
-    if (lines.length >= 400 || depth > 14) return;
-    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).filter(Boolean).join(" ").slice(0, 60);
-    const attrs = ["id", "role", "aria-label", "placeholder", "type", "title"].filter((a) => el.getAttribute(a)).map((a) => `${a}="${el.getAttribute(a).slice(0, 40)}"`).join(" ");
-    const val = "value" in el && el.value && !el.closest(".monaco-editor") ? ` value="${String(el.value).slice(0, 40)}"` : "";
-    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
-    lines.push(`${"  ".repeat(depth)}${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${attrs}${val} ${own}`.trimEnd());
-    for (const c of el.children) walk(c, depth + 1);
-  };
-  walk(win, 0);
-  const canvas = mc.canvas ? mc.canvas.texts.slice(0, 40).map((t) => t.text).join(" | ") : "(no canvas texts)";
-  return `URL: ${location.pathname}\nWINDOW:\n${lines.join("\n")}\nCANVAS TEXTS: ${canvas}`;
-}
-
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message && message.type === "PIN_DUMP") { sendResponse({ ok: true, text: pinDump() }); return; }
   if (!message || (message.type !== "PIN_READ" && message.type !== "PIN_REOPEN")) return;
   if (message.type === "PIN_REOPEN") { pinReopen(message.title).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message })); return true; }
   try { sendResponse({ ok: true, flow: pinFlowId(), step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
