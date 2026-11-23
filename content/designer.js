@@ -837,18 +837,26 @@ async function pinReopen(title, alt) {
   const box = mc.canvas.canvas;
   const inside = cands.filter((t) => t.left >= box.left && t.top >= box.top && t.left + t.width <= box.left + box.width && t.top + t.height <= box.top + box.height);
   const openTitle = () => { const w = ptDialogs().pop(); if (!w) return null; const h = w.querySelector('[aria-label="Edit title"]') || w.querySelector("h1, h2, h3"); return h ? mcNorm(h.textContent).replace(/\s+/g, "") : ""; };
-  const clickAt = (el, x, y) => {
+  // A real mouse arrives over the step before it presses: the Designer hit-tests from the pointer's last position (hover),
+  // so without moves it acts on the step it had last, not the one clicked. Move in first, then press.
+  const clickAt = async (el, x, y) => {
     const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
     const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
+    for (const [dx, dy] of [[-12, -6], [-6, -3], [0, 0]]) {
+      const mv = { clientX: x + dx, clientY: y + dy, buttons: 0 };
+      fire("pointerover", mv); fire("mouseover", mv); fire("pointermove", mv); fire("mousemove", mv);
+      await pinWait(40);
+    }
+    await pinWait(120);
     const click = (n) => { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); };
-    click(1); click(2); fire("dblclick", { detail: 2 });
+    click(1); await pinWait(80); click(2); fire("dblclick", { detail: 2 });
   };
   const tried = [];
   for (const t of inside.length ? inside : cands) {
     const x = t.left + t.width / 2, y = t.top + t.height / 2; // the drawn name itself, not a guessed card
     const el = document.elementFromPoint(x, y);
     if (!el || el.tagName !== "CANVAS") { tried.push("covered"); continue; }
-    clickAt(el, x, y);
+    await clickAt(el, x, y);
     let got = null;
     for (let i = 0; i < 12 && got === null; i++) { await pinWait(100); got = openTitle(); }
     if (got === want) return { ok: true, clicked: t.name };
