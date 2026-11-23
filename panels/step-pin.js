@@ -42,6 +42,7 @@ function spRender() {
   document.getElementById("spPanel").classList.toggle("is-off", !sp.on);
   const list = document.getElementById("spList");
   list.hidden = !sp.on;
+  document.getElementById("spUnpinAll").hidden = !sp.on || !spPins().length;
   document.getElementById("spOffNote").hidden = sp.on;
   list.innerHTML = "";
   const pins = spPins();
@@ -76,6 +77,7 @@ function initStepPinPanel() {
     while (spPins().length > SP_MAX) sp.pins.splice(sp.pins.lastIndexOf(spPins().pop()), 1);
     await spSave(); spRender();
   });
+  document.getElementById("spUnpinAll").addEventListener("click", async () => { sp.pins = sp.pins.filter((p) => p.flow !== sp.flow); await spSave(); spRender(); });
   document.getElementById("spList").addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;

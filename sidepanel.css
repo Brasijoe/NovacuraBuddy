@@ -990,3 +990,5 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 #spPanel.is-off #spPinBtn { opacity: .5; }
 .sp-pin h2 { text-transform: none; font-size: 13px; }
 .sp-pin h2::after { content: ""; }
+.sp-listhead { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.sp-listhead[hidden], #spUnpinAll[hidden] { display: none; }
