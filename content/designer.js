@@ -823,6 +823,7 @@ async function pinReopen(title, alt) {
     for (let i = 0; i < 20 && ptDialogs().length; i++) await pinWait(150);
     await pinWait(450); // let the window's closing animation and backdrop finish before clicking the canvas
   }
+  if (ptDialogs().length) return { ok: false, error: "A step window is still open (Apply may be blocked by an error in the step). Close it and try again." };
   dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
   await pinWait(500);
   if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
