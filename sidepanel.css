@@ -979,3 +979,14 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .ec-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ec-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin-top: -2px; border: 1px dashed var(--accent); border-radius: 8px; font-size: 12px; }
 .ec-filter.is-active { background: var(--accent-soft); color: var(--accent); }
+
+/* Pin step */
+.sp-pin .sp-actions { display: flex; gap: 6px; }
+.sp-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; margin-top: 4px; }
+.sp-code { margin: 0; padding: 8px; max-height: 360px; overflow: auto; white-space: pre; font-family: ui-monospace, Consolas, monospace; background: var(--surface-raised); border-radius: 6px; user-select: text; }
+.sp-fields { display: grid; grid-template-columns: minmax(70px, 35%) 1fr; gap: 4px 8px; margin: 0; }
+.sp-fields dt { color: #6b7280; overflow-wrap: anywhere; }
+.sp-fields dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
+#spPanel.is-off #spPinBtn { opacity: .5; }
+.sp-pin h2 { text-transform: none; font-size: 13px; }
+.sp-pin h2::after { content: ""; }

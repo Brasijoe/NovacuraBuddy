@@ -745,3 +745,67 @@ function ptRender() {
 }
 
 setInterval(() => { try { ptRender(); } catch { /* never disturb the Designer */ } }, 700);
+
+
+// --- Pin step -------------------------------------------------------------------------------
+// The side panel's "Pin step" tab asks for what the step window open in the Designer shows: title,
+// code editors (full text) and the visible fields. The panel shows it as its own copy; the Designer
+// is only read, never changed. (A live clone of the page's markup cannot cross into the side panel:
+// it is another document without the Designer's styles, and the code editors draw only visible lines.)
+function pinLabelFor(el, win) {
+  const aria = el.getAttribute("aria-label") || el.getAttribute("placeholder");
+  if (el.id) { const l = win.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l && l.textContent.trim()) return l.textContent.trim().slice(0, 80); }
+  const wrap = el.closest("label");
+  if (wrap) { const t = wrap.textContent.replace(el.value || "", "").trim(); if (t) return t.slice(0, 80); }
+  let node = el;
+  for (let depth = 0; node && node !== win && depth < 4; depth++, node = node.parentElement) {
+    let prev = node.previousElementSibling;
+    while (prev) {
+      const t = prev.textContent.trim();
+      if (t && t.length <= 80 && !prev.querySelector("input,textarea,select,.monaco-editor")) return t;
+      if (prev.querySelector("input,textarea,select,.monaco-editor")) break;
+      prev = prev.previousElementSibling;
+    }
+  }
+  return (aria || "").trim().slice(0, 80);
+}
+
+function pinRead() {
+  const wins = ptDialogs();
+  const win = wins[wins.length - 1];
+  if (!win) return null;
+  dispatchEvent(new CustomEvent("novacura-buddy-code-ask"));
+  const heading = win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
+  const editors = [];
+  for (const e of ptEditors) {
+    const dom = win.querySelector(`[data-nb-ed="${e.idx}"]`);
+    if (!dom || !e.text.trim()) continue;
+    editors.push({ label: pinLabelFor(dom, win), language: e.language, text: e.text });
+  }
+  const fields = [];
+  for (const el of win.querySelectorAll("input, textarea, select, app-single-line-code-input")) {
+    if (el.closest(".monaco-editor") || (el.type && ["password", "hidden", "file"].includes(el.type))) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    let value;
+    if (el.type === "checkbox" || el.type === "radio") value = el.checked ? "yes" : "no";
+    else if (el.tagName === "SELECT") value = el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : "";
+    else if (el.tagName === "APP-SINGLE-LINE-CODE-INPUT") value = el.textContent.replace(/\u00a0/g, " ").trim();
+    else value = el.value;
+    if (value === "" || value == null) continue;
+    fields.push({ label: pinLabelFor(el, win), value: String(value).slice(0, 5000) });
+  }
+  return {
+    title: heading ? heading.textContent.trim().slice(0, 120) : "",
+    page: document.title,
+    url: location.href,
+    editors, fields,
+    text: (win.innerText || "").trim().slice(0, 20000),
+    at: Date.now()
+  };
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!message || message.type !== "PIN_READ") return;
+  try { sendResponse({ ok: true, step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
+});
