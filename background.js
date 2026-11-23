@@ -1175,7 +1175,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
           const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
-          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
+          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
         }
         // Entity Check: which IFS projections a flow / package / organisation uses and whether IFS has them enabled.
         case "EC_SCAN_CURRENT": { // the open flow and everything it uses; read-only
