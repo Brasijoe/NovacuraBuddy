@@ -775,7 +775,7 @@ function pinRead() {
   const win = wins[wins.length - 1];
   if (!win) return null;
   dispatchEvent(new CustomEvent("novacura-buddy-code-ask"));
-  const heading = win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
+  const heading = win.querySelector('[aria-label="Edit title"]') || win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
   const editors = [];
   for (const e of ptEditors) {
     const dom = win.querySelector(`[data-nb-ed="${e.idx}"]`);
@@ -826,27 +826,41 @@ async function pinReopen(title, alt) {
   dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
   await pinWait(500);
   if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
-  // Exact name only (a name the canvas cuts short with "…" counts as a prefix): a fuzzy match opened other steps.
   const want = mcNorm(title).replace(/\s+/g, "");
   const norm = (t) => mcNorm(t.name).replace(/\s+/g, "");
-  const names = mcCanvasNames();
-  const hit = names.find((t) => norm(t) === want)
-    || names.find((t) => { const n = norm(t); const cut = n.replace(/(…|\.\.\.)$/, ""); return cut !== n && cut.length >= 4 && want.startsWith(cut); });
-  if (!hit) return { ok: false, error: `Step "${title}" is not on screen in the Designer. Scroll it into view and try again.` };
-  const r = mcCardRect(hit);
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  const el = document.elementFromPoint(x, y);
-  if (!el) return { ok: false, error: "Could not reach the step on the canvas." };
-  const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
-  const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
-  const click = (n) => { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); };
-  const opened = async (ms) => { for (let i = 0; i < ms / 100; i++) { if (ptDialogs().length) return true; await pinWait(100); } return false; };
-  // Attempt 1: a quick double click. Attempt 2: select first, then double click after a pause (as a user does).
-  click(1); click(2); fire("dblclick", { detail: 2 });
-  if (await opened(1000)) return { ok: true, clicked: hit.name };
-  click(1); await pinWait(300); click(1); click(2); fire("dblclick", { detail: 2 });
-  if (await opened(1200)) return { ok: true, clicked: hit.name };
-  return { ok: false, error: `Selected "${hit.name}" on the canvas (element ${el.tagName.toLowerCase()}), but its window did not open. Double-click the step yourself once.` };
+  // Exact name only (a name the canvas cuts short with "…" counts as a prefix). The canvas can report a name at several
+  // positions (older redraws), so every position is tried in turn and the window that opens is checked by its title.
+  const cands = mcCanvasNames().filter((t) => norm(t) === want
+    || (() => { const n = norm(t); const cut = n.replace(/(…|\.\.\.)$/, ""); return cut !== n && cut.length >= 4 && want.startsWith(cut); })());
+  if (!cands.length) return { ok: false, error: `Step "${title}" is not on screen in the Designer. Scroll it into view and try again.` };
+  const box = mc.canvas.canvas;
+  const inside = cands.filter((t) => t.left >= box.left && t.top >= box.top && t.left + t.width <= box.left + box.width && t.top + t.height <= box.top + box.height);
+  const openTitle = () => { const w = ptDialogs().pop(); if (!w) return null; const h = w.querySelector('[aria-label="Edit title"]') || w.querySelector("h1, h2, h3"); return h ? mcNorm(h.textContent).replace(/\s+/g, "") : ""; };
+  const clickAt = (el, x, y) => {
+    const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
+    const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
+    const click = (n) => { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); };
+    click(1); click(2); fire("dblclick", { detail: 2 });
+  };
+  const tried = [];
+  for (const t of inside.length ? inside : cands) {
+    const x = t.left + t.width / 2, y = t.top + t.height / 2; // the drawn name itself, not a guessed card
+    const el = document.elementFromPoint(x, y);
+    if (!el || el.tagName !== "CANVAS") { tried.push("covered"); continue; }
+    clickAt(el, x, y);
+    let got = null;
+    for (let i = 0; i < 12 && got === null; i++) { await pinWait(100); got = openTitle(); }
+    if (got === want) return { ok: true, clicked: t.name };
+    tried.push(got === null ? "nothing opened" : `opened "${got}"`);
+    if (got !== null) { // the wrong step opened: close it without applying, then try the next position
+      const w = ptDialogs().pop();
+      const cancel = w && [...w.querySelectorAll("button")].find((b) => /^\s*(cancel|abbrechen)\s*$/i.test(b.textContent));
+      if (cancel) cancel.click();
+      for (let i = 0; i < 15 && ptDialogs().length; i++) await pinWait(150);
+      await pinWait(300);
+    }
+  }
+  return { ok: false, error: `Could not open "${title}" (${tried.join("; ")}). Double-click it yourself once.` };
 }
 
 /** A compact outline of the open step window (tags, classes, own text), for finding out how the Designer marks a step's name. Read-only. */
