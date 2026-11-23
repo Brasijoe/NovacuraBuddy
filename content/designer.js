@@ -814,62 +814,45 @@ const pinWait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Applies the step window that is open (the Designer's own Apply/OK button, as a click), then opens
  *  the step named `title` by clicking it on the canvas. Nothing is saved to the flow by Buddy itself. */
-async function pinReopen(title, alt) {
+async function pinReopen(title) {
   const win = ptDialogs().pop();
   if (win) {
     const btn = [...win.querySelectorAll("button")].find((b) => /^\s*(apply|ok|done|übernehmen)\s*$/i.test(b.textContent) && !b.disabled);
     if (!btn) return { ok: false, error: "The open step has no Apply button Buddy can find; it was left open." };
     btn.click();
     for (let i = 0; i < 20 && ptDialogs().length; i++) await pinWait(150);
-    await pinWait(450); // let the window's closing animation and backdrop finish before clicking the canvas
+    await pinWait(300);
   }
   if (ptDialogs().length) return { ok: false, error: "A step window is still open (Apply may be blocked by an error in the step). Close it and try again." };
-  dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
-  await pinWait(500);
-  if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
+  // Position independent: use the Designer's own search (toolbar magnifier). Picking a result selects the step and pans the
+  // canvas to it wherever it is; Enter then opens the selected step's window.
   const want = mcNorm(title).replace(/\s+/g, "");
-  const norm = (t) => mcNorm(t.name).replace(/\s+/g, "");
-  // Exact name only (a name the canvas cuts short with "…" counts as a prefix). The canvas can report a name at several
-  // positions (older redraws), so every position is tried in turn and the window that opens is checked by its title.
-  const cands = mcCanvasNames().filter((t) => norm(t) === want
-    || (() => { const n = norm(t); const cut = n.replace(/(…|\.\.\.)$/, ""); return cut !== n && cut.length >= 4 && want.startsWith(cut); })());
-  if (!cands.length) return { ok: false, error: `Step "${title}" is not on screen in the Designer. Scroll it into view and try again.` };
-  const box = mc.canvas.canvas;
-  const inside = cands.filter((t) => t.left >= box.left && t.top >= box.top && t.left + t.width <= box.left + box.width && t.top + t.height <= box.top + box.height);
-  const openTitle = () => { const w = ptDialogs().pop(); if (!w) return null; const h = w.querySelector('[aria-label="Edit title"]') || w.querySelector("h1, h2, h3"); return h ? mcNorm(h.textContent).replace(/\s+/g, "") : ""; };
-  // A real mouse arrives over the step before it presses: the Designer hit-tests from the pointer's last position (hover),
-  // so without moves it acts on the step it had last, not the one clicked. Move in first, then press.
-  const clickAt = async (el, x, y) => {
-    const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
-    const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
-    for (const [dx, dy] of [[-12, -6], [-6, -3], [0, 0]]) {
-      const mv = { clientX: x + dx, clientY: y + dy, buttons: 0 };
-      fire("pointerover", mv); fire("mouseover", mv); fire("pointermove", mv); fire("mousemove", mv);
-      await pinWait(40);
-    }
-    await pinWait(120);
-    const click = (n) => { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); };
-    click(1); await pinWait(80); click(2); fire("dblclick", { detail: 2 });
-  };
-  const tried = [];
-  for (const t of inside.length ? inside : cands) {
-    const x = t.left + t.width / 2, y = t.top + t.height / 2; // the drawn name itself, not a guessed card
-    const el = document.elementFromPoint(x, y);
-    if (!el || el.tagName !== "CANVAS") { tried.push("covered"); continue; }
-    await clickAt(el, x, y);
-    let got = null;
-    for (let i = 0; i < 12 && got === null; i++) { await pinWait(100); got = openTitle(); }
-    if (got === want) return { ok: true, clicked: t.name };
-    tried.push(got === null ? "nothing opened" : `opened "${got}"`);
-    if (got !== null) { // the wrong step opened: close it without applying, then try the next position
-      const w = ptDialogs().pop();
-      const cancel = w && [...w.querySelectorAll("button")].find((b) => /^\s*(cancel|abbrechen)\s*$/i.test(b.textContent));
-      if (cancel) cancel.click();
-      for (let i = 0; i < 15 && ptDialogs().length; i++) await pinWait(150);
-      await pinWait(300);
-    }
+  const field = () => document.querySelector('app-search input[placeholder="Search"]');
+  if (!field()) {
+    const open = document.querySelector('button:has([aria-label="Search"])');
+    if (!open) return { ok: false, error: "The Designer's search button was not found." };
+    open.click();
+    for (let i = 0; i < 15 && !field(); i++) await pinWait(100);
   }
-  return { ok: false, error: `Could not open "${title}" (${tried.join("; ")}). Double-click it yourself once.` };
+  if (!field()) return { ok: false, error: "The Designer's search did not open." };
+  const input = field();
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, title);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  const rows = () => [...document.querySelectorAll("app-search-result button")];
+  const nameOf = (b) => { const sp = b.querySelector("span"); return sp ? mcNorm(sp.textContent).replace(/\s+/g, "") : ""; };
+  let hits = [];
+  for (let i = 0; i < 25; i++) { await pinWait(120); hits = rows().filter((b) => nameOf(b) === want); if (hits.length) break; }
+  if (!hits.length) return { ok: false, error: `The Designer's search found no step named "${title}".` };
+  // A step shows up once as a name match (one line) and again for text inside it (a second line): take the name match.
+  const hit = hits.find((b) => b.children.length === 1) || hits[0];
+  hit.click(); // selects the step and pans the canvas to it
+  await pinWait(500);
+  const enter = (t) => document.body.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true }));
+  enter("keydown"); enter("keyup");
+  let got = null;
+  for (let i = 0; i < 15 && got === null; i++) { await pinWait(100); const w = ptDialogs().pop(); const h = w && (w.querySelector('[aria-label="Edit title"]') || w.querySelector("h1, h2, h3")); got = h ? mcNorm(h.textContent).replace(/\s+/g, "") : null; }
+  if (got === want) return { ok: true, clicked: title };
+  return { ok: false, error: got === null ? `Selected "${title}" in the Designer, but its window did not open. Press Enter on the canvas.` : `Opened a different step ("${got}") instead of "${title}".` };
 }
 
 /** Without a step window: the Designer's bottom toolbar, every visible text input and the open overlays (search box and results),
@@ -923,6 +906,6 @@ function pinDump() {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message && message.type === "PIN_DUMP") { sendResponse({ ok: true, text: pinDump() }); return; }
   if (!message || (message.type !== "PIN_READ" && message.type !== "PIN_REOPEN")) return;
-  if (message.type === "PIN_REOPEN") { pinReopen(message.title, message.alt).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message })); return true; }
+  if (message.type === "PIN_REOPEN") { pinReopen(message.title).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message })); return true; }
   try { sendResponse({ ok: true, flow: pinFlowId(), step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
 });
