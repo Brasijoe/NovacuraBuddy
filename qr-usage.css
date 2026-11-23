@@ -13,3 +13,17 @@
 .qu-pkg { color: var(--ink-muted); font-size: 11.5px; }
 .qu-noname { color: var(--ink-muted); }
 .qu-ifs-link { margin-left: 6px; font-size: 12px; white-space: nowrap; }
+
+.qu-row { cursor: pointer; }
+.qu-row:hover td { background: var(--surface-raised); }
+.qu-row:focus-visible { outline: 2px solid var(--accent, #0C65F4); outline-offset: -2px; }
+.qu-chevron { display: inline-block; width: 14px; color: var(--ink-muted); }
+.qu-detail-row > td { padding: 0 10px 12px; border-bottom: 1px solid var(--surface-raised); }
+.qu-detail { background: var(--surface-raised); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.qu-detail-error { color: var(--danger, #c0392b); }
+.qu-detail-head { display: flex; align-items: center; justify-content: space-between; }
+.qu-detail-head h3 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
+.qu-sql { margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; border-radius: 6px; border: 1px solid var(--surface-raised); background: var(--surface, #fff); font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.qu-fields { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 12.5px; }
+.qu-fields dt { color: var(--ink-muted); }
+.qu-fields dd { margin: 0; overflow-wrap: anywhere; }
