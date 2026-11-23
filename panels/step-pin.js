@@ -38,6 +38,39 @@ function spTypes(editors) {
   }
   return out;
 }
+/** Column names of the first SELECT in the step's SQL: the alias (AS x or trailing word) or the part after the last dot.
+ *  Empty when the list has * (Buddy cannot know the columns then) or no SQL is found. */
+function spSqlColumns(editors) {
+  for (const e of editors || []) {
+    const text = String(e.text || "").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+    const m = /\bselect\b/i.exec(text);
+    if (!m) continue;
+    let depth = 0, cur = "", parts = [], i = m.index + m[0].length, done = false;
+    for (; i < text.length && !done; i++) {
+      const c = text[i];
+      if (c === "'") { const j = text.indexOf("'", i + 1); const end = j < 0 ? text.length : j; cur += text.slice(i, end + 1); i = end; continue; }
+      if (c === "(") depth++;
+      else if (c === ")") { depth--; if (depth < 0) break; }
+      if (depth === 0 && c === ",") { parts.push(cur); cur = ""; continue; }
+      if (depth === 0 && /\s/.test(c) && /^\s+from\b/i.test(text.slice(i))) { done = true; break; }
+      cur += c;
+    }
+    if (cur.trim()) parts.push(cur);
+    const names = [];
+    for (let p of parts) {
+      p = p.replace(/^\s*(distinct|all)\s+/i, "").trim();
+      if (!p || /(^|\.)\*$/.test(p)) return [];
+      const as = /\bas\s+"?([A-Za-z_][\w$#]*)"?\s*$/i.exec(p);
+      const tail = /(?:^|[\s.)])"?([A-Za-z_][\w$#]*)"?\s*$/.exec(p);
+      const name = as ? as[1] : tail ? tail[1] : "";
+      if (!name) return [];
+      names.push(name);
+    }
+    if (names.length) return [{ type: "SELECT", columns: names.map((n) => ({ name: n, type: "" })) }];
+  }
+  return [];
+}
+function spColumnSets(pin) { const t = spTypes(pin.editors); return t.length ? t : spSqlColumns(pin.editors); }
 function spStepKey(s) { return `${s.title}`; }
 const spPins = () => sp.pins.filter((p) => p.flow === sp.flow);
 
@@ -72,7 +105,7 @@ function spRender() {
     const details = !pin.expanded ? "" : `<div class="sp-details">
         <div class="sp-meta">Pinned ${new Date(pin.at).toLocaleTimeString()}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}
           <span class="sp-meta-actions"><button class="sp-link" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button></span></div>
-        ${spTypes(pin.editors).map((t, i) => `<div class="sp-label"><span>Columns of ${spEsc(t.type)} (${t.columns.length})</span><button class="sp-link" data-copyc="${pin.id}:${i}" title="Copy the column names, one per line">Copy names</button></div><dl class="sp-fields sp-cols" style="font-size:${sp.size}px">${t.columns.map((c) => `<dt>${spEsc(c.name)}</dt><dd><span class="sp-val">${spEsc(c.type)}</span></dd>`).join("")}</dl>`).join("")}
+        ${spColumnSets(pin).map((t, i) => `<div class="sp-label"><span>Columns of ${spEsc(t.type)} (${t.columns.length})</span><button class="sp-link" data-copyc="${pin.id}:${i}" title="Copy the column names, one per line">Copy names</button></div><dl class="sp-fields sp-cols" style="font-size:${sp.size}px">${t.columns.map((c) => `<dt>${spEsc(c.name)}</dt><dd><span class="sp-val">${spEsc(c.type)}</span></dd>`).join("")}</dl>`).join("")}
         ${pin.editors.map((e, i) => `<div class="sp-label"><span>${spEsc(e.label || e.language || "Code")}</span><button class="sp-link" data-copy="${pin.id}:${i}">Copy</button></div><pre class="sp-code" style="font-size:${sp.size}px">${spEsc(e.text)}</pre>`).join("")}
         ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f, i) => `<dt>${spEsc(f.label || "Field")}</dt><dd><span class="sp-val">${spEsc(f.value)}</span><button class="sp-link sp-copyval" data-copyf="${pin.id}:${i}" title="Copy this value">Copy</button></dd>`).join("")}</dl>` : ""}
         ${!pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""}
@@ -111,7 +144,7 @@ function initStepPinPanel() {
     if (b.dataset.copyc) {
       const [id, i] = b.dataset.copyc.split(":");
       const pin = sp.pins.find((p) => p.id === id);
-      try { await navigator.clipboard.writeText(spTypes(pin.editors)[+i].columns.map((c) => c.name).join("\n")); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      try { await navigator.clipboard.writeText(spColumnSets(pin)[+i].columns.map((c) => c.name).join("\n")); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
       setTimeout(() => { b.textContent = "Copy names"; }, 1500);
       return;
     }
