@@ -221,8 +221,8 @@ function buildQrModuleBox(getBaseUrl) {
   track.innerHTML = '<span class="toggle-thumb"></span>';
   const text = document.createElement("span");
   text.className = "toggle-label";
-  text.textContent = "Only include created Quick Reports";
-  label.append(input, track, text, infoTip("Off: the module contains every public Quick Report of the instance. On: only the Quick Reports you deployed to this instance with NovacuraBuddy are kept; the others are removed from the module code."));
+  text.textContent = "Only include used Quick Reports";
+  label.append(input, track, text, infoTip("Off: the module contains every public Quick Report of the instance. On: Buddy first scans all flows of your Flow organisation (same scan as \"Scan org for Quick Report usage\") and keeps only the Quick Reports that flows actually call; the others are removed from the module code."));
   const button = document.createElement("button");
   button.className = "btn-primary";
   button.textContent = "Create/update QuickReports module";
@@ -242,11 +242,34 @@ function buildQrModuleBox(getBaseUrl) {
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   let running = false;
 
-  async function run(onlyCreated, force, baseUrl) {
+  /** The ids of the Quick Reports the org's flows call: the same scan as the usage page. */
+  async function scanUsedIds() {
+    const org = await send({ type: "QR_ORG" });
+    if (!org.ok) throw new Error(org.error || "Could not find your Flow organisation");
+    const call = async (message) => { const r = await send({ ...message, masterPassword: "" }); if (!r.ok) throw new Error(r.error || "Flow read failed"); return r; };
+    const result = await QrUsage.runScan({
+      flow: {
+        listPackages: async () => (await call({ type: "FT_PACKAGES", orgId: org.orgId })).packages,
+        listAssets: async (pkg) => (await call({ type: "MC_ASSETS", orgId: org.orgId, packageId: pkg })).assets,
+        readFlowIds: async (itemId) => (await call({ type: "QRU_FLOW", orgId: org.orgId, itemId })).ids
+      },
+      readNames: null,
+      onProgress: (step, current, total) => { button.textContent = `Scanning flows… (${step} ${current}/${total})`; }
+    });
+    if (result.errors.length) throw new Error(`${result.errors.length} flow(s) could not be read, so the list of used Quick Reports would be incomplete. Nothing was changed. First error: ${result.errors[0]}`);
+    return result.reports.map((r) => r.id);
+  }
+
+  async function run(onlyUsed, force, baseUrl, knownIds) {
     running = true;
     applyState();
+    let usedIds = knownIds || null;
+    if (onlyUsed && !usedIds) {
+      button.textContent = "Scanning flows…";
+      try { usedIds = await scanUsedIds(); } catch (e) { running = false; button.textContent = "Create/update QuickReports module"; applyState(); return showError(e.message, true); }
+    }
     button.textContent = "Creating module…";
-    const response = await actionOrShowError({ type: "QR_PROJECTION_MODULE", baseUrl, onlyCreated, force, masterPassword: masterPasswordOf() });
+    const response = await actionOrShowError({ type: "QR_PROJECTION_MODULE", baseUrl, usedIds: onlyUsed ? usedIds : null, force, masterPassword: masterPasswordOf() });
     running = false;
     button.textContent = "Create/update QuickReports module";
     applyState();
@@ -258,7 +281,7 @@ function buildQrModuleBox(getBaseUrl) {
       const proceed = document.createElement("button");
       proceed.className = "btn-primary";
       proceed.textContent = "Proceed";
-      proceed.onclick = () => { show("", ""); run(onlyCreated, true, baseUrl); };
+      proceed.onclick = () => { show("", ""); run(onlyUsed, true, baseUrl, usedIds); };
       const full = document.createElement("button");
       full.textContent = "Create full module";
       full.onclick = () => { input.checked = false; show("", ""); run(false, false, baseUrl); };

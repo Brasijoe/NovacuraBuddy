@@ -387,15 +387,15 @@ async function handleFlowPropertiesModule({ baseUrl, luNames, masterPassword }) 
 }
 
 /** QR_PROJECTION_MODULE: the org-level "QuickReports" module (top level, no package) generated from the
- *  instance's QuickReports projection. onlyCreated keeps just the reports deployed to that instance
- *  through NovacuraBuddy; without force, a module that would lose reports is not written. */
-async function handleQuickReportsModule({ baseUrl, onlyCreated, force, masterPassword }) {
+ *  instance's QuickReports projection. usedIds (from the usage scan of the org's flows) keeps just the
+ *  Quick Reports that flows actually call; without force, a module that would lose reports is not written. */
+async function handleQuickReportsModule({ baseUrl, usedIds, force, masterPassword }) {
   const { orgId, flowFetch } = await flowPropertiesContext();
   const masterKey = await instanceStore.ensureMasterKey(IfsInstances.createOneShotPrompt(masterPassword));
   const ifsToken = await instanceStore.getIfsAuthToken(baseUrl, masterKey);
   const moduleName = QuickReportsModule.MODULE_NAME;
-  const deployedIds = onlyCreated ? (await qrService.historyForInstance(baseUrl)).map((d) => String(d.quickReportId)) : null;
-  log("QR_PROJECTION_MODULE start: org", orgId, "onlyCreated", !!onlyCreated, "deployed", deployedIds && deployedIds.length);
+  const deployedIds = Array.isArray(usedIds) ? usedIds.map(String) : null;
+  log("QR_PROJECTION_MODULE start: org", orgId, "onlyUsed", !!deployedIds, "used", deployedIds && deployedIds.length);
   return QuickReportsModule.updateQuickReportsModule({
     deployedIds,
     force: !!force,
@@ -798,6 +798,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case "CL_FLOW_PROPERTIES_PREFLIGHT":
           await handleFlowPropertiesPreflight();
           return sendResponse({ ok: true });
+        case "QR_ORG": // the Flow organisation the usage scan runs on (the last Designer org)
+          return sendResponse({ ok: true, orgId: (await flowPropertiesContext()).orgId });
         case "QR_PROJECTION_MODULE":
           return sendResponse({ ok: true, result: await handleQuickReportsModule(message) });
         case "CL_FLOW_PROPERTIES_MODULE":
