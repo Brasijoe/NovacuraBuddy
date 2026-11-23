@@ -823,7 +823,7 @@ async function pinReopen(title) {
     for (let i = 0; i < 20 && ptDialogs().length; i++) await pinWait(150);
   }
   dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
-  await pinWait(300);
+  await pinWait(500);
   if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
   const want = mcNorm(title).replace(/\s+/g, "");
   const norm = (t) => mcNorm(t.name).replace(/\s+/g, "");
@@ -837,9 +837,14 @@ async function pinReopen(title) {
   if (!el) return { ok: false, error: "Could not reach the step on the canvas." };
   const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0, pointerId: 1, pointerType: "mouse", isPrimary: true, view: window };
   const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
-  for (let n = 1; n <= 2; n++) { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); }
-  fire("dblclick", { detail: 2 });
-  return { ok: true, clicked: hit.name };
+  const click = (n) => { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); };
+  const opened = async (ms) => { for (let i = 0; i < ms / 100; i++) { if (ptDialogs().length) return true; await pinWait(100); } return false; };
+  // Attempt 1: a quick double click. Attempt 2: select first, then double click after a pause (as a user does).
+  click(1); click(2); fire("dblclick", { detail: 2 });
+  if (await opened(1000)) return { ok: true, clicked: hit.name };
+  click(1); await pinWait(300); click(1); click(2); fire("dblclick", { detail: 2 });
+  if (await opened(1200)) return { ok: true, clicked: hit.name };
+  return { ok: false, error: `Selected "${hit.name}" on the canvas (element ${el.tagName.toLowerCase()}), but its window did not open. Double-click the step yourself once.` };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
