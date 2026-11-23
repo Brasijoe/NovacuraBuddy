@@ -1174,7 +1174,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const tab = captureDesignerTab();
           const packageId = await resolvePackageIdFor(tab);
           const pkg = await FlowTransfer.exportFlow({ flowFetch: boundFlowFetch(), orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
-          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
+          return sendResponse({ ok: true, flowName: pkg.assets[tab.itemId] ? pkg.assets[tab.itemId].name : null, projections: PermissionCheck.projectionUsage(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare), ...PermissionCheck.usageByConnector(pkg, FlowDocumentation.projectionNamesIn, ModuleCompare) });
         }
         case "FDOC_GENERATE": { // documentation of the open flow: read-only Flow calls, IFS only when asked for
           const tab = captureDesignerTab();
