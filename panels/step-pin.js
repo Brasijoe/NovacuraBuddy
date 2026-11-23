@@ -57,7 +57,7 @@ function spRender() {
     ].join("");
     card.innerHTML = `<div class="section-head"><h2>${spEsc(pin.title || "Step")}</h2><span class="api-hint">${new Date(pin.at).toLocaleTimeString()}</span></div>
       <div class="api-hint">Step: ${spEsc(pin.title || "?")}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}</div>
-      <div class="sp-actions"><button class="btn-ghost" data-act="fold" data-id="${pin.id}">${pin.collapsed ? "Show" : "Fold"}</button><button class="btn-primary" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer (it is pinned too), then reopens this one there">Open in Designer</button><button class="btn-ghost" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button><button class="btn-ghost" data-act="remove" data-id="${pin.id}">Unpin</button></div>${body}`;
+      <div class="sp-actions"><button class="btn-ghost" data-act="fold" data-id="${pin.id}">${pin.collapsed ? "Show" : "Fold"}</button><button class="btn-primary" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer, then reopens this one there">Open in Designer</button><button class="btn-ghost" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button><button class="btn-ghost" data-act="remove" data-id="${pin.id}">Unpin</button></div>${body}`;
     list.appendChild(card);
   }
 }
@@ -104,10 +104,6 @@ function initStepPinPanel() {
     if (b.dataset.act === "reopen") {
       await spPoll();
       const note = document.getElementById("spOpenNote");
-      if (sp.open && spStepKey(sp.open) !== pin.key) { // the open step moves into the pins
-        const cur = { id: String(Date.now()), flow: sp.flow, title: sp.open.title, heading: sp.open.heading, page: sp.open.page, key: spStepKey(sp.open), at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields, collapsed: false };
-        sp.pins = [cur, ...sp.pins.filter((p) => !(p.flow === cur.flow && p.key === cur.key))];
-      }
       const res = sp.tabId ? await chrome.tabs.sendMessage(sp.tabId, { type: "PIN_REOPEN", title: pin.title, alt: pin.heading }).catch(() => null) : null;
       note.textContent = res && res.ok ? `Clicked "${res.clicked}" in the Designer.` : (res && res.error) || "The Designer did not answer.";
       await spSave(); spRender(); return;
