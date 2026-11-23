@@ -1,7 +1,7 @@
 // Pin step tab: keeps a copy of the step window open in the Flow Designer in the side panel, so its
 // code and settings stay in view while you edit another step. The copy is a read-only snapshot made
 // by content/designer.js (PIN_READ); nothing is ever written to the flow from here.
-const SP_KEY = "stepPins"; // chrome.storage.local: { on, size, pins: [{ id, title, page, at, editors, fields, collapsed }] }
+const SP_KEY = "stepPins"; // chrome.storage.local: { on, size, pins: [{ id, title, page, at, editors, fields, expanded, from }] }
 const SP_MAX = 6;
 const sp = { on: true, size: 12, pins: [], open: null, flow: null, tabId: null, timer: null };
 
@@ -49,15 +49,20 @@ function spRender() {
   if (!pins.length) { list.innerHTML = '<p class="api-hint">Nothing pinned for this flow yet. Open a step in the Designer and press "Pin current step".</p>'; return; }
   for (const pin of pins) {
     const card = document.createElement("div");
-    card.className = "cm-card sp-pin";
-    const body = pin.collapsed ? "" : [
-      ...pin.editors.map((e) => `<div class="sp-label">${spEsc(e.label || e.language || "Code")}<button class="btn-ghost sp-copy" data-copy="${pin.id}:${pin.editors.indexOf(e)}">Copy</button></div><pre class="sp-code" style="font-size:${sp.size}px">${spEsc(e.text)}</pre>`),
-      pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f) => `<dt>${spEsc(f.label || "Field")}</dt><dd>${spEsc(f.value)}</dd>`).join("")}</dl>` : "",
-      !pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""
-    ].join("");
-    card.innerHTML = `<div class="section-head"><h2>${spEsc(pin.title || "Step")}</h2><span class="api-hint">${new Date(pin.at).toLocaleTimeString()}</span></div>
-      <div class="api-hint">Step: ${spEsc(pin.title || "?")}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}</div>
-      <div class="sp-actions"><button class="btn-ghost" data-act="fold" data-id="${pin.id}">${pin.collapsed ? "Show" : "Fold"}</button><button class="btn-primary" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer, then reopens this one there">Open in Designer</button><button class="btn-ghost" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button><button class="btn-ghost" data-act="remove" data-id="${pin.id}">Unpin</button></div>${body}`;
+    card.className = "sp-pin" + (pin.expanded ? " is-open" : "");
+    const details = !pin.expanded ? "" : `<div class="sp-details">
+        <div class="sp-meta">Pinned ${new Date(pin.at).toLocaleTimeString()}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}
+          <span class="sp-meta-actions"><button class="sp-link" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button></span></div>
+        ${pin.editors.map((e, i) => `<div class="sp-label"><span>${spEsc(e.label || e.language || "Code")}</span><button class="sp-link" data-copy="${pin.id}:${i}">Copy</button></div><pre class="sp-code" style="font-size:${sp.size}px">${spEsc(e.text)}</pre>`).join("")}
+        ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f) => `<dt>${spEsc(f.label || "Field")}</dt><dd>${spEsc(f.value)}</dd>`).join("")}</dl>` : ""}
+        ${!pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""}
+      </div>`;
+    const from = pin.from ? `<div class="sp-from">Last opened from <button class="sp-link" data-act="back" data-id="${pin.id}" title="Applies the open step and opens ${spEsc(pin.from.title)} again">&#8617; ${spEsc(pin.from.title)}</button></div>` : "";
+    card.innerHTML = `<div class="sp-row">
+        <button class="sp-toggle" data-act="fold" data-id="${pin.id}" aria-expanded="${!!pin.expanded}" title="${pin.expanded ? "Hide" : "Show"} details"><span class="sp-caret" aria-hidden="true"></span><span class="sp-title">${spEsc(pin.title || "Step")}</span></button>
+        <button class="btn-primary sp-open" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer, then opens this one there">Open</button>
+        <button class="sp-x" data-act="remove" data-id="${pin.id}" title="Unpin" aria-label="Unpin">&times;</button>
+      </div>${from}${details}`;
     list.appendChild(card);
   }
 }
@@ -81,7 +86,7 @@ function initStepPinPanel() {
     await spPoll();
     const s = sp.open;
     if (!sp.on || !s) return;
-    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, collapsed: false };
+    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, expanded: false };
     sp.pins = [pin, ...sp.pins.filter((p) => !(p.flow === pin.flow && p.key === pin.key))];
     while (spPins().length > SP_MAX) sp.pins.splice(sp.pins.lastIndexOf(spPins().pop()), 1);
     await spSave(); spRender();
@@ -100,11 +105,13 @@ function initStepPinPanel() {
     const pin = sp.pins.find((p) => p.id === b.dataset.id);
     if (!pin) return;
     if (b.dataset.act === "remove") sp.pins = sp.pins.filter((p) => p !== pin);
-    if (b.dataset.act === "fold") pin.collapsed = !pin.collapsed;
-    if (b.dataset.act === "reopen") {
+    if (b.dataset.act === "fold") pin.expanded = !pin.expanded;
+    if (b.dataset.act === "reopen" || b.dataset.act === "back") {
       await spPoll();
       const note = document.getElementById("spOpenNote");
-      const res = sp.tabId ? await chrome.tabs.sendMessage(sp.tabId, { type: "PIN_REOPEN", title: pin.title, alt: pin.heading }).catch(() => null) : null;
+      const target = b.dataset.act === "back" ? pin.from : { title: pin.title, heading: pin.heading };
+      if (b.dataset.act === "reopen" && sp.open && spStepKey(sp.open) !== pin.key) pin.from = { title: sp.open.title, heading: sp.open.heading }; // remember where we came from (not pinned)
+      const res = sp.tabId ? await chrome.tabs.sendMessage(sp.tabId, { type: "PIN_REOPEN", title: target.title, alt: target.heading }).catch(() => null) : null;
       note.textContent = res && res.ok ? `Clicked "${res.clicked}" in the Designer.` : (res && res.error) || "The Designer did not answer.";
       await spSave(); spRender(); return;
     }
