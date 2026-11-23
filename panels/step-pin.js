@@ -56,6 +56,7 @@ function spRender() {
       !pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""
     ].join("");
     card.innerHTML = `<div class="section-head"><h2>${spEsc(pin.title || "Step")}</h2><span class="api-hint">${new Date(pin.at).toLocaleTimeString()}</span></div>
+      <div class="api-hint">Step: ${spEsc(pin.title || "?")}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}</div>
       <div class="sp-actions"><button class="btn-ghost" data-act="fold" data-id="${pin.id}">${pin.collapsed ? "Show" : "Fold"}</button><button class="btn-primary" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer (it is pinned too), then reopens this one there">Open in Designer</button><button class="btn-ghost" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button><button class="btn-ghost" data-act="remove" data-id="${pin.id}">Unpin</button></div>${body}`;
     list.appendChild(card);
   }
@@ -65,6 +66,14 @@ function initStepPinPanel() {
   chrome.storage.local.get(SP_KEY).then(({ [SP_KEY]: st }) => {
     if (st) { sp.on = st.on !== false; sp.size = st.size || 12; sp.pins = st.pins || []; }
     spRender();
+  });
+  document.getElementById("spDumpBtn").addEventListener("click", async (e) => {
+    const b = e.currentTarget, old = b.textContent;
+    const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/*" });
+    const tab = tabs.find((t) => t.active) || tabs[0];
+    const res = tab ? await chrome.tabs.sendMessage(tab.id, { type: "PIN_DUMP" }).catch(() => null) : null;
+    try { await navigator.clipboard.writeText(res && res.text ? res.text : "No step window found."); b.textContent = res && res.text ? "Copied" : "No window"; } catch { b.textContent = "Copy failed"; }
+    setTimeout(() => { b.textContent = old; }, 2000);
   });
   document.getElementById("spOn").addEventListener("change", (e) => { sp.on = e.target.checked; spSave(); spRender(); spPoll(); });
   document.getElementById("spSize").addEventListener("input", (e) => { sp.size = +e.target.value; spSave(); spRender(); });
