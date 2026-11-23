@@ -1,8 +1,8 @@
 // Results page of "Scan org for Quick Report usage": one row per Quick Report that flows call.
 const params = new URLSearchParams(location.search);
-const sel = { orgId: params.get("orgId"), baseUrl: params.get("baseUrl") || "" };
+const sel = { orgId: params.get("orgId"), baseUrl: params.get("baseUrl") || "", flowId: params.get("flowId") || "" };
 const el = (id) => document.getElementById(id);
-const KEY = `qrUsage:${sel.orgId}`;
+const KEY = sel.flowId ? `qrUsage:${sel.orgId}:${sel.flowId}` : `qrUsage:${sel.orgId}`;
 let result = null;
 
 async function call(message) {
@@ -154,18 +154,18 @@ function renderTable() {
       li.append(a, pkg);
       flows.append(li);
     }
-    if (sel.baseUrl) {
-      const url = IfsLinks.ifsObjectUrl(sel.baseUrl, "quickReport", { quickReportId: r.id });
-      if (url) {
-        const a = document.createElement("a");
-        a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = " Open in IFS ↗"; a.className = "qu-ifs-link";
-        name.append(a);
-      }
-    }
+    const ifsCell = document.createElement("td");
+    const url = sel.baseUrl && IfsLinks.ifsObjectUrl(sel.baseUrl, "quickReport", { quickReportId: r.id });
+    if (url) {
+      const a = document.createElement("a");
+      a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open in IFS ↗"; a.className = "qu-ifs-link";
+      a.title = "Open this Quick Report in the IFS web client";
+      ifsCell.append(a);
+    } else { ifsCell.textContent = "—"; ifsCell.title = "Choose an IFS instance above to get links"; ifsCell.className = "qu-noname"; }
     const cells = [r.functionName, r.id].map((t) => { const td = document.createElement("td"); td.textContent = t; return td; });
     const flowCell = document.createElement("td");
     flowCell.append(flows);
-    tr.append(cells[0], cells[1], name, flowCell);
+    tr.append(cells[0], cells[1], name, ifsCell, flowCell);
     body.append(tr);
     if (sel.baseUrl) makeExpandable(tr, r);
   }
@@ -197,6 +197,7 @@ async function scan() {
   el("quProgressFill").style.width = "0%";
   try {
     const r = await QrUsage.runScan({
+      onlyFlowId: sel.flowId || null,
       flow: {
         listPackages: async () => (await call({ type: "FT_PACKAGES", orgId: sel.orgId })).packages,
         listAssets: async (pkg) => (await call({ type: "MC_ASSETS", orgId: sel.orgId, packageId: pkg })).assets,
@@ -217,10 +218,33 @@ async function scan() {
   }
 }
 
+/** The instance select on the result card: fills the IFS links and the missing names without a rescan. */
+async function setupInstancePicker() {
+  const select = el("quInstance");
+  const response = await send({ type: "LIST_INSTANCES" });
+  select.innerHTML = "";
+  select.append(new Option("Choose an IFS instance…", ""));
+  const list = response.ok ? response.instances.slice().sort((a, b) => a.name.localeCompare(b.name)) : [];
+  for (const i of list) select.append(new Option(i.name, i.baseUrl));
+  el("quInstanceField").hidden = !list.length;
+  select.value = list.some((i) => i.baseUrl === sel.baseUrl) ? sel.baseUrl : "";
+  select.onchange = async () => {
+    sel.baseUrl = select.value;
+    if (sel.baseUrl && result && result.reports.some((r) => !r.name)) {
+      try {
+        const names = (await call({ type: "QRU_NAMES", baseUrl: sel.baseUrl, ids: result.reports.map((r) => r.id) })).names;
+        for (const r of result.reports) if (!r.name) r.name = names[r.id] || "";
+      } catch (e) { showError(`Names could not be read from IFS: ${e.message}`, true); }
+    }
+    el("quSubtitle").textContent = sel.baseUrl ? `Names and links from ${select.selectedOptions[0].textContent}` : "Without Quick Report names";
+    renderTable();
+  };
+}
+
 async function main() {
   if (!sel.orgId) return showError("No organisation given — start the scan from the side panel's Quick Reports tab.", true);
   const org = params.get("org") || sel.orgId;
-  el("quTitle").textContent = `Quick Report usage · ${org}`;
+  el("quTitle").textContent = `Quick Report usage · ${org}${sel.flowId ? " · current flow" : ""}`;
   document.title = `Quick Report usage · ${org}`;
   el("quSubtitle").textContent = sel.baseUrl ? sel.baseUrl : "Without Quick Report names";
   send({ type: "LIST_INSTANCES" }).then((response) => {
@@ -228,6 +252,7 @@ async function main() {
     if (instance) el("quSubtitle").textContent = `Names from ${instance.name}`;
   });
   el("quRescanBtn").onclick = scan;
+  await setupInstancePicker();
   el("quFilter").addEventListener("input", () => result && renderTable());
   renderSteps();
   const { [KEY]: last } = await chrome.storage.local.get(KEY);
