@@ -45,6 +45,7 @@
           <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
           <div class="tab-menu-row"><button id="tab-permission-sets" class="tab-item" role="tab">Compare Permission Sets <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Compares permission sets (their projection and action grants) between two IFS instances. Tick the sets, see what differs, then create missing sets, merge both ways, or use one instance as the reference and copy or sync to the other. Nothing is written before you confirm the preview with a second click."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-deps" class="tab-item" role="tab">Flow Dependencies</button><span class="info-tip" data-tip="Scans an IFS installation for everything that calls Novacura Flow (run.novacura.com or app.novacura.com): events, event actions, workflows, routing addresses and page commands. Results open in a new browser tab. Read-only: the scan never changes anything in IFS."></span></div>
+          <div class="tab-menu-row"><button id="tab-entity-check" class="tab-item" role="tab">Entity Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds the IFS projections (entities) the open flow, a whole package or an organisation uses and shows whether each one is enabled in an IFS instance. Disabled ones can be switched on per projection, after your confirmation."></span></div>
           <div class="tab-menu-row"><button id="tab-permission-check" class="tab-item" role="tab">Permission Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds every IFS projection the flow open in the Designer calls and compares them with what an IFS user is allowed to use. Per connector (they can run as the user or the IAM client user), for one user or some permission sets. Read-only so far; adding the missing permissions comes next."></span></div>
         </div>
       </div>
@@ -446,6 +447,39 @@
       <div id="etResult" hidden></div>
     </section>
 
+    <section id="panel-entity-check" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> reading and the status are safe. Switching a projection on or off in IFS is not yet confirmed against a live IFS; each switch asks for a confirmation and is read back.</span></div>
+      <div class="cm-toolbar">
+        <span id="ecSession" class="ft-chip ft-chip-muted">Checking Flow session…</span>
+        <button id="ecRefreshBtn" class="btn-ghost" title="Reload the Flow session, organisations, packages and IFS instances">&#8635; Refresh</button>
+      </div>
+
+      <div class="cm-card" id="ecScopeCard">
+        <div class="section-head"><h2>1. What to scan</h2><span class="info-tip" data-tip="The flow open in the Designer tab (with every module and sub-flow it uses), all flows and modules of one package (plus the App Library), or everything in an organisation. Only reads Flow."></span></div>
+        <label class="fd-default"><input type="radio" name="ecScope" value="current" checked /> The open flow</label>
+        <label class="fd-default"><input type="radio" name="ecScope" value="package" /> A package</label>
+        <label class="fd-default"><input type="radio" name="ecScope" value="org" /> A whole organisation</label>
+        <select id="ecOrg" hidden></select>
+        <select id="ecPackage" hidden><option value="">Choose a package…</option></select>
+      </div>
+
+      <div class="cm-card">
+        <div class="section-head"><h2>2. IFS instance and permission sets</h2><span class="info-tip" data-tip="The instance whose projections are checked. The state shown is the one IFS has right now (Active in the Projection Explorer); the switches start from it. Tick permission sets (optional): when you enable a projection here, it is also granted to the ticked sets."></span></div>
+        <div id="ecPicker"></div>
+        <button id="ecScanBtn" class="btn-primary fd-scan-btn" disabled>Scan and check</button>
+        <p id="ecHint" class="api-hint" hidden></p>
+      </div>
+
+      <div class="cm-card" id="ecResultCard" hidden>
+        <div class="section-head"><h2>3. Entities</h2><span class="info-tip" data-tip="Every projection the scan found. Enabled / Disabled is the state in IFS; Not found means the instance has no such projection. Use the switch to enable or disable one: you confirm each change, and it is read back from IFS afterwards."></span></div>
+        <div id="ecSummary" class="ft-chips"></div>
+        <div class="search-row"><input id="ecSearch" placeholder="Search entities, components, flows…" autocomplete="off" /></div>
+        <div id="ecFilters" class="ft-chips"></div>
+        <p id="ecCount" class="list-count"></p>
+        <div id="ecList" class="ec-list"></div>
+      </div>
+    </section>
+
     <section id="panel-permission-check" role="tabpanel" hidden>
       <div class="banner banner-warning"><span><strong>WIP:</strong> applying permissions is not yet fully verified against a live IFS; Read Only grants are not supported.</span></div>
       <div class="section-head"><h2>Projections the open flow calls</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every module and sub-flow it uses, and lists the IFS projections they call. Nothing is changed in Flow or IFS."></span></div>
@@ -602,6 +636,8 @@
     <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
     <script src="panels/permission-check.js"></script>
+    <script src="lib/entity-check.js"></script>
+    <script src="panels/entity-check.js"></script>
     <script src="lib/ifs-links.js"></script>
     <script src="panels/event-triggers.js"></script>
     <script src="lib/permission-set-compare.js"></script>
