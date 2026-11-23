@@ -836,17 +836,23 @@ async function pinReopen(title) {
   }
   if (!field()) return { ok: false, error: "The Designer's search did not open." };
   const input = field();
+  // Keep the search panel out of sight while it is driven (it is the Designer's own panel; nothing in it changes).
+  const hidden = [];
+  for (let el = input.closest("app-search"), n = 0; el && n < 3 && el !== document.body; el = el.parentElement, n++) { hidden.push([el, el.style.opacity]); el.style.opacity = "0"; }
+  const unhide = () => { for (const [el, v] of hidden) el.style.opacity = v; };
+  try {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, title);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   const rows = () => [...document.querySelectorAll("app-search-result button")];
   const nameOf = (b) => { const sp = b.querySelector("span"); return sp ? mcNorm(sp.textContent).replace(/\s+/g, "") : ""; };
   let hits = [];
-  for (let i = 0; i < 25; i++) { await pinWait(120); hits = rows().filter((b) => nameOf(b) === want); if (hits.length) break; }
+  for (let i = 0; i < 50; i++) { await pinWait(60); hits = rows().filter((b) => nameOf(b) === want); if (hits.length) break; }
   if (!hits.length) return { ok: false, error: `The Designer's search found no step named "${title}".` };
   // A step shows up once as a name match (one line) and again for text inside it (a second line): take the name match.
   const hit = hits.find((b) => b.children.length === 1) || hits[0];
   hit.click(); // selects the step and pans the canvas to it
-  await pinWait(500);
+  } finally { unhide(); }
+  await pinWait(350);
   const enter = (t) => document.body.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true }));
   enter("keydown"); enter("keyup");
   let got = null;
