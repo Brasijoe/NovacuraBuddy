@@ -25,6 +25,19 @@ function spKind(icon) {
   if (icon === "sequence") return "Sequence (array)";
   return icon ? `Single value (${icon})` : "Unknown";
 }
+/** Columns of every `type Name = { field: type, ... }` in the step's code: [{ type, columns: [{ name, type }] }]. */
+function spTypes(editors) {
+  const out = [];
+  for (const e of editors || []) {
+    const re = /\btype\s+(\w+)\s*=\s*\{([^}]*)\}/g;
+    let m;
+    while ((m = re.exec(e.text))) {
+      const columns = m[2].split(/[,\n]/).map((l) => l.trim()).filter(Boolean).map((l) => { const k = l.indexOf(":"); return k < 0 ? null : { name: l.slice(0, k).trim(), type: l.slice(k + 1).trim() }; }).filter(Boolean);
+      if (columns.length) out.push({ type: m[1], columns });
+    }
+  }
+  return out;
+}
 function spStepKey(s) { return `${s.title}`; }
 const spPins = () => sp.pins.filter((p) => p.flow === sp.flow);
 
@@ -59,6 +72,7 @@ function spRender() {
     const details = !pin.expanded ? "" : `<div class="sp-details">
         <div class="sp-meta">Pinned ${new Date(pin.at).toLocaleTimeString()}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}
           <span class="sp-meta-actions"><button class="sp-link" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button></span></div>
+        ${spTypes(pin.editors).map((t, i) => `<div class="sp-label"><span>Columns of ${spEsc(t.type)} (${t.columns.length})</span><button class="sp-link" data-copyc="${pin.id}:${i}" title="Copy the column names, one per line">Copy names</button></div><dl class="sp-fields sp-cols" style="font-size:${sp.size}px">${t.columns.map((c) => `<dt>${spEsc(c.name)}</dt><dd><span class="sp-val">${spEsc(c.type)}</span></dd>`).join("")}</dl>`).join("")}
         ${pin.editors.map((e, i) => `<div class="sp-label"><span>${spEsc(e.label || e.language || "Code")}</span><button class="sp-link" data-copy="${pin.id}:${i}">Copy</button></div><pre class="sp-code" style="font-size:${sp.size}px">${spEsc(e.text)}</pre>`).join("")}
         ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f, i) => `<dt>${spEsc(f.label || "Field")}</dt><dd><span class="sp-val">${spEsc(f.value)}</span><button class="sp-link sp-copyval" data-copyf="${pin.id}:${i}" title="Copy this value">Copy</button></dd>`).join("")}</dl>` : ""}
         ${!pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""}
@@ -94,6 +108,13 @@ function initStepPinPanel() {
   document.getElementById("spList").addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
+    if (b.dataset.copyc) {
+      const [id, i] = b.dataset.copyc.split(":");
+      const pin = sp.pins.find((p) => p.id === id);
+      try { await navigator.clipboard.writeText(spTypes(pin.editors)[+i].columns.map((c) => c.name).join("\n")); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      setTimeout(() => { b.textContent = "Copy names"; }, 1500);
+      return;
+    }
     if (b.dataset.copyo) {
       const [id, i] = b.dataset.copyo.split(":");
       const pin = sp.pins.find((p) => p.id === id);

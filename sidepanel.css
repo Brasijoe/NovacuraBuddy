@@ -1009,3 +1009,4 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .sp-fields dd { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
 .sp-val { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
 .sp-copyval { flex: none; }
+.sp-cols { max-height: 200px; overflow: auto; }
