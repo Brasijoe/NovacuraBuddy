@@ -71,7 +71,7 @@ function initStepPinPanel() {
     await spPoll();
     const s = sp.open;
     if (!sp.on || !s) return;
-    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, collapsed: false };
+    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, collapsed: false };
     sp.pins = [pin, ...sp.pins.filter((p) => !(p.flow === pin.flow && p.key === pin.key))];
     while (spPins().length > SP_MAX) sp.pins.splice(sp.pins.lastIndexOf(spPins().pop()), 1);
     await spSave(); spRender();
@@ -94,10 +94,10 @@ function initStepPinPanel() {
       await spPoll();
       const note = document.getElementById("spOpenNote");
       if (sp.open && spStepKey(sp.open) !== pin.key) { // the open step moves into the pins
-        const cur = { id: String(Date.now()), flow: sp.flow, title: sp.open.title, page: sp.open.page, key: spStepKey(sp.open), at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields, collapsed: false };
+        const cur = { id: String(Date.now()), flow: sp.flow, title: sp.open.title, heading: sp.open.heading, page: sp.open.page, key: spStepKey(sp.open), at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields, collapsed: false };
         sp.pins = [cur, ...sp.pins.filter((p) => !(p.flow === cur.flow && p.key === cur.key))];
       }
-      const res = sp.tabId ? await chrome.tabs.sendMessage(sp.tabId, { type: "PIN_REOPEN", title: pin.title }).catch(() => null) : null;
+      const res = sp.tabId ? await chrome.tabs.sendMessage(sp.tabId, { type: "PIN_REOPEN", title: pin.title, alt: pin.heading }).catch(() => null) : null;
       note.textContent = res && res.ok ? `Clicked "${res.clicked}" in the Designer.` : (res && res.error) || "The Designer did not answer.";
       await spSave(); spRender(); return;
     }
