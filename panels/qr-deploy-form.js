@@ -3,7 +3,10 @@
  *  edits). Never writes history — the background does that after a finished deploy. A finished
  *  deploy shows a green confirmation inside the form; `onDeployed` is optional. With `onClose`
  *  the form gets a Close button (side panel); the editor page keeps its form always open. */
-function renderDeployForm(container, getReport, { send, onDeployed, onClose, onError }) {
+function renderDeployForm(container, getReport, { send, onDeployed, onClose, onError, presetBaseUrl, updateQuickReportId }) {
+  // updateQuickReportId: editing an existing Quick Report of the IFS instance — the button says Update and
+  // always updates that report (never creates one or asks about a name clash).
+  const actionLabel = updateQuickReportId ? "Update" : "Deploy";
   container.innerHTML = "";
   container.classList.add("deploy-form");
 
@@ -11,7 +14,7 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
   actions.className = "deploy-actions";
   const deployBtn = document.createElement("button");
   deployBtn.className = "btn-primary";
-  deployBtn.textContent = "Deploy";
+  deployBtn.textContent = actionLabel;
   deployBtn.disabled = true;
   actions.appendChild(deployBtn);
   if (onClose) {
@@ -34,13 +37,14 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
     successBox = document.createElement("div");
     successBox.className = "banner banner-deployed";
     successBox.setAttribute("role", "status");
-    successBox.textContent = `✓ Deployed "${report.name}" to ${picker.instanceLabel(baseUrl)} — Quick Report id ${quickReportId}.`;
+    successBox.textContent = `✓ ${updateQuickReportId ? "Updated" : "Deployed"} "${report.name}" to ${picker.instanceLabel(baseUrl)} — Quick Report id ${quickReportId}.`;
     container.appendChild(successBox);
   }
 
   const picker = renderPermissionPicker(container, {
     send,
     onError,
+    presetBaseUrl,
     emptySetsText: "No customer permission sets on this instance — the report deploys without grants.",
     onChange: (ready) => {
       removeConfirmBox();
@@ -52,7 +56,7 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
 
   async function deploy(forceQuickReportId, baseUrlOverride) {
     const report = getReport();
-    if (!report) return onError("Give the report a name and some SQL before deploying.");
+    if (!report) return onError(`Give the report a name and some SQL before ${updateQuickReportId ? "updating" : "deploying"}.`);
     const baseUrl = baseUrlOverride || picker.baseUrl();
     const origin = new URL(baseUrl).origin;
     // Must run inside the click's user gesture, before any other await.
@@ -61,10 +65,10 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
     const permissionSetIds = picker.selectedIds();
     removeSuccessBox();
     deployBtn.disabled = true;
-    deployBtn.textContent = "Deploying…";
+    deployBtn.textContent = updateQuickReportId ? "Updating…" : "Deploying…";
     const response = await send({ type: "QR_DEPLOY", baseUrl, report, permissionSetIds, forceQuickReportId, masterPassword: "" });
     deployBtn.disabled = false;
-    deployBtn.textContent = "Deploy";
+    deployBtn.textContent = actionLabel;
     if (!response.ok) return onError(explainLocked(response));
     if (response.outcome.status === "needsConfirmation") return askOverwrite(response.outcome, baseUrl);
     showDeployed(report, baseUrl, response.outcome.quickReportId);
@@ -90,5 +94,5 @@ function renderDeployForm(container, getReport, { send, onDeployed, onClose, onE
     confirmBox = box;
   }
 
-  deployBtn.onclick = () => deploy();
+  deployBtn.onclick = () => deploy(updateQuickReportId || undefined);
 }

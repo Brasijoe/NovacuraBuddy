@@ -97,7 +97,18 @@ function renderDetail(td, r, d, error) {
   copy.textContent = "Copy";
   copy.disabled = !d.sql;
   copy.onclick = async () => { await navigator.clipboard.writeText(d.sql); copy.textContent = "Copied"; setTimeout(() => (copy.textContent = "Copy"), 1500); };
-  head.append(title, copy);
+  const edit = document.createElement("button");
+  edit.className = "btn-primary";
+  edit.textContent = "Edit";
+  edit.title = "Open in the Quick Report editor with the name, SQL and this IFS instance filled in";
+  edit.onclick = () => {
+    const q = new URLSearchParams({ ifsBaseUrl: sel.baseUrl, ifsId: r.id });
+    chrome.tabs.create({ url: chrome.runtime.getURL(`qr-editor.html?${q}`) });
+  };
+  const actions = document.createElement("div");
+  actions.className = "qu-detail-actions";
+  actions.append(copy, edit);
+  head.append(title, actions);
   const sql = document.createElement("pre");
   sql.className = "qu-sql";
   sql.textContent = d.sql || "No SQL stored on this Quick Report.";

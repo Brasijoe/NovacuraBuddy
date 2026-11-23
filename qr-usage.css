@@ -27,3 +27,4 @@
 .qu-fields { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 12.5px; }
 .qu-fields dt { color: var(--ink-muted); }
 .qu-fields dd { margin: 0; overflow-wrap: anywhere; }
+.qu-detail-actions { display: flex; gap: 8px; }
