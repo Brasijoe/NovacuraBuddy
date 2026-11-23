@@ -826,11 +826,12 @@ async function pinReopen(title, alt) {
   dispatchEvent(new CustomEvent("novacura-buddy-canvas-ask"));
   await pinWait(500);
   if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
-  const wants = [title, alt].filter(Boolean).map((w) => mcNorm(w).replace(/\s+/g, ""));
+  // Exact name only (a name the canvas cuts short with "…" counts as a prefix): a fuzzy match opened other steps.
+  const want = mcNorm(title).replace(/\s+/g, "");
   const norm = (t) => mcNorm(t.name).replace(/\s+/g, "");
   const names = mcCanvasNames();
-  const hit = names.find((t) => wants.includes(norm(t)))
-    || names.filter((t) => { const n = norm(t).replace(/(…|\.\.\.)$/, ""); return n.length >= 3 && wants.some((w) => w.startsWith(n) || w.includes(n)); }).sort((a, b) => b.name.length - a.name.length)[0];
+  const hit = names.find((t) => norm(t) === want)
+    || names.find((t) => { const n = norm(t); const cut = n.replace(/(…|\.\.\.)$/, ""); return cut !== n && cut.length >= 4 && want.startsWith(cut); });
   if (!hit) return { ok: false, error: `Step "${title}" is not on screen in the Designer. Scroll it into view and try again.` };
   const r = mcCardRect(hit);
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
