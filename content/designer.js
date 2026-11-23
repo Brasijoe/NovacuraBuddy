@@ -793,7 +793,8 @@ function pinRead() {
     else if (el.tagName === "APP-SINGLE-LINE-CODE-INPUT") value = el.textContent.replace(/\u00a0/g, " ").trim();
     else value = el.value;
     if (value === "" || value == null) continue;
-    fields.push({ label: pinLabelFor(el, win), value: String(value).slice(0, 5000) });
+    const label = pinLabelFor(el, win);
+    fields.push({ label, value: String(value).slice(0, 5000), output: /output|ausgabe|returns?\b|result/i.test(label) });
   }
   // The step's own name (its Name field) tells steps apart; the window heading is often the same for all of one type.
   const nameField = fields.find((f) => /^\s*(name|step name|label|title|titel|bezeichnung)\s*:?\s*$/i.test(f.label));

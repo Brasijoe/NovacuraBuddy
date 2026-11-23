@@ -54,15 +54,17 @@ function spRender() {
         <div class="sp-meta">Pinned ${new Date(pin.at).toLocaleTimeString()}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}
           <span class="sp-meta-actions"><button class="sp-link" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button></span></div>
         ${pin.editors.map((e, i) => `<div class="sp-label"><span>${spEsc(e.label || e.language || "Code")}</span><button class="sp-link" data-copy="${pin.id}:${i}">Copy</button></div><pre class="sp-code" style="font-size:${sp.size}px">${spEsc(e.text)}</pre>`).join("")}
-        ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f) => `<dt>${spEsc(f.label || "Field")}</dt><dd>${spEsc(f.value)}</dd>`).join("")}</dl>` : ""}
+        ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f, i) => `<dt>${spEsc(f.label || "Field")}</dt><dd><span class="sp-val">${spEsc(f.value)}</span><button class="sp-link sp-copyval" data-copyf="${pin.id}:${i}" title="Copy this value">Copy</button></dd>`).join("")}</dl>` : ""}
         ${!pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""}
       </div>`;
+    const outs = pin.fields.filter((f) => f.output);
+    const outLine = outs.length ? `<div class="sp-from">${outs.map((f) => `${spEsc(f.label)}: <b>${spEsc(f.value.length > 60 ? f.value.slice(0, 57) + "…" : f.value)}</b>`).join(" · ")}</div>` : "";
     const from = pin.from ? `<div class="sp-from">Last opened from <button class="sp-link" data-act="back" data-id="${pin.id}" title="Applies the open step and opens ${spEsc(pin.from.title)} again">&#8617; ${spEsc(pin.from.title)}</button></div>` : "";
     card.innerHTML = `<div class="sp-row">
         <button class="sp-toggle" data-act="fold" data-id="${pin.id}" aria-expanded="${!!pin.expanded}" title="${pin.expanded ? "Hide" : "Show"} details"><span class="sp-caret" aria-hidden="true"></span><span class="sp-title">${spEsc(pin.title || "Step")}</span></button>
         <button class="btn-primary sp-open" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer, then opens this one there">Open</button>
         <button class="sp-x" data-act="remove" data-id="${pin.id}" title="Unpin" aria-label="Unpin">&times;</button>
-      </div>${from}${details}`;
+      </div>${outLine}${from}${details}`;
     list.appendChild(card);
   }
 }
@@ -87,6 +89,13 @@ function initStepPinPanel() {
   document.getElementById("spList").addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
+    if (b.dataset.copyf) {
+      const [id, i] = b.dataset.copyf.split(":");
+      const pin = sp.pins.find((p) => p.id === id);
+      try { await navigator.clipboard.writeText(pin.fields[+i].value); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1500);
+      return;
+    }
     if (b.dataset.copy) {
       const [id, i] = b.dataset.copy.split(":");
       const pin = sp.pins.find((p) => p.id === id);
