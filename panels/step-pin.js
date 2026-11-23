@@ -98,7 +98,7 @@ function initStepPinPanel() {
         sp.pins = [cur, ...sp.pins.filter((p) => !(p.flow === cur.flow && p.key === cur.key))];
       }
       const res = sp.tabId ? await chrome.tabs.sendMessage(sp.tabId, { type: "PIN_REOPEN", title: pin.title }).catch(() => null) : null;
-      note.textContent = res && res.ok ? "Reopened in the Designer." : (res && res.error) || "The Designer did not answer.";
+      note.textContent = res && res.ok ? `Clicked "${res.clicked}" in the Designer.` : (res && res.error) || "The Designer did not answer.";
       await spSave(); spRender(); return;
     }
     if (b.dataset.act === "update") {

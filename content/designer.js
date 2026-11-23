@@ -795,8 +795,11 @@ function pinRead() {
     if (value === "" || value == null) continue;
     fields.push({ label: pinLabelFor(el, win), value: String(value).slice(0, 5000) });
   }
+  // The step's own name (its Name field) tells steps apart; the window heading is often the same for all of one type.
+  const nameField = fields.find((f) => /^\s*(name|step name|label|title|titel|bezeichnung)\s*:?\s*$/i.test(f.label));
   return {
-    title: heading ? heading.textContent.trim().slice(0, 120) : "",
+    title: nameField ? nameField.value.trim().slice(0, 120) : (heading ? heading.textContent.trim().slice(0, 120) : ""),
+    heading: heading ? heading.textContent.trim().slice(0, 120) : "",
     page: document.title,
     url: location.href,
     editors, fields,
@@ -823,8 +826,10 @@ async function pinReopen(title) {
   await pinWait(300);
   if (!mc.canvas) return { ok: false, error: "The Designer canvas has not reported its steps yet." };
   const want = mcNorm(title).replace(/\s+/g, "");
-  const hit = mcCanvasNames().filter((t) => { const n = mcNorm(t.name).replace(/\s+/g, "").replace(/(…|\.\.\.)$/, ""); return n.length >= 3 && want.includes(n); })
-    .sort((a, b) => b.name.length - a.name.length)[0];
+  const norm = (t) => mcNorm(t.name).replace(/\s+/g, "");
+  const names = mcCanvasNames();
+  const hit = names.find((t) => norm(t) === want)
+    || names.filter((t) => { const n = norm(t).replace(/(…|\.\.\.)$/, ""); return n.length >= 3 && (want.startsWith(n) || want.includes(n)); }).sort((a, b) => b.name.length - a.name.length)[0];
   if (!hit) return { ok: false, error: `Step "${title}" is not on screen in the Designer. Scroll it into view and try again.` };
   const r = mcCardRect(hit);
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -834,7 +839,7 @@ async function pinReopen(title) {
   const fire = (type, extra) => el.dispatchEvent(type.startsWith("pointer") ? new PointerEvent(type, { ...opts, ...extra }) : new MouseEvent(type, { ...opts, ...extra }));
   for (let n = 1; n <= 2; n++) { fire("pointerdown", { buttons: 1, detail: n }); fire("mousedown", { buttons: 1, detail: n }); fire("pointerup", { buttons: 0, detail: n }); fire("mouseup", { buttons: 0, detail: n }); fire("click", { buttons: 0, detail: n }); }
   fire("dblclick", { detail: 2 });
-  return { ok: true };
+  return { ok: true, clicked: hit.name };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
