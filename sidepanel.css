@@ -979,3 +979,30 @@ body.lf-page { padding: 24px 32px; max-width: 1500px; margin: 0 auto; font-size:
 .ec-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ec-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin-top: -2px; border: 1px dashed var(--accent); border-radius: 8px; font-size: 12px; }
 .ec-filter.is-active { background: var(--accent-soft); color: var(--accent); }
+
+/* Pin step */
+.sp-listhead { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.sp-listhead[hidden], #spUnpinAll[hidden] { display: none; }
+#spList { display: flex; flex-direction: column; gap: 8px; }
+.sp-pin { border: 1px solid var(--surface-raised); border-radius: 8px; padding: 6px 8px; }
+.sp-row { display: flex; align-items: center; gap: 6px; }
+.sp-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 4px 2px; cursor: pointer; color: inherit; font: inherit; font-weight: 600; text-align: left; }
+.sp-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-caret { flex: none; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .12s; }
+.sp-pin.is-open .sp-caret { transform: rotate(90deg); }
+.sp-open { flex: none; padding: 3px 10px; font-size: 12px; }
+.sp-x { flex: none; background: none; border: 0; color: #6b7280; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.sp-x:hover { color: inherit; }
+.sp-from, .sp-meta { font-size: 11.5px; color: #6b7280; padding: 0 2px 2px 13px; display: flex; align-items: center; gap: 6px; }
+.sp-link { background: none; border: 0; padding: 0; color: #0c65f4; cursor: pointer; font: inherit; font-size: 11.5px; }
+.sp-link:hover { text-decoration: underline; }
+.sp-meta-actions { margin-left: auto; }
+.sp-details { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--surface-raised); }
+.sp-details .sp-meta { padding-left: 0; }
+.sp-label { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; }
+.sp-code { margin: 0; padding: 8px; max-height: 320px; overflow: auto; white-space: pre; font-family: ui-monospace, Consolas, monospace; background: var(--surface-raised); border-radius: 6px; user-select: text; }
+.sp-fields { display: grid; grid-template-columns: minmax(70px, 35%) 1fr; gap: 4px 8px; margin: 0; }
+.sp-fields dt { color: #6b7280; overflow-wrap: anywhere; }
+.sp-fields dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
+#spPanel.is-off #spPinBtn { opacity: .5; }
+.sp-actions { display: flex; gap: 6px; }

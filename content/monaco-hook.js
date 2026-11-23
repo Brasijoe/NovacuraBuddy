@@ -11,7 +11,8 @@
       const m = window.monaco;
       editors = ((m && m.editor && m.editor.getEditors && m.editor.getEditors()) || [])
         .filter((e) => { const dom = e.getDomNode(); return dom && dom.offsetParent !== null && e.getModel(); })
-        .map((e) => ({ uri: String(e.getModel().uri), language: e.getModel().getLanguageId(), text: e.getModel().getValue() }));
+        .map((e, i) => { e.getDomNode().setAttribute("data-nb-ed", String(i)); return e; })
+        .map((e, i) => ({ idx: i, uri: String(e.getModel().uri), language: e.getModel().getLanguageId(), text: e.getModel().getValue() }));
     } catch { /* leave empty */ }
     window.dispatchEvent(new CustomEvent("novacura-buddy-code-texts", { detail: JSON.stringify(editors) }));
   });
