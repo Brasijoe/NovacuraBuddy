@@ -19,6 +19,12 @@ async function spReadOpenStep() {
   } catch { return { error: "Reload the Flow Designer tab once so Buddy can read it." }; }
 }
 
+/** The Designer's variable type icon names, as the format of an output: record = one record, sequence = a list of them. */
+function spKind(icon) {
+  if (icon === "record") return "Record";
+  if (icon === "sequence") return "Sequence (array)";
+  return icon ? `Single value (${icon})` : "Unknown";
+}
 function spStepKey(s) { return `${s.title}`; }
 const spPins = () => sp.pins.filter((p) => p.flow === sp.flow);
 
@@ -57,8 +63,7 @@ function spRender() {
         ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f, i) => `<dt>${spEsc(f.label || "Field")}</dt><dd><span class="sp-val">${spEsc(f.value)}</span><button class="sp-link sp-copyval" data-copyf="${pin.id}:${i}" title="Copy this value">Copy</button></dd>`).join("")}</dl>` : ""}
         ${!pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""}
       </div>`;
-    const outs = pin.fields.filter((f) => f.output);
-    const outLine = outs.length ? `<div class="sp-from">${outs.map((f) => `${spEsc(f.label)}: <b>${spEsc(f.value.length > 60 ? f.value.slice(0, 57) + "…" : f.value)}</b>`).join(" · ")}</div>` : "";
+    const outLine = (pin.outputs || []).length ? `<div class="sp-from">${pin.outputs.map((o, i) => `Output: <b>${spEsc(o.name || "?")}</b> · ${spEsc(spKind(o.icon))}<button class="sp-link" data-copyo="${pin.id}:${i}" title="Copy the output variable name">Copy</button>`).join(" · ")}</div>` : "";
     const from = pin.from ? `<div class="sp-from">Last opened from <button class="sp-link" data-act="back" data-id="${pin.id}" title="Applies the open step and opens ${spEsc(pin.from.title)} again">&#8617; ${spEsc(pin.from.title)}</button></div>` : "";
     card.innerHTML = `<div class="sp-row">
         <button class="sp-toggle" data-act="fold" data-id="${pin.id}" aria-expanded="${!!pin.expanded}" title="${pin.expanded ? "Hide" : "Show"} details"><span class="sp-caret" aria-hidden="true"></span><span class="sp-title">${spEsc(pin.title || "Step")}</span></button>
@@ -80,7 +85,7 @@ function initStepPinPanel() {
     await spPoll();
     const s = sp.open;
     if (!sp.on || !s) return;
-    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, expanded: false };
+    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, outputs: s.outputs || [], expanded: false };
     sp.pins = [pin, ...sp.pins.filter((p) => !(p.flow === pin.flow && p.key === pin.key))];
     while (spPins().length > SP_MAX) sp.pins.splice(sp.pins.lastIndexOf(spPins().pop()), 1);
     await spSave(); spRender();
@@ -89,6 +94,13 @@ function initStepPinPanel() {
   document.getElementById("spList").addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
+    if (b.dataset.copyo) {
+      const [id, i] = b.dataset.copyo.split(":");
+      const pin = sp.pins.find((p) => p.id === id);
+      try { await navigator.clipboard.writeText(pin.outputs[+i].name); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1500);
+      return;
+    }
     if (b.dataset.copyf) {
       const [id, i] = b.dataset.copyf.split(":");
       const pin = sp.pins.find((p) => p.id === id);
@@ -118,7 +130,7 @@ function initStepPinPanel() {
     }
     if (b.dataset.act === "update") {
       await spPoll();
-      if (sp.open && spStepKey(sp.open) === pin.key) Object.assign(pin, { at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields });
+      if (sp.open && spStepKey(sp.open) === pin.key) Object.assign(pin, { at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields, outputs: sp.open.outputs || [] });
       else document.getElementById("spOpenNote").textContent = "That step is not the one open in the Designer right now.";
     }
     await spSave(); spRender();

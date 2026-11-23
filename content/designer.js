@@ -784,7 +784,7 @@ function pinRead() {
   }
   const fields = [];
   for (const el of win.querySelectorAll("input, textarea, select, app-single-line-code-input")) {
-    if (el.closest(".monaco-editor") || (el.type && ["password", "hidden", "file"].includes(el.type))) continue;
+    if (el.closest(".monaco-editor") || el.closest("app-target-variable") || (el.type && ["password", "hidden", "file"].includes(el.type))) continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) continue;
     let value;
@@ -797,13 +797,21 @@ function pinRead() {
     fields.push({ label, value: String(value).slice(0, 5000), output: /output|ausgabe|returns?\b|result/i.test(label) });
   }
   // The step's own name (its Name field) tells steps apart; the window heading is often the same for all of one type.
+  // Output variables: the Designer draws a type icon (record.svg, sequence.svg, ...) before the variable name.
+  const outputs = [];
+  for (const tv of win.querySelectorAll("app-target-variable")) {
+    const name = (tv.querySelector("input") || {}).value || "";
+    const img = tv.querySelector("app-variable-icon img");
+    const icon = img ? String(img.getAttribute("src") || "").split("?")[0].split("/").pop().replace(/\.svg$/i, "") : "";
+    if (name || icon) outputs.push({ name, icon });
+  }
   const nameField = fields.find((f) => /^\s*(name|step name|label|title|titel|bezeichnung)\s*:?\s*$/i.test(f.label));
   return {
     title: nameField ? nameField.value.trim().slice(0, 120) : (heading ? heading.textContent.trim().slice(0, 120) : ""),
     heading: heading ? heading.textContent.trim().slice(0, 120) : "",
     page: document.title,
     url: location.href,
-    editors, fields,
+    editors, fields, outputs,
     text: (win.innerText || "").trim().slice(0, 20000),
     at: Date.now()
   };
