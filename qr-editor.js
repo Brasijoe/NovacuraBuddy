@@ -14,6 +14,13 @@ const els = {
   byInstance: document.querySelector("#byInstanceTable tbody")
 };
 
+// "Edit" from the Quick Report usage results: ?ifsBaseUrl=…&ifsId=… opens the report as it is on that IFS
+// instance. The name is fixed, the instance is preselected and the deploy button updates that report.
+const ifsEdit = (() => {
+  const q = new URLSearchParams(location.search);
+  return q.get("ifsBaseUrl") && q.get("ifsId") ? { baseUrl: q.get("ifsBaseUrl"), id: q.get("ifsId") } : null;
+})();
+
 let editing = { id: null, sqlSha: null, jsonSha: null, createdAt: null };
 let dirty = false;
 let instancesByUrl = {};
@@ -72,6 +79,7 @@ function deployableReport() {
   const name = els.name.value.trim();
   const content = els.sql.value;
   if (!name || !content.trim()) return null;
+  if (ifsEdit) return { id: `ifs-${ifsEdit.id}`, name, content };
   const localId = `local-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
   return { id: editing.id || localId, name, content };
 }
@@ -80,8 +88,30 @@ function renderDeploy() {
   els.deployHint.hidden = true;
   renderDeployForm(els.deployForm, deployableReport, {
     send,
-    onError: (message) => showError(message, true)
+    onError: (message) => showError(message, true),
+    ...(ifsEdit ? { presetBaseUrl: ifsEdit.baseUrl, updateQuickReportId: ifsEdit.id } : {})
   });
+}
+
+async function loadIfsReport() {
+  els.title.textContent = "Edit Quick Report";
+  els.name.readOnly = true;
+  const deployHeading = document.querySelector(".editor-side h2");
+  if (deployHeading) deployHeading.textContent = "Update in IFS";
+  els.tags.hidden = true; // not part of IFS
+  els.save.hidden = true; // this page edits the IFS report; the GitHub library isn't involved
+  els.name.title = "The name of an existing Quick Report can't be changed here";
+  els.sql.placeholder = "Reading from IFS…";
+  renderDeploy();
+  const response = await send({ type: "QRU_DETAIL", baseUrl: ifsEdit.baseUrl, id: ifsEdit.id, masterPassword: "" });
+  els.sql.placeholder = "SELECT …";
+  if (!response.ok) return showError(`Could not read Quick Report ${ifsEdit.id} from IFS: ${explain(response)}`, true);
+  const d = response.details;
+  els.name.value = d.name;
+  els.sql.value = d.sql;
+  els.title.textContent = d.name || `Quick Report ${ifsEdit.id}`;
+  document.title = `${els.title.textContent} — Edit Quick Report`;
+  dirty = false;
 }
 
 function applyReport(report) {
@@ -178,5 +208,6 @@ window.addEventListener("beforeunload", (e) => {
 
 (async () => {
   await loadInstances();
+  if (ifsEdit) return loadIfsReport();
   await loadReports();
 })();

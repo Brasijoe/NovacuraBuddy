@@ -1,6 +1,6 @@
 /** Instance select + permission-set checklist, shared by the Quick Report and Custom LU deploy
  *  forms. Instances come from Basic Data; ticks are pre-set from the per-instance memory. */
-function renderPermissionPicker(container, { send, onError, emptySetsText, onChange }) {
+function renderPermissionPicker(container, { send, onError, emptySetsText, onChange, presetBaseUrl }) {
   const select = document.createElement("select");
   const sets = document.createElement("div");
   sets.className = "checklist";
@@ -18,6 +18,10 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
     }
     select.append(new Option("Choose an IFS instance…", ""));
     for (const instance of instances) select.append(new Option(instance.name, instance.baseUrl));
+    if (presetBaseUrl && instances.some((i) => i.baseUrl === presetBaseUrl)) {
+      select.value = presetBaseUrl;
+      select.onchange();
+    }
   })();
 
   let selectToken = 0; // bumped on every change so a slow response for a previous instance is ignored
