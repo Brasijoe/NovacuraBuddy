@@ -42,6 +42,79 @@ function onStep(id, current, total) {
 
 const designerUrl = (flowId) => `https://build.novacura.com/admin/design/designer/organizations/${sel.orgId}/items/${flowId}`;
 
+const detailCache = new Map();
+const expanded = new Set();
+
+/** Click a row to show the Quick Report's SQL and fields below it (read from IFS on first open). */
+function makeExpandable(tr, r) {
+  tr.classList.add("qu-row");
+  tr.tabIndex = 0;
+  tr.setAttribute("aria-expanded", "false");
+  const first = tr.firstElementChild;
+  const chevron = document.createElement("span");
+  chevron.className = "qu-chevron";
+  chevron.textContent = "▸";
+  first.prepend(chevron);
+  let detailRow = null;
+  const toggle = async () => {
+    if (detailRow) {
+      detailRow.remove(); detailRow = null; expanded.delete(r.id);
+      tr.setAttribute("aria-expanded", "false"); chevron.textContent = "▸";
+      return;
+    }
+    expanded.add(r.id);
+    tr.setAttribute("aria-expanded", "true"); chevron.textContent = "▾";
+    detailRow = document.createElement("tr");
+    detailRow.className = "qu-detail-row";
+    const td = document.createElement("td");
+    td.colSpan = 4;
+    detailRow.append(td);
+    tr.after(detailRow);
+    renderDetail(td, r, null);
+    try {
+      if (!detailCache.has(r.id)) detailCache.set(r.id, (await call({ type: "QRU_DETAIL", baseUrl: sel.baseUrl, id: r.id })).details);
+      if (detailRow) renderDetail(td, r, detailCache.get(r.id));
+    } catch (e) {
+      if (detailRow) renderDetail(td, r, null, e.message);
+    }
+  };
+  tr.addEventListener("click", (e) => { if (!e.target.closest("a")) toggle(); });
+  tr.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === tr) { e.preventDefault(); toggle(); } });
+  if (expanded.has(r.id)) toggle();
+}
+
+function renderDetail(td, r, d, error) {
+  td.innerHTML = "";
+  const box = document.createElement("div");
+  box.className = "qu-detail";
+  if (error) { box.textContent = `Could not read the Quick Report from IFS: ${error}`; box.classList.add("qu-detail-error"); td.append(box); return; }
+  if (!d) { box.textContent = "Reading from IFS…"; box.classList.add("list-count"); td.append(box); return; }
+  const head = document.createElement("div");
+  head.className = "qu-detail-head";
+  const title = document.createElement("h3");
+  title.textContent = "SQL";
+  const copy = document.createElement("button");
+  copy.textContent = "Copy";
+  copy.disabled = !d.sql;
+  copy.onclick = async () => { await navigator.clipboard.writeText(d.sql); copy.textContent = "Copied"; setTimeout(() => (copy.textContent = "Copy"), 1500); };
+  head.append(title, copy);
+  const sql = document.createElement("pre");
+  sql.className = "qu-sql";
+  sql.textContent = d.sql || "No SQL stored on this Quick Report.";
+  box.append(head, sql);
+  if (d.fields.length) {
+    const grid = document.createElement("dl");
+    grid.className = "qu-fields";
+    for (const [k, v] of d.fields) {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      grid.append(dt, dd);
+    }
+    box.append(grid);
+  }
+  td.append(box);
+}
+
 function renderTable() {
   const body = el("quBody");
   body.innerHTML = "";
@@ -83,6 +156,7 @@ function renderTable() {
     flowCell.append(flows);
     tr.append(cells[0], cells[1], name, flowCell);
     body.append(tr);
+    if (sel.baseUrl) makeExpandable(tr, r);
   }
 }
 

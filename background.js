@@ -1327,6 +1327,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
           return sendResponse({ ok: true, names: await QrUsage.readNames(client.get, message.ids) });
         }
+        case "QRU_DETAIL": { // one Quick Report's SQL and fields from IFS (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          return sendResponse({ ok: true, details: await QrUsage.readDetails(client.get, message.id) });
+        }
         case "MC_FLOW_MARKS": { // the Designer's content script: the newest scan that marks this flow
           const { [MODULE_COMPARE_MARKS_KEY]: index = {} } = await chrome.storage.local.get(MODULE_COMPARE_MARKS_KEY);
           const hit = Object.values(index)
