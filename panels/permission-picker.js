@@ -1,5 +1,5 @@
 /** Instance select + permission-set checklist, shared by the Quick Report and Custom LU deploy
- *  forms. Instances come from Basic Data; ticks are pre-set from the per-instance memory. */
+ *  forms. Instances come from Basic Data; ticks are pre-set from the per-instance memory and those sets are listed first. */
 function renderPermissionPicker(container, { send, onError, emptySetsText, onChange, presetBaseUrl }) {
   const select = document.createElement("select");
   const sets = document.createElement("div");
@@ -37,7 +37,9 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
     if (!response.ok) return onError(explainLocked(response));
     const remembered = new Set(response.remembered);
     if (!response.sets.length) sets.textContent = emptySetsText;
-    for (const ps of response.sets) {
+    // Already assigned (remembered) permission sets first, the rest keeps IFS's order.
+    const ordered = [...response.sets.filter((ps) => remembered.has(ps.id)), ...response.sets.filter((ps) => !remembered.has(ps.id))];
+    for (const ps of ordered) {
       const label = document.createElement("label");
       const box = document.createElement("input");
       box.type = "checkbox";
