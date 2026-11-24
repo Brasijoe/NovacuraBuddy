@@ -13,6 +13,11 @@
     <header class="topbar"><h1 id="editorTitle">New Quick Report</h1></header>
 
     <div class="editor-grid">
+      <nav class="editor-nav" id="editorNav" aria-label="Quick Reports" hidden>
+        <div class="section-head"><h2>Quick Reports</h2><span class="info-tip" data-tip="Jump to another Quick Report without going back to the side panel. Folders are the customer folders from the Quick Reports tab (expand or collapse them here, organise them in the side panel). If you have unsaved changes you are asked before leaving."></span></div>
+        <input id="navFilter" placeholder="Filter…" />
+        <div id="navList" class="nav-list"></div>
+      </nav>
       <section class="editor-main">
         <input id="qrName" placeholder="Report name" />
         <input id="qrTags" placeholder="Tags, comma separated" />
@@ -44,7 +49,9 @@
     </div>
 
     <script src="lib/vendor/sql-formatter.min.js"></script>
+    <script src="lib/qr-folders.js"></script>
     <script src="panels/common.js"></script>
+    <script src="panels/info-tip.js"></script>
     <script src="panels/combobox.js"></script>
     <script src="panels/permission-picker.js"></script>
     <script src="panels/qr-deploy-form.js"></script>

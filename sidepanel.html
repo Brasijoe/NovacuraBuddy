@@ -152,8 +152,13 @@
         <button id="qrRefreshBtn">Refresh</button>
       </div>
       <div class="list-toolbar">
-        <span class="section-head"><span class="list-count" id="qrCount"></span><span class="info-tip" data-tip="Each report is a SQL file in your own folder of the GitHub repo set in Basic Data. Deploy creates or updates the Quick Report on an IFS instance and grants the permission sets you tick. Module, shown once a report is deployed, creates the Flow module for it and activates it in the open flow."></span></span>
-        <button id="qrNewBtn" class="btn-primary">New report</button>
+        <span class="section-head"><span class="list-count" id="qrCount"></span><span class="info-tip" data-tip="Each report is a SQL file in your own folder of the GitHub repo set in Basic Data. Group them in expandable folders, e.g. one per customer: create a folder with New folder, then drag reports onto it (folders are remembered in this browser profile and do not change the repo). Deploy creates or updates the Quick Report on an IFS instance and grants the permission sets you tick. Module, shown once a report is deployed, creates the Flow module for it and activates it in the open flow."></span></span>
+        <span class="toolbar-buttons"><button id="qrNewFolderBtn">New folder</button><button id="qrNewBtn" class="btn-primary">New report</button></span>
+      </div>
+      <div id="qrNewFolderRow" class="qr-newfolder" hidden>
+        <input id="qrNewFolderInput" placeholder="Folder name, e.g. a customer" />
+        <button id="qrNewFolderOk" class="btn-primary">Create</button>
+        <button id="qrNewFolderCancel" class="btn-ghost">Cancel</button>
       </div>
       <span class="list-count" id="qrRefreshed"></span>
       <div id="qrSetupHint" class="empty-state" hidden></div>
@@ -614,6 +619,7 @@
 
     <script src="lib/vendor/fuse.min.js"></script>
     <script src="lib/qr-search.js"></script>
+    <script src="lib/qr-folders.js"></script>
     <script src="lib/qr-usage.js"></script>
     <script src="lib/ifs-client.js"></script>
     <script src="lib/ifs-permissions.js"></script>

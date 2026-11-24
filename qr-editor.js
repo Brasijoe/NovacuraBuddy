@@ -123,6 +123,9 @@ function applyReport(report) {
   els.title.textContent = report.name;
   document.title = `${report.name} — Quick Report`;
   window.history.replaceState(null, "", `?id=${encodeURIComponent(report.id)}`);
+  if (!navReports.some((r) => r.id === report.id)) navReports = [...navReports, report].sort((a, b) => a.name.localeCompare(b.name));
+  else navReports = navReports.map((r) => (r.id === report.id ? report : r));
+  renderNav();
   dirty = false;
   renderDeploy();
   refreshHistory();
@@ -136,6 +139,66 @@ async function loadInstances() {
   els.byInstanceSelect.append(new Option("Choose an IFS instance…", ""));
   for (const i of response.instances) els.byInstanceSelect.append(new Option(i.name, i.baseUrl));
 }
+
+// ---- Sidebar: jump between Quick Reports, grouped by the customer folders ----
+let navReports = [];
+let navFolders = QrFolders.empty();
+const navEls = { nav: document.getElementById("editorNav"), list: document.getElementById("navList"), filter: document.getElementById("navFilter") };
+
+function goToReport(id) {
+  if (id === editing.id) return;
+  if (dirty && !confirm("You have unsaved changes in this report. Leave without saving?")) return;
+  dirty = false;
+  location.href = `qr-editor.html?id=${encodeURIComponent(id)}`;
+}
+
+function renderNav() {
+  if (ifsEdit || !navReports.length) { navEls.nav.hidden = true; document.querySelector(".editor-grid").classList.remove("has-nav"); return; }
+  navEls.nav.hidden = false;
+  document.querySelector(".editor-grid").classList.add("has-nav");
+  const term = navEls.filter.value.trim().toLowerCase();
+  const shown = navReports.filter((r) => !term || r.name.toLowerCase().includes(term));
+  navEls.list.innerHTML = "";
+  const item = (r) => {
+    const b = document.createElement("button");
+    b.className = "nav-item" + (r.id === editing.id ? " is-current" : "");
+    b.textContent = r.name;
+    b.title = r.name;
+    if (r.id === editing.id) b.setAttribute("aria-current", "page");
+    b.onclick = () => goToReport(r.id);
+    return b;
+  };
+  if (!navFolders.folders.length) { for (const r of shown) navEls.list.appendChild(item(r)); return; }
+  for (const g of QrFolders.group(navFolders, shown, { hideEmpty: !!term })) {
+    const key = g.folder ? g.folder.id : "__none";
+    const collapsed = !term && !!navFolders.collapsed[key] && !g.reports.some((r) => r.id === editing.id);
+    const wrap = document.createElement("div");
+    const head = document.createElement("button");
+    head.className = "nav-folder-head btn-ghost";
+    head.setAttribute("aria-expanded", String(!collapsed));
+    head.innerHTML = `<span class="qr-caret">${collapsed ? "▸" : "▾"}</span>`;
+    const name = document.createElement("span");
+    name.textContent = g.folder ? g.folder.name : "No folder";
+    const count = document.createElement("span");
+    count.className = "qr-folder-count";
+    count.textContent = String(g.reports.length);
+    head.append(name, count);
+    head.onclick = () => { navFolders = QrFolders.setCollapsed(navFolders, key, !collapsed); QrFolders.save(navFolders); renderNav(); };
+    wrap.appendChild(head);
+    if (!collapsed) {
+      const body = document.createElement("div");
+      body.className = "nav-folder-body";
+      for (const r of g.reports) body.appendChild(item(r));
+      wrap.appendChild(body);
+    }
+    navEls.list.appendChild(wrap);
+  }
+}
+
+navEls.filter.addEventListener("input", renderNav);
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes[QrFolders.KEY] && changes[QrFolders.KEY].newValue) { navFolders = QrFolders.normalize(changes[QrFolders.KEY].newValue); renderNav(); }
+});
 
 async function loadReports() {
   const id = new URLSearchParams(location.search).get("id");
@@ -155,6 +218,9 @@ async function loadReports() {
     showError(`${explain(response)} — showing the last cached copy; saving may be refused until the list loads.`, true);
   }
   reportNames = Object.fromEntries(reports.map((r) => [r.id, r.name]));
+  navReports = reports;
+  navFolders = await QrFolders.load();
+  renderNav();
   if (!id) return renderDeploy();
   const report = reports.find((r) => r.id === id);
   if (!report) return showError(`Quick Report "${id}" wasn't found in your folder.`, true);
