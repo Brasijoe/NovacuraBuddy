@@ -60,9 +60,6 @@ function mcEnsureHost() {
     .layer { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; }
     .outline { position: fixed; border: 2px solid; border-radius: 8px; box-sizing: border-box; pointer-events: none; }
     .cl-row { position: fixed; display: flex; gap: 3px; flex-wrap: nowrap; overflow: hidden; pointer-events: none; }
-    .cl-status { position: fixed; left: 16px; bottom: 16px; padding: 3px 10px; border-radius: 12px; background: #fff; color: #4b5068; border: 1px solid #d9dcef; font: 11.5px/1.4 system-ui, sans-serif; box-shadow: 0 2px 8px rgba(20,22,53,.15); cursor: pointer; pointer-events: auto; z-index: 2147483001; max-width: 60vw; }
-    .cl-status.warn { border-color: #fd6e15; color: #a5470b; }
-    @media (prefers-color-scheme: dark) { .cl-status { background: #1b1d3a; color: #a9acc9; border-color: #33365c; } }
     .cl-chip { height: 14px; padding: 0 6px; border-radius: 7px; color: #fff; font: 600 9.5px/14px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: auto; cursor: help; }
     .badge { position: fixed; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; color: #fff; font: 700 11px/18px system-ui, sans-serif; text-align: center; pointer-events: auto; cursor: help; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
     .panel { position: fixed; right: 16px; bottom: 16px; width: 340px; max-height: 50vh; display: flex; flex-direction: column; background: #fff; color: #141635; border: 1px solid #d9dcef; border-radius: 12px; box-shadow: 0 8px 28px rgba(20,22,53,.22); font: 13px/1.4 system-ui, sans-serif; z-index: 2147483001; pointer-events: auto; }
@@ -365,8 +362,8 @@ function mcPlace() {
 // A small colour-coded label with the connector name above every step that uses a connector
 // (Database, REST, PowerShell ...); steps without one get nothing. Read-only like the marks: the
 // connectors come from the flow's designer data (background, CL_FLOW_CONNECTORS), the labels are
-// drawn on our own layer. Switched on/off from the side panel or the pill in the Designer.
-const cl = { key: null, steps: [], off: true, error: null, loaded: false, targets: new Map(), shown: 0 };
+// drawn on our own layer. Switched on/off from the side panel.
+const cl = { key: null, steps: [], off: true, targets: new Map() };
 
 function clLocate() {
   cl.targets = new Map();
@@ -379,8 +376,6 @@ function clLocate() {
 }
 
 function clPlace() {
-  cl.shown = 0;
-  clStatus();
   if (cl.off) return;
   for (const step of cl.steps) {
     for (const target of cl.targets.get(step.id) || []) {
@@ -400,43 +395,8 @@ function clPlace() {
         row.append(chip);
       }
       mc.layer.append(row);
-      cl.shown++;
     }
   }
-  clStatus();
-}
-
-/** A small pill bottom left: what the labels found (or why not), click copies the page info. */
-function clStatus() {
-  if (!mc.root) return;
-  let pill = mc.root.querySelector(".cl-status");
-  if (cl.off || !cl.key) { if (pill) pill.remove(); return; }
-  if (!pill) {
-    pill = document.createElement("div");
-    pill.className = "cl-status";
-    pill.title = "Click to copy what the connector labels see (to send to the developer)";
-    pill.onclick = async () => {
-      try { await navigator.clipboard.writeText(clDiagnostics()); pill.dataset.copied = "1"; setTimeout(() => delete pill.dataset.copied, 1500); } catch { /* ignore */ }
-    };
-    mc.root.append(pill);
-  }
-  const found = cl.steps.filter((st) => (cl.targets.get(st.id) || []).length).length;
-  pill.textContent = pill.dataset.copied ? "Copied" : cl.error ? `Connector labels: ${cl.error}` : !cl.loaded ? "Connector labels: reading the flow…"
-    : !cl.steps.length ? "Connector labels: no step uses a connector"
-    : `Connector labels: ${found} of ${cl.steps.length} steps found on the canvas`;
-  pill.classList.toggle("warn", !!cl.error || (cl.loaded && cl.steps.length > 0 && found < cl.steps.length));
-}
-
-function clDiagnostics() {
-  const texts = mc.canvas ? mc.canvas.texts : null;
-  return [
-    `NovacuraBuddy connector labels ${new Date().toISOString()}`,
-    `url: ${location.pathname}`,
-    `error: ${cl.error || "none"}, loaded: ${cl.loaded}, steps with a connector: ${cl.steps.length}`,
-    `canvas texts reported: ${texts ? texts.length : "none (canvas hook silent)"}`,
-    ...cl.steps.map((st) => `${st.label} (${st.id}) [${st.connectors.map((c) => c.name).join(", ")}] targets: ${(cl.targets.get(st.id) || []).length}`),
-    `canvas names: ${texts ? texts.slice(0, 40).map((t) => `"${t.text.slice(0, 30)}"`).join(" ") : ""}`
-  ].join("\n");
 }
 
 async function clRefresh(force) {
@@ -445,15 +405,11 @@ async function clRefresh(force) {
   if (!force && key === cl.key) return;
   cl.key = key;
   cl.steps = [];
-  cl.error = null;
-  cl.loaded = false;
   cl.targets = new Map();
   if (m && !cl.off) {
-    const res = await chrome.runtime.sendMessage({ type: "CL_FLOW_CONNECTORS", orgId: m[1], itemId: m[2] }).catch((e) => ({ ok: false, error: e.message }));
+    const res = await chrome.runtime.sendMessage({ type: "CL_FLOW_CONNECTORS", orgId: m[1], itemId: m[2] }).catch(() => null);
     if (cl.key !== key) return;
     cl.steps = res && res.ok ? res.steps : [];
-    cl.error = res && res.ok ? null : String((res && res.error) || "no answer from the extension").slice(0, 120);
-    cl.loaded = true;
   }
   clLocate();
   mcEnsureHost();
@@ -784,7 +740,7 @@ function pinRead() {
   }
   const fields = [];
   for (const el of win.querySelectorAll("input, textarea, select, app-single-line-code-input")) {
-    if (el.closest(".monaco-editor") || (el.type && ["password", "hidden", "file"].includes(el.type))) continue;
+    if (el.closest(".monaco-editor") || el.closest("app-target-variable") || (el.type && ["password", "hidden", "file"].includes(el.type))) continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) continue;
     let value;
@@ -793,16 +749,25 @@ function pinRead() {
     else if (el.tagName === "APP-SINGLE-LINE-CODE-INPUT") value = el.textContent.replace(/\u00a0/g, " ").trim();
     else value = el.value;
     if (value === "" || value == null) continue;
-    fields.push({ label: pinLabelFor(el, win), value: String(value).slice(0, 5000) });
+    const label = pinLabelFor(el, win);
+    fields.push({ label, value: String(value).slice(0, 5000), output: /output|ausgabe|returns?\b|result/i.test(label) });
   }
   // The step's own name (its Name field) tells steps apart; the window heading is often the same for all of one type.
+  // Output variables: the Designer draws a type icon (record.svg, sequence.svg, ...) before the variable name.
+  const outputs = [];
+  for (const tv of win.querySelectorAll("app-target-variable")) {
+    const name = (tv.querySelector("input") || {}).value || "";
+    const img = tv.querySelector("app-variable-icon img");
+    const icon = img ? String(img.getAttribute("src") || "").split("?")[0].split("/").pop().replace(/\.svg$/i, "") : "";
+    if (name || icon) outputs.push({ name, icon });
+  }
   const nameField = fields.find((f) => /^\s*(name|step name|label|title|titel|bezeichnung)\s*:?\s*$/i.test(f.label));
   return {
     title: nameField ? nameField.value.trim().slice(0, 120) : (heading ? heading.textContent.trim().slice(0, 120) : ""),
     heading: heading ? heading.textContent.trim().slice(0, 120) : "",
     page: document.title,
     url: location.href,
-    editors, fields,
+    editors, fields, outputs,
     text: (win.innerText || "").trim().slice(0, 20000),
     at: Date.now()
   };
@@ -861,56 +826,7 @@ async function pinReopen(title) {
   return { ok: false, error: got === null ? `Selected "${title}" in the Designer, but its window did not open. Press Enter on the canvas.` : `Opened a different step ("${got}") instead of "${title}".` };
 }
 
-/** Without a step window: the Designer's bottom toolbar, every visible text input and the open overlays (search box and results),
- *  to find out how the step search works. Read-only. */
-function pinDumpPage() {
-  const lines = [];
-  const outline = (el, depth, budget) => {
-    if (lines.length >= budget || depth > 10) return;
-    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).filter(Boolean).join(" ").slice(0, 60);
-    const attrs = ["id", "role", "aria-label", "placeholder", "type", "title", "src"].filter((a) => el.getAttribute(a)).map((a) => `${a}="${el.getAttribute(a).slice(0, 50)}"`).join(" ");
-    const val = "value" in el && el.value ? ` value="${String(el.value).slice(0, 40)}"` : "";
-    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
-    lines.push(`${"  ".repeat(depth)}${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${attrs}${val} ${own}`.trimEnd());
-    for (const c of el.children) outline(c, depth + 1, budget);
-  };
-  const vis = (el) => { const r = el.getBoundingClientRect(); const c = getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
-  lines.push("== BOTTOM TOOLBAR (visible buttons/inputs in the lowest 140px) ==");
-  for (const el of document.querySelectorAll("button, input, [role=button], [role=textbox], [role=search]")) {
-    if (!vis(el) || (mc.host && mc.host.contains(el))) continue;
-    const r = el.getBoundingClientRect();
-    if (r.top < innerHeight - 140) continue;
-    const img = el.querySelector("img, svg, [style*='.svg']");
-    lines.push(`${el.tagName.toLowerCase()}.${(typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 3).join(".") : "")} aria-label="${el.getAttribute("aria-label") || ""}" title="${el.getAttribute("title") || ""}" placeholder="${el.getAttribute("placeholder") || ""}" text="${el.textContent.trim().slice(0, 40)}" img="${img ? (img.getAttribute("src") || img.getAttribute("style") || "svg").slice(0, 60) : ""}" at=${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`);
-  }
-  lines.push("== VISIBLE TEXT INPUTS ==");
-  for (const el of document.querySelectorAll("input, textarea, [contenteditable=true]")) if (vis(el) && !el.closest(".monaco-editor")) { const r = el.getBoundingClientRect(); lines.push(`${el.tagName.toLowerCase()} placeholder="${el.getAttribute("placeholder") || ""}" aria-label="${el.getAttribute("aria-label") || ""}" value="${(el.value || "").slice(0, 40)}" at=${Math.round(r.left)},${Math.round(r.top)}`); }
-  lines.push("== OVERLAYS ==");
-  for (const el of document.querySelectorAll(".cdk-overlay-container > *, .cdk-overlay-pane, [role=listbox], [role=menu], [role=dialog]")) if (vis(el) && !(mc.host && mc.host.contains(el))) outline(el, 0, 300);
-  return `URL: ${location.pathname}\n${lines.join("\n")}`;
-}
-
-/** A compact outline of the open step window (tags, classes, own text), for finding out how the Designer marks a step's name. Read-only. */
-function pinDump() {
-  const win = ptDialogs().pop();
-  if (!win) return pinDumpPage();
-  const lines = [];
-  const walk = (el, depth) => {
-    if (lines.length >= 400 || depth > 14) return;
-    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).filter(Boolean).join(" ").slice(0, 60);
-    const attrs = ["id", "role", "aria-label", "placeholder", "type", "title"].filter((a) => el.getAttribute(a)).map((a) => `${a}="${el.getAttribute(a).slice(0, 40)}"`).join(" ");
-    const val = "value" in el && el.value && !el.closest(".monaco-editor") ? ` value="${String(el.value).slice(0, 40)}"` : "";
-    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
-    lines.push(`${"  ".repeat(depth)}${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${attrs}${val} ${own}`.trimEnd());
-    for (const c of el.children) walk(c, depth + 1);
-  };
-  walk(win, 0);
-  const canvas = mc.canvas ? mc.canvas.texts.slice(0, 40).map((t) => t.text).join(" | ") : "(no canvas texts)";
-  return `URL: ${location.pathname}\nWINDOW:\n${lines.join("\n")}\nCANVAS TEXTS: ${canvas}`;
-}
-
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message && message.type === "PIN_DUMP") { sendResponse({ ok: true, text: pinDump() }); return; }
   if (!message || (message.type !== "PIN_READ" && message.type !== "PIN_REOPEN")) return;
   if (message.type === "PIN_REOPEN") { pinReopen(message.title).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message })); return true; }
   try { sendResponse({ ok: true, flow: pinFlowId(), step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
