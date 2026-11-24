@@ -19,6 +19,58 @@ async function spReadOpenStep() {
   } catch { return { error: "Reload the Flow Designer tab once so Buddy can read it." }; }
 }
 
+/** The Designer's variable type icon names, as the format of an output: record = one record, sequence = a list of them. */
+function spKind(icon) {
+  if (icon === "record") return "Record";
+  if (icon === "sequence") return "Sequence (array)";
+  return icon ? `Single value (${icon})` : "Unknown";
+}
+/** Columns of every `type Name = { field: type, ... }` in the step's code: [{ type, columns: [{ name, type }] }]. */
+function spTypes(editors) {
+  const out = [];
+  for (const e of editors || []) {
+    const re = /\btype\s+(\w+)\s*=\s*\{([^}]*)\}/g;
+    let m;
+    while ((m = re.exec(e.text))) {
+      const columns = m[2].split(/[,\n]/).map((l) => l.trim()).filter(Boolean).map((l) => { const k = l.indexOf(":"); return k < 0 ? null : { name: l.slice(0, k).trim(), type: l.slice(k + 1).trim() }; }).filter(Boolean);
+      if (columns.length) out.push({ type: m[1], columns });
+    }
+  }
+  return out;
+}
+/** Column names of the first SELECT in the step's SQL: the alias (AS x or trailing word) or the part after the last dot.
+ *  Empty when the list has * (Buddy cannot know the columns then) or no SQL is found. */
+function spSqlColumns(editors) {
+  for (const e of editors || []) {
+    const text = String(e.text || "").replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ");
+    const m = /\bselect\b/i.exec(text);
+    if (!m) continue;
+    let depth = 0, cur = "", parts = [], i = m.index + m[0].length, done = false;
+    for (; i < text.length && !done; i++) {
+      const c = text[i];
+      if (c === "'") { const j = text.indexOf("'", i + 1); const end = j < 0 ? text.length : j; cur += text.slice(i, end + 1); i = end; continue; }
+      if (c === "(") depth++;
+      else if (c === ")") { depth--; if (depth < 0) break; }
+      if (depth === 0 && c === ",") { parts.push(cur); cur = ""; continue; }
+      if (depth === 0 && /\s/.test(c) && /^\s+from\b/i.test(text.slice(i))) { done = true; break; }
+      cur += c;
+    }
+    if (cur.trim()) parts.push(cur);
+    const names = [];
+    for (let p of parts) {
+      p = p.replace(/^\s*(distinct|all)\s+/i, "").trim();
+      if (!p || /(^|\.)\*$/.test(p)) return [];
+      const as = /\bas\s+"?([A-Za-z_][\w$#]*)"?\s*$/i.exec(p);
+      const tail = /(?:^|[\s.)])"?([A-Za-z_][\w$#]*)"?\s*$/.exec(p);
+      const name = as ? as[1] : tail ? tail[1] : "";
+      if (!name) return [];
+      names.push(name);
+    }
+    if (names.length) return [{ type: "SELECT", columns: names.map((n) => ({ name: n, type: "" })) }];
+  }
+  return [];
+}
+function spColumnSets(pin) { const t = spTypes(pin.editors); return t.length ? t : spSqlColumns(pin.editors); }
 function spStepKey(s) { return `${s.title}`; }
 const spPins = () => sp.pins.filter((p) => p.flow === sp.flow);
 
@@ -53,16 +105,18 @@ function spRender() {
     const details = !pin.expanded ? "" : `<div class="sp-details">
         <div class="sp-meta">Pinned ${new Date(pin.at).toLocaleTimeString()}${pin.heading && pin.heading !== pin.title ? ` · Window: ${spEsc(pin.heading)}` : ""}
           <span class="sp-meta-actions"><button class="sp-link" data-act="update" data-id="${pin.id}" title="Read this step again from the open step window">&#8635; Update</button></span></div>
+        ${spColumnSets(pin).map((t, i) => `<div class="sp-label"><span>Columns of ${spEsc(t.type)} (${t.columns.length})</span><button class="sp-link" data-copyc="${pin.id}:${i}" title="Copy the column names, one per line">Copy names</button></div><dl class="sp-fields sp-cols" style="font-size:${sp.size}px">${t.columns.map((c) => `<dt>${spEsc(c.name)}</dt><dd><span class="sp-val">${spEsc(c.type)}</span></dd>`).join("")}</dl>`).join("")}
         ${pin.editors.map((e, i) => `<div class="sp-label"><span>${spEsc(e.label || e.language || "Code")}</span><button class="sp-link" data-copy="${pin.id}:${i}">Copy</button></div><pre class="sp-code" style="font-size:${sp.size}px">${spEsc(e.text)}</pre>`).join("")}
-        ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f) => `<dt>${spEsc(f.label || "Field")}</dt><dd>${spEsc(f.value)}</dd>`).join("")}</dl>` : ""}
+        ${pin.fields.length ? `<dl class="sp-fields" style="font-size:${sp.size}px">${pin.fields.map((f, i) => `<dt>${spEsc(f.label || "Field")}</dt><dd><span class="sp-val">${spEsc(f.value)}</span><button class="sp-link sp-copyval" data-copyf="${pin.id}:${i}" title="Copy this value">Copy</button></dd>`).join("")}</dl>` : ""}
         ${!pin.editors.length && !pin.fields.length ? '<p class="api-hint">The step window showed no code or fields Buddy could read.</p>' : ""}
       </div>`;
+    const outLine = (pin.outputs || []).length ? `<div class="sp-from">${pin.outputs.map((o, i) => `Output: <b>${spEsc(o.name || "?")}</b> · ${spEsc(spKind(o.icon))}<button class="sp-link" data-copyo="${pin.id}:${i}" title="Copy the output variable name">Copy</button>`).join(" · ")}</div>` : "";
     const from = pin.from ? `<div class="sp-from">Last opened from <button class="sp-link" data-act="back" data-id="${pin.id}" title="Applies the open step and opens ${spEsc(pin.from.title)} again">&#8617; ${spEsc(pin.from.title)}</button></div>` : "";
     card.innerHTML = `<div class="sp-row">
         <button class="sp-toggle" data-act="fold" data-id="${pin.id}" aria-expanded="${!!pin.expanded}" title="${pin.expanded ? "Hide" : "Show"} details"><span class="sp-caret" aria-hidden="true"></span><span class="sp-title">${spEsc(pin.title || "Step")}</span></button>
         <button class="btn-primary sp-open" data-act="reopen" data-id="${pin.id}" title="Applies the step open in the Designer, then opens this one there">Open</button>
         <button class="sp-x" data-act="remove" data-id="${pin.id}" title="Unpin" aria-label="Unpin">&times;</button>
-      </div>${from}${details}`;
+      </div>${outLine}${from}${details}`;
     list.appendChild(card);
   }
 }
@@ -72,21 +126,13 @@ function initStepPinPanel() {
     if (st) { sp.on = st.on !== false; sp.size = st.size || 12; sp.pins = st.pins || []; }
     spRender();
   });
-  document.getElementById("spDumpBtn").addEventListener("click", async (e) => {
-    const b = e.currentTarget, old = b.textContent;
-    const tabs = await chrome.tabs.query({ url: "https://build.novacura.com/*" });
-    const tab = tabs.find((t) => t.active) || tabs[0];
-    const res = tab ? await chrome.tabs.sendMessage(tab.id, { type: "PIN_DUMP" }).catch(() => null) : null;
-    try { await navigator.clipboard.writeText(res && res.text ? res.text : "No step window found."); b.textContent = res && res.text ? "Copied" : "No window"; } catch { b.textContent = "Copy failed"; }
-    setTimeout(() => { b.textContent = old; }, 2000);
-  });
   document.getElementById("spOn").addEventListener("change", (e) => { sp.on = e.target.checked; spSave(); spRender(); spPoll(); });
   document.getElementById("spSize").addEventListener("input", (e) => { sp.size = +e.target.value; spSave(); spRender(); });
   document.getElementById("spPinBtn").addEventListener("click", async () => {
     await spPoll();
     const s = sp.open;
     if (!sp.on || !s) return;
-    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, expanded: false };
+    const pin = { id: String(Date.now()), flow: sp.flow, title: s.title, heading: s.heading, page: s.page, key: spStepKey(s), at: s.at, editors: s.editors, fields: s.fields, outputs: s.outputs || [], expanded: false };
     sp.pins = [pin, ...sp.pins.filter((p) => !(p.flow === pin.flow && p.key === pin.key))];
     while (spPins().length > SP_MAX) sp.pins.splice(sp.pins.lastIndexOf(spPins().pop()), 1);
     await spSave(); spRender();
@@ -95,6 +141,27 @@ function initStepPinPanel() {
   document.getElementById("spList").addEventListener("click", async (e) => {
     const b = e.target.closest("button");
     if (!b) return;
+    if (b.dataset.copyc) {
+      const [id, i] = b.dataset.copyc.split(":");
+      const pin = sp.pins.find((p) => p.id === id);
+      try { await navigator.clipboard.writeText(spColumnSets(pin)[+i].columns.map((c) => c.name).join("\n")); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      setTimeout(() => { b.textContent = "Copy names"; }, 1500);
+      return;
+    }
+    if (b.dataset.copyo) {
+      const [id, i] = b.dataset.copyo.split(":");
+      const pin = sp.pins.find((p) => p.id === id);
+      try { await navigator.clipboard.writeText(pin.outputs[+i].name); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1500);
+      return;
+    }
+    if (b.dataset.copyf) {
+      const [id, i] = b.dataset.copyf.split(":");
+      const pin = sp.pins.find((p) => p.id === id);
+      try { await navigator.clipboard.writeText(pin.fields[+i].value); b.textContent = "Copied"; } catch { b.textContent = "Failed"; }
+      setTimeout(() => { b.textContent = "Copy"; }, 1500);
+      return;
+    }
     if (b.dataset.copy) {
       const [id, i] = b.dataset.copy.split(":");
       const pin = sp.pins.find((p) => p.id === id);
@@ -117,7 +184,7 @@ function initStepPinPanel() {
     }
     if (b.dataset.act === "update") {
       await spPoll();
-      if (sp.open && spStepKey(sp.open) === pin.key) Object.assign(pin, { at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields });
+      if (sp.open && spStepKey(sp.open) === pin.key) Object.assign(pin, { at: sp.open.at, editors: sp.open.editors, fields: sp.open.fields, outputs: sp.open.outputs || [] });
       else document.getElementById("spOpenNote").textContent = "That step is not the one open in the Designer right now.";
     }
     await spSave(); spRender();

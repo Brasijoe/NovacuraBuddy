@@ -167,6 +167,7 @@
         <label class="cm-field">1. Organisation <select id="qruOrgSelect"></select></label>
         <div id="qruOrgHint" class="empty-state" hidden></div>
         <label class="cm-field">2. IFS instance (for the names) <select id="qruInstanceSelect"></select></label>
+        <label class="cm-field">3. Scope <select id="qruScopeSelect"><option value="org">Whole organisation</option><option value="flow">Current flow only (open Designer tab)</option></select></label>
         <button id="qruScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
         <div id="qruHint" class="empty-state" hidden></div>
         <p id="qruLast" class="list-count" hidden></p>
@@ -571,7 +572,7 @@
         <div class="cm-card">
           <div class="section-head"><h2>1. Open step</h2><span class="info-tip" data-tip="The step window currently open in the Flow Designer. Pin it to keep a copy of its code and settings here. Pins belong to the flow they were made in (up to 6 per flow). Open applies the open step and opens the pinned one (experimental); the pin then remembers which step you came from, so you can go back."></span></div>
           <p id="spOpenNote" class="api-hint">Open a step in the Flow Designer.</p>
-          <div class="sp-actions"><button id="spPinBtn" class="btn-primary" disabled>Pin current step</button><button id="spDumpBtn" class="btn-ghost" title="Copies an outline of the open step window and the step names on the canvas, for troubleshooting">Copy diagnostics</button></div>
+          <div class="sp-actions"><button id="spPinBtn" class="btn-primary" disabled>Pin current step</button></div>
         </div>
         <p id="spOffNote" class="api-hint" hidden>Pinning is off. Your pinned steps are kept.</p>
         <div class="sp-listhead"><button id="spUnpinAll" class="btn-ghost" title="Removes every pinned step of this flow">Unpin all</button></div>
@@ -613,6 +614,7 @@
 
     <script src="lib/vendor/fuse.min.js"></script>
     <script src="lib/qr-search.js"></script>
+    <script src="lib/qr-usage.js"></script>
     <script src="lib/ifs-client.js"></script>
     <script src="lib/ifs-permissions.js"></script>
     <script src="lib/qr-deploy.js"></script>

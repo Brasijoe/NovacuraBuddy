@@ -9,11 +9,12 @@ function qruHint(text) {
   qruEl("qruHint").hidden = !text;
 }
 
-const qruSelection = () => ({ orgId: qruEl("qruOrgSelect").value, baseUrl: qruEl("qruInstanceSelect").value });
+const qruSelection = () => ({ orgId: qruEl("qruOrgSelect").value, baseUrl: qruEl("qruInstanceSelect").value, flowId: qruEl("qruScopeSelect").value === "flow" ? qruEl("qruScopeSelect").dataset.flowId || "" : "" });
 
 function qruOpenResults(sel, scan) {
   const q = new URLSearchParams({ orgId: sel.orgId, baseUrl: sel.baseUrl });
   q.set("org", qruEl("qruOrgSelect").selectedOptions[0].textContent);
+  if (sel.flowId) q.set("flowId", sel.flowId);
   if (scan) q.set("scan", "1");
   chrome.tabs.create({ url: chrome.runtime.getURL(`qr-usage.html?${q}`) });
 }
@@ -24,7 +25,7 @@ async function qruShowLast() {
   const last = qruEl("qruLast");
   last.hidden = true;
   if (!sel.orgId) return;
-  const key = `qrUsage:${sel.orgId}`;
+  const key = sel.flowId ? `qrUsage:${sel.orgId}:${sel.flowId}` : `qrUsage:${sel.orgId}`;
   const { [key]: result } = await chrome.storage.local.get(key);
   const now = qruSelection();
   if (!result || now.orgId !== sel.orgId) return;
@@ -87,6 +88,18 @@ function refreshQruState() {
 }
 
 qruEl("qruOrgSelect").addEventListener("change", qruShowLast);
+qruEl("qruScopeSelect").addEventListener("change", async () => {
+  const scope = qruEl("qruScopeSelect");
+  scope.dataset.flowId = "";
+  qruHint("");
+  if (scope.value === "flow") {
+    const ctx = await send({ type: "LF_CONTEXT" });
+    if (!ctx.ok || !ctx.itemId) { scope.value = "org"; return qruHint("No Flow Designer tab with a flow is open. Open the flow in the Designer first."); }
+    scope.dataset.flowId = ctx.itemId;
+    if (ctx.orgId && [...qruEl("qruOrgSelect").options].some((o) => o.value === ctx.orgId)) qruEl("qruOrgSelect").value = ctx.orgId;
+  }
+  qruShowLast();
+});
 
 qruEl("qruScanBtn").addEventListener("click", async () => {
   const sel = qruSelection();
