@@ -12,7 +12,7 @@ importScripts(
   "lib/module-merge.js",
   "lib/flow-modules.js",
   "lib/flow-transfer.js",
-  "lib/flow-links.js",
+  "lib/flow-designer-data.js",
   "lib/flow-step-sql.js",
   "lib/flow-commit-chain.js",
   "lib/flow-environments.js",
@@ -493,7 +493,7 @@ async function refreshIfOpen(orgId, itemIds) {
  *  flows and grouping per package (read-only). */
 async function buildFlowIndex(orgId) {
   if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: grouping per package reads the packages from Flow.");
-  const scan = await linkScan(orgId);
+  const scan = await assetScan(orgId);
   // keys: the short values an asset carries (ids, keys, branch ids) — one of them may be the
   // flow key at the end of a run.novacura.com URL.
   const shortValues = (o) => Object.values(o || {}).filter((v) => typeof v === "string" && v.length <= 64);
@@ -586,18 +586,18 @@ function designerPageProbe() {
   return out.join("\n");
 }
 
-/** Linked Flows tab: one scan of an organisation's assets (with link tags) is kept for a minute,
- *  so the open-flow strip, the Link flows list and the overview share it. Writes drop it. */
-const linkScans = new Map(); // orgId -> { at, promise }
-function linkScan(orgId, force) {
-  const hit = linkScans.get(orgId);
+/** One scan of an organisation's assets is kept for a minute and shared by the tabs that need
+ *  it (Commit Dependencies, Flow Dependencies, ...). Writes drop it. */
+const assetScans = new Map(); // orgId -> { at, promise }
+function assetScan(orgId, force) {
+  const hit = assetScans.get(orgId);
   if (!force && hit && Date.now() - hit.at < 60000) return hit.promise;
-  const promise = FlowLinks.scan({ flowFetch: boundFlowFetch(), orgId });
-  linkScans.set(orgId, { at: Date.now(), promise });
-  promise.catch(() => linkScans.delete(orgId));
+  const promise = FlowDesignerData.scan({ flowFetch: boundFlowFetch(), orgId });
+  assetScans.set(orgId, { at: Date.now(), promise });
+  promise.catch(() => assetScans.delete(orgId));
   return promise;
 }
-const linkScanDone = (orgId) => linkScans.delete(orgId);
+const assetScanDone = (orgId) => assetScans.delete(orgId);
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
@@ -890,51 +890,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.choice === "update").map((r) => r.targetId));
           return sendResponse({ ok: true, outcome });
         }
-        case "LF_CONTEXT": { // the open flow and the organisation the tab starts on
+        case "FLOW_CONTEXT": { // the open flow and the organisation the tab starts on
           const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
           return sendResponse({ ok: true, orgId: designerTabState ? designerTabState.orgId : lastOrgId || null, itemId: designerTabState ? designerTabState.itemId : null, hasFlowToken: !!flowToken.get() });
         }
-        case "LF_SCAN": {
-          const result = await linkScan(message.orgId, message.force);
-          const assets = result.assets.map(({ id, name, type, packageId, packageName, tag }) => ({ id, name, type, packageId, packageName, tag }));
-          return sendResponse({ ok: true, scan: { orgId: result.orgId, packages: result.packages, assets, scannedAt: result.scannedAt } });
-        }
-        case "LF_STATUSES":
-          return sendResponse({ ok: true, statuses: await FlowLinks.statuses({ flowFetch: boundFlowFetch(), orgId: message.orgId, scanResult: await linkScan(message.orgId), linkIds: message.linkIds }) });
-        case "LF_PLAN_LINK":
-          return sendResponse({ ok: true, plan: await FlowLinks.planLink({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, adoptIds: message.adoptIds, newPackageIds: message.newPackageIds, scanResult: await linkScan(message.orgId, message.force) }) });
-        case "LF_LINK": {
-          log("LF_LINK start:", message.sourceId, "adopt", message.adoptIds, "new in", message.newPackageIds);
-          try {
-            const outcome = await FlowLinks.runLink({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, adoptIds: message.adoptIds, newPackageIds: message.newPackageIds, log });
-            return sendResponse({ ok: true, outcome });
-          } finally { linkScanDone(message.orgId); }
-        }
-        case "LF_PLAN_PUSH":
-          return sendResponse({ ok: true, plan: await FlowLinks.planPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, targetIds: message.targetIds, scanResult: await linkScan(message.orgId, true) }) });
-        case "LF_LATEST": {
-          const latest = await FlowLinks.latestOf({ flowFetch: boundFlowFetch(), orgId: message.orgId, scanResult: await linkScan(message.orgId, true), linkId: message.linkId, exceptId: message.exceptId });
-          return sendResponse({ ok: true, latest: latest ? { id: latest.id, name: latest.name, packageName: latest.packageName } : null });
-        }
-        case "LF_PUSH": {
-          log("LF_PUSH start:", message.sourceId, "->", message.targets.map((t) => t.id));
-          try {
-            const outcome = await FlowLinks.runPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, sourceId: message.sourceId, targets: message.targets, expectedMaxRev: message.expectedMaxRev, expectedSourceFp: message.expectedSourceFp, expectedSourceETag: message.expectedSourceETag, log });
-            await refreshIfOpen(message.orgId, outcome.results.filter((r) => r.outcome === "pushed").map((r) => r.id));
-            return sendResponse({ ok: true, outcome });
-          } finally { linkScanDone(message.orgId); }
-        }
-        case "LF_ENVIRONMENTS": { // the org's environments, and where the given flows are deployed
+        case "FLOW_ENVIRONMENTS": { // the org's environments, and where the given flows are deployed
           const flowFetch = boundFlowFetch();
           const environments = await FlowEnvironments.listEnvironments({ flowFetch, orgId: message.orgId });
           const deployed = {};
           for (const f of message.flows || []) deployed[f.id] = await FlowEnvironments.deployedIn({ flowFetch, orgId: message.orgId, packageId: f.packageId, assetId: f.id, environments }).catch(() => []);
           return sendResponse({ ok: true, environments, deployed });
         }
-        case "LF_DEPLOY": { // the just committed head versions, read fresh after the push
+        case "FLOW_DEPLOY": { // the just committed head versions, read fresh after the push
           const flowFetch = boundFlowFetch();
-          linkScanDone(message.orgId);
-          const index = new Map((await linkScan(message.orgId, true)).assets.map((a) => [a.id, a]));
+          assetScanDone(message.orgId);
+          const index = new Map((await assetScan(message.orgId, true)).assets.map((a) => [a.id, a]));
           // Apps and automations are products and not in the asset scan: the panel passes what it knows of them.
           const given = new Map((message.flows || []).map((f) => [f.id, f]));
           const flows = [];
@@ -949,18 +919,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
             flows.push({ id, type: a ? a.type : g.type, packageId, headVersionId: head });
           }
-          log("LF_DEPLOY:", message.envId, flows.map((f) => f.id));
+          log("FLOW_DEPLOY:", message.envId, flows.map((f) => f.id));
           return sendResponse({ ok: true, results: await FlowEnvironments.deploy({ flowFetch, orgId: message.orgId, envId: message.envId, flows }) });
         }
         case "CC_PLAN": { // the tree of flows that use the open asset, bottom to top (read-only)
           const onProgress = (current, total, name) => chrome.runtime.sendMessage({ type: "CC_PROGRESS", orgId: message.orgId, current, total, name }).catch(() => {});
-          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await linkScan(message.orgId, true), log, onProgress }) });
+          return sendResponse({ ok: true, plan: await FlowCommitChain.plan({ flowFetch: boundFlowFetch(), orgId: message.orgId, rootId: message.rootId, scanResult: await assetScan(message.orgId, true), log, onProgress }) });
         }
         // Flow Analysis (read-only): the open flow against the version deployed on an environment.
         case "FA_ROOT": { // the open flow, the assets it uses (any depth) and the organisation's environments
           const flowFetch = boundFlowFetch();
           const designer = await FlowDesignerTab.getDesignerData({ flowFetch, orgId: message.orgId, itemId: message.itemId });
-          const scanResult = await linkScan(message.orgId);
+          const scanResult = await assetScan(message.orgId);
           const index = new Map(scanResult.assets.map((a) => [a.id, a]));
           let packageId = null;
           try { packageId = await FlowDesignerTab.resolvePackageId({ flowFetch, orgId: message.orgId, itemId: message.itemId }); } catch { /* global item */ }
@@ -1021,24 +991,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const out = await FlowCommitChain.commitOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, bump: message.bump, log, commit: message.commit !== false, message: message.commitMessage });
             await refreshIfOpen(message.orgId, [message.asset.id]);
             return sendResponse({ ok: true, ...out });
-          } finally { linkScanDone(message.orgId); }
+          } finally { assetScanDone(message.orgId); }
         case "CC_UNDO":
           try {
             await FlowCommitChain.undoOne({ flowFetch: boundFlowFetch(), orgId: message.orgId, asset: message.asset, undo: message.undo });
             await refreshIfOpen(message.orgId, [message.asset.id]);
             return sendResponse({ ok: true });
-          } finally { linkScanDone(message.orgId); }
-        case "LF_UNLINK":
-          try {
-            await FlowLinks.unlink({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId });
-            return sendResponse({ ok: true });
-          } finally { linkScanDone(message.orgId); }
-        case "LF_UNDO":
-          try {
-            await FlowLinks.undoPush({ flowFetch: boundFlowFetch(), orgId: message.orgId, assetId: message.assetId, undo: message.undo });
-            await refreshIfOpen(message.orgId, [message.assetId]);
-            return sendResponse({ ok: true });
-          } finally { linkScanDone(message.orgId); }
+          } finally { assetScanDone(message.orgId); }
         case "FD_SCAN": { // Flow dependency scanner: read-only, the scan only gets GET methods
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
           const ifs = { get: client.get, getText: client.getText };
@@ -1068,7 +1027,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: the automations are read from Flow.");
           const flowFetch = boundFlowFetch();
           const [scan, environments, accessKeys] = await Promise.all([
-            linkScan(orgId), FlowEnvironments.listEnvironments({ flowFetch, orgId }), EventTriggers.listAccessKeys({ flowFetch, orgId }).catch(() => [])
+            assetScan(orgId), FlowEnvironments.listEnvironments({ flowFetch, orgId }), EventTriggers.listAccessKeys({ flowFetch, orgId }).catch(() => [])
           ]);
           const onProgress = (current, total) => chrome.runtime.sendMessage({ type: "ET_PROGRESS", current, total }).catch(() => {});
           const { automations, checked, failures } = await EventTriggers.listAutomations({ flowFetch, orgId, packages: scan.packages, environments, onProgress });
@@ -1233,7 +1192,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           progress("Reading the flow and everything it uses");
           const pkg = await FlowTransfer.exportFlow({ flowFetch, orgId: tab.orgId, packageId, itemId: tab.itemId, generator: `NovacuraBuddy ${chrome.runtime.getManifest().version}`, log });
           progress("Finding where it is used");
-          const scan = await linkScan(tab.orgId);
+          const scan = await assetScan(tab.orgId);
           // A flow can only use its own package's assets and the App Library, so a packaged asset is
           // looked for in its package and the library; a global one (no package) in every package.
           const { refs, failed } = await FlowDocumentation.readReferences({ flowFetch, orgId: tab.orgId, assets: scan.assets.filter((a) => !packageId || a.packageId === packageId || a.packageId === null), onProgress: (c, t) => progress("Reading flows to find where it is used", c, t) });
@@ -1355,7 +1314,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const wanted = new Set(message.moduleIds || []);
           const uses = assets.some((r) => !r.usedIndirectly && wanted.has(r.assetId));
           // Per step (arrows aside) its label and text, so the results can name the steps that are hit.
-          const steps = !uses ? [] : [...FlowLinks.materialize(d.data)].filter(([, e]) => e.kind !== "arrow").map(([id, e]) => ({
+          const steps = !uses ? [] : [...FlowDesignerData.materialize(d.data)].filter(([, e]) => e.kind !== "arrow").map(([id, e]) => ({
             id, label: String(e.label || e.name || (e.configuration && e.configuration.label) || e.stepType || e.kind || id), text: ModuleCompare.flowText({ data: [e] }),
             location: e.location || null // where the Designer draws it (its canvas has no step elements)
           })).filter((st) => st.text);

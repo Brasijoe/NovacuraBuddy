@@ -54,7 +54,7 @@ async function qruLoadInstances() {
 /** Fills the organisation list once Flow has a session (the 5s poll retries until it does). */
 async function qruLoadOrgs() {
   const orgSelect = qruEl("qruOrgSelect");
-  const [ctx, orgs] = await Promise.all([send({ type: "LF_CONTEXT" }), send({ type: "FT_ORGS" })]);
+  const [ctx, orgs] = await Promise.all([send({ type: "FLOW_CONTEXT" }), send({ type: "FT_ORGS" })]);
   const previous = orgSelect.value;
   const designerOrg = ctx.ok ? ctx.orgId : null;
   if (!orgs.ok || !orgs.orgs.length) {
@@ -93,7 +93,7 @@ qruEl("qruScopeSelect").addEventListener("change", async () => {
   scope.dataset.flowId = "";
   qruHint("");
   if (scope.value === "flow") {
-    const ctx = await send({ type: "LF_CONTEXT" });
+    const ctx = await send({ type: "FLOW_CONTEXT" });
     if (!ctx.ok || !ctx.itemId) { scope.value = "org"; return qruHint("No Flow Designer tab with a flow is open. Open the flow in the Designer first."); }
     scope.dataset.flowId = ctx.itemId;
     if (ctx.orgId && [...qruEl("qruOrgSelect").options].some((o) => o.value === ctx.orgId)) qruEl("qruOrgSelect").value = ctx.orgId;

@@ -1,7 +1,7 @@
 /* Commit Dependencies tab: updates the open asset's users, a tree of the flows above it, bottom to top
  * (lib/flow-commit-chain.js). The preview lists the tree leaves first with what needs a commit and
  * why, all ticked; the run commits one asset at a time, stops at the first error and offers Undo
- * per commit. Deploy chips and the PROD confirmation are the Linked Flows ones. */
+ * per commit. Deploy chips and the PROD confirmation are the same as in the other Flow tabs. */
 
 const cc = {
   inited: false,
@@ -39,7 +39,7 @@ function ccOnShow() {
 /** From the 5s poll: follows the Designer tab (open flow, organisation) while the tab is shown. */
 async function refreshCommitChainState(first) {
   if (!ccVisible() || (cc.run && cc.run.running)) return;
-  const ctx = await send({ type: "LF_CONTEXT" });
+  const ctx = await send({ type: "FLOW_CONTEXT" });
   if (!ctx.ok) return;
   cc.hasToken = ctx.hasFlowToken;
   const hint = ccEl("ccSessionHint");
@@ -86,13 +86,13 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 /** Flows and automations of the tree that a run would commit: the ones that can be deployed. */
-const ccDeployables = () => (cc.plan && cc.mode === "commit" ? cc.plan.items.filter((i) => lfDeployable(i) && cc.selected.has(i.id)) : []);
+const ccDeployables = () => (cc.plan && cc.mode === "commit" ? cc.plan.items.filter((i) => uiDeployable(i) && cc.selected.has(i.id)) : []);
 
 async function ccLoadEnvironments() {
   const seq = cc.loadSeq;
-  const flows = (cc.plan ? cc.plan.items.filter(lfDeployable) : []).map((i) => ({ id: i.id, packageId: i.packageId }));
+  const flows = (cc.plan ? cc.plan.items.filter(uiDeployable) : []).map((i) => ({ id: i.id, packageId: i.packageId }));
   if (!flows.length) return;
-  const response = await send({ type: "LF_ENVIRONMENTS", orgId: cc.orgId, flows });
+  const response = await send({ type: "FLOW_ENVIRONMENTS", orgId: cc.orgId, flows });
   if (seq !== cc.loadSeq || (cc.run && cc.run.running)) return;
   cc.envs = response.ok ? { list: response.environments.filter((e) => e.type !== "dev"), deployed: response.deployed || {} } : { list: [], deployed: {}, error: response.error };
   ccRender();
@@ -108,26 +108,26 @@ function ccRender() {
   const title = ccEl("ccTitle");
   const rootItem = cc.plan ? ccItem(cc.plan.rootId) : null;
   title.textContent = rootItem ? `${rootItem.name} · ${rootItem.packageName}` : cc.itemId ? "" : "Open a flow in the Flow Designer.";
-  if (cc.loading) { root.appendChild(lfH("span", { className: "ft-env-status", textContent: cc.progress ? `Scanning flow ${Math.min(cc.progress.current + 1, cc.progress.total)} of ${cc.progress.total}: ${cc.progress.name}` : "Listing the assets…" })); return; }
+  if (cc.loading) { root.appendChild(uiH("span", { className: "ft-env-status", textContent: cc.progress ? `Scanning flow ${Math.min(cc.progress.current + 1, cc.progress.total)} of ${cc.progress.total}: ${cc.progress.name}` : "Listing the assets…" })); return; }
   if (!cc.plan) return;
   if (cc.run && (cc.run.finished || cc.run.failed)) return ccRenderResults(root);
 
   const items = cc.plan.items;
   if (cc.plan.cycles.length) {
-    root.appendChild(lfH("div", { className: "lf-strip lf-strip-warn" },
-      lfH("strong", { textContent: "Flows that use each other" }),
-      lfH("span", { className: "api-hint", textContent: `${cc.plan.cycles.map((c) => c.join(" → ")).join("; ")}. These cannot be put in order; the loop is cut where it closes, so one of them is committed before it points at the other's newest version.` })));
+    root.appendChild(uiH("div", { className: "lf-strip lf-strip-warn" },
+      uiH("strong", { textContent: "Flows that use each other" }),
+      uiH("span", { className: "api-hint", textContent: `${cc.plan.cycles.map((c) => c.join(" → ")).join("; ")}. These cannot be put in order; the loop is cut where it closes, so one of them is committed before it points at the other's newest version.` })));
   }
-  root.appendChild(lfH("div", { className: "lf-label" },
-    lfH("h2", { textContent: "Used by" }),
-    lfH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : ccPlural(items.length - 1, "asset uses it", "assets use it") }),
-    lfH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId).map((i) => i.id)); ccRender(); } }),
-    lfH("button", { type: "button", className: "btn-ghost", textContent: "None", title: "Untick every asset", onclick: () => { cc.selected = new Set(); ccRender(); } }),
+  root.appendChild(uiH("div", { className: "lf-label" },
+    uiH("h2", { textContent: "Used by" }),
+    uiH("span", { className: "list-count", textContent: items.length === 1 ? "Nothing uses it" : ccPlural(items.length - 1, "asset uses it", "assets use it") }),
+    uiH("button", { type: "button", className: "btn-ghost", textContent: "All", title: "Tick every asset", onclick: () => { cc.selected = new Set(cc.plan.items.filter((i) => !i.missing && i.id !== cc.plan.rootId).map((i) => i.id)); ccRender(); } }),
+    uiH("button", { type: "button", className: "btn-ghost", textContent: "None", title: "Untick every asset", onclick: () => { cc.selected = new Set(); ccRender(); } }),
     infoTip("The open asset at the top and, branching below it, the flows that use it, and the flows that use those. All are ticked; unticking one leaves out its whole branch. The run goes bottom to top: the open asset first, then each flow above it, pointed at the new versions below it. Hover a row for details."),
-    lfH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every asset, its package and whether it was read) to send to the developer",
+    uiH("button", { type: "button", className: "btn-ghost", textContent: "Copy scan info", title: "Copies what was scanned (every asset, its package and whether it was read) to send to the developer",
       onclick: async (e) => { try { await navigator.clipboard.writeText(cc.plan.info); e.target.textContent = "Copied"; } catch { e.target.textContent = "Copy failed"; } } })));
-  if (cc.plan.failedPackages && cc.plan.failedPackages.length) root.appendChild(lfH("div", { className: "banner banner-error", textContent: `The asset list of ${ccPlural(cc.plan.failedPackages.length, "package", "packages")} could not be read, so flows in them were not scanned: ${cc.plan.failedPackages.slice(0, 5).join("; ")}` }));
-  const list = lfH("div", { className: "cc-tree" });
+  if (cc.plan.failedPackages && cc.plan.failedPackages.length) root.appendChild(uiH("div", { className: "banner banner-error", textContent: `The asset list of ${ccPlural(cc.plan.failedPackages.length, "package", "packages")} could not be read, so flows in them were not scanned: ${cc.plan.failedPackages.slice(0, 5).join("; ")}` }));
+  const list = uiH("div", { className: "cc-tree" });
   const order = new Map(items.map((i, n) => [i.id, n + 1]));
   for (const row of ccTreeLayout()) list.appendChild(ccRow(ccItem(row.id), order.get(row.id), row.guide, row));
   root.appendChild(list);
@@ -139,35 +139,35 @@ function ccRender() {
   const blockedByProd = cc.mode === "commit" && ccDeployProd().length > 0 && !cc.prodOk;
   const busy = !!(cc.run && cc.run.running);
   const verb = `${cc.mode === "save" ? "Save" : "Commit"} ${ccPlural(chosen.length, "asset", "assets")}`;
-  const run = lfCta({
+  const run = uiCta({
     icon: "push", label: envCount ? `${verb} & deploy` : verb, badge: envCount ? ccPlural(envCount, "environment", "environments") : null,
     disabled: !chosen.length || blockedByProd || busy,
     title: blockedByProd ? "Confirm the production deploy first." : "Runs from the open asset up through the flows that use it and stops at the first error"
   });
-  if (busy) lfSetLabel(run, "Committing…");
+  if (busy) uiSetLabel(run, "Committing…");
   run.addEventListener("click", ccRun);
-  root.appendChild(lfH("div", { className: "lf-cta-row" }, run,
+  root.appendChild(uiH("div", { className: "lf-cta-row" }, run,
     infoTip("Handles the ticked assets one by one, bottom to top. Before a flow is committed or saved it is pointed at the new versions of what it uses and saved with all its steps. The first error stops the run; what was done stays done and can be undone.")));
   if (busy) root.appendChild(ccProgress());
 }
 
 function ccRenderMode() {
   const busy = !!(cc.run && cc.run.running);
-  const box = lfH("div", { className: "lf-deploy" });
-  box.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "What to do" }),
+  const box = uiH("div", { className: "lf-deploy" });
+  box.appendChild(uiH("div", { className: "lf-label" }, uiH("h2", { textContent: "What to do" }),
     infoTip("Commit: the flows point at the new versions and get a new committed version (and can be deployed afterwards). Save: the flows point at the new versions and are saved, but no new version is committed, so you can check them in the Designer first. The open asset itself is only committed, never just saved.")));
-  const row = lfH("div", { className: "cc-mode" });
+  const row = uiH("div", { className: "cc-mode" });
   for (const [value, label] of [["commit", "Commit"], ["save", "Save only"]]) {
-    const input = lfH("input", { type: "radio", name: "ccMode", checked: cc.mode === value, disabled: busy });
+    const input = uiH("input", { type: "radio", name: "ccMode", checked: cc.mode === value, disabled: busy });
     input.addEventListener("change", () => { cc.mode = value; ccRender(); });
-    row.appendChild(lfH("label", { className: "api-check" }, input, lfH("span", { textContent: label })));
+    row.appendChild(uiH("label", { className: "api-check" }, input, uiH("span", { textContent: label })));
   }
   box.appendChild(row);
   const rootItem = ccItem(cc.plan.rootId);
-  const msg = lfH("input", { type: "text", className: "cc-message", value: cc.message, placeholder: "Auto generated version.", disabled: busy });
+  const msg = uiH("input", { type: "text", className: "cc-message", value: cc.message, placeholder: "Auto generated version.", disabled: busy });
   msg.addEventListener("input", () => { cc.message = msg.value; });
-  box.appendChild(lfH("label", { className: "cc-message-row" },
-    lfH("span", { className: "api-hint", textContent: `Commit message of ${rootItem ? rootItem.name : "the open asset"}` }), msg,
+  box.appendChild(uiH("label", { className: "cc-message-row" },
+    uiH("span", { className: "api-hint", textContent: `Commit message of ${rootItem ? rootItem.name : "the open asset"}` }), msg,
     infoTip(`The flows above the open asset are committed as "Commit from Asset ${rootItem ? rootItem.name : "<asset>"}: <this message>". It starts as the open asset's last commit message when Flow tells it, otherwise empty (then "Auto generated version.").`)));
   return box;
 }
@@ -222,7 +222,7 @@ function ccBranch(id) {
 function ccRow(item, number, guide, row) {
   const state = cc.run && cc.run.done.get(item.id);
   const failed = cc.run && cc.run.failed && cc.run.failed.id === item.id;
-  const input = lfH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing, title: ccIsProduct(item) ? `An ${item.type} is saved with the new versions, never committed from here: commit it in the Designer.` : "" });
+  const input = uiH("input", { type: "checkbox", checked: cc.selected.has(item.id), disabled: !!(cc.run && cc.run.running) || item.missing, title: ccIsProduct(item) ? `An ${item.type} is saved with the new versions, never committed from here: commit it in the Designer.` : "" });
   input.addEventListener("change", () => {
     for (const id of [item.id, ...ccBranch(item.id)]) if (input.checked) cc.selected.add(id); else cc.selected.delete(id);
     ccRender();
@@ -230,48 +230,48 @@ function ccRow(item, number, guide, row) {
   const info = [`${item.type}${item.packageName ? ` · ${item.packageName}` : " · App Library"}`, ...item.reasons.map((r) => r.text), item.missing ? "Not found in this organisation" : null,
     ...(item.products || []).map((p) => `Runs as ${p.type} "${p.name}"`)].filter(Boolean).join("\n");
   const fold = row.kids
-    ? lfH("button", { type: "button", className: "btn-ghost cc-fold", textContent: cc.collapsed.has(item.id) ? "▸" : "▴", title: cc.collapsed.has(item.id) ? `Show the ${ccPlural(ccBranch(item.id).length, "asset", "assets")} above that use it` : "Hide the branch above",
+    ? uiH("button", { type: "button", className: "btn-ghost cc-fold", textContent: cc.collapsed.has(item.id) ? "▸" : "▴", title: cc.collapsed.has(item.id) ? `Show the ${ccPlural(ccBranch(item.id).length, "asset", "assets")} above that use it` : "Hide the branch above",
         onclick: () => { if (cc.collapsed.has(item.id)) cc.collapsed.delete(item.id); else cc.collapsed.add(item.id); ccRender(); } })
-    : lfH("span", { className: "cc-fold" });
-  return lfH("div", { className: `cc-node${row.grey ? " cc-grey" : ""}`, title: info },
-    lfH("span", { className: "cc-guide", textContent: guide }), fold,
-    lfH("label", { className: "cc-main" }, input, ftKindIcon(item.type), lfH("strong", { className: "ft-name", textContent: item.name })),
+    : uiH("span", { className: "cc-fold" });
+  return uiH("div", { className: `cc-node${row.grey ? " cc-grey" : ""}`, title: info },
+    uiH("span", { className: "cc-guide", textContent: guide }), fold,
+    uiH("label", { className: "cc-main" }, input, ftKindIcon(item.type), uiH("strong", { className: "ft-name", textContent: item.name })),
     state ? (state.skipped ? ftChip("✓ Up to date", "ok", "Already up to date: nothing was saved or committed") : state.savedOnly ? ftChip("Saved, commit in Designer", "info", "Saved with the new versions of what it uses. Commit it in the Designer: committing apps from here is switched off.") : ftChip(cc.run.commit ? "Committed" : "Saved", "ok"))
     : failed ? ftChip("Failed", "warn", cc.run.failed.error)
     : !item.needs && !item.missing ? ftChip("✓ Up to date", "ok", "Uses the newest committed version of everything below it and has no changes of its own")
-    : lfH("span"));
+    : uiH("span"));
 }
 
 function ccProgress() {
   const chosen = cc.plan.items.filter((i) => cc.selected.has(i.id));
-  return lfH("span", { className: "ft-env-status", textContent: `${cc.run.commit ? "Committed" : "Saved"} ${cc.run.done.size} of ${chosen.length}…` });
+  return uiH("span", { className: "ft-env-status", textContent: `${cc.run.commit ? "Committed" : "Saved"} ${cc.run.done.size} of ${chosen.length}…` });
 }
 
 const ccDeployProd = () => (cc.envs ? cc.envs.list.filter((e) => e.isProduction && cc.deploy.has(e.id)) : []);
 
 function ccRenderDeploy() {
-  const box = lfH("div", { className: "lf-deploy" });
-  box.appendChild(lfH("div", { className: "lf-label" }, lfH("h2", { textContent: "Deploy afterwards" }),
+  const box = uiH("div", { className: "lf-deploy" });
+  box.appendChild(uiH("div", { className: "lf-label" }, uiH("h2", { textContent: "Deploy afterwards" }),
     infoTip("Optional. Tick the environments that should get the new versions once every commit went through. Only flows and automations are deployed, each from its own package; modules and sub-flows ship inside them. Nothing is remembered: every run starts with none ticked.")));
-  if (!cc.plan.items.some(lfDeployable)) {
-    box.appendChild(lfH("span", { className: "api-hint", textContent: "No flow or automation in this tree can be deployed on its own. Sub-flows and modules reach an environment with the flows that use them." }));
+  if (!cc.plan.items.some(uiDeployable)) {
+    box.appendChild(uiH("span", { className: "api-hint", textContent: "No flow or automation in this tree can be deployed on its own. Sub-flows and modules reach an environment with the flows that use them." }));
     return box;
   }
-  if (!cc.envs) { box.appendChild(lfH("span", { className: "api-hint", textContent: "Reading environments…" })); return box; }
-  if (cc.envs.error) { box.appendChild(lfH("span", { className: "api-hint", textContent: `Environments could not be read: ${cc.envs.error}` })); return box; }
-  if (!cc.envs.list.length) { box.appendChild(lfH("span", { className: "api-hint", textContent: "This organisation has no environments to deploy to." })); return box; }
+  if (!cc.envs) { box.appendChild(uiH("span", { className: "api-hint", textContent: "Reading environments…" })); return box; }
+  if (cc.envs.error) { box.appendChild(uiH("span", { className: "api-hint", textContent: `Environments could not be read: ${cc.envs.error}` })); return box; }
+  if (!cc.envs.list.length) { box.appendChild(uiH("span", { className: "api-hint", textContent: "This organisation has no environments to deploy to." })); return box; }
   const busy = !!(cc.run && cc.run.running);
   const ids = ccDeployables().map((i) => i.id);
-  const chips = lfH("div", { className: "lf-env-chips" });
+  const chips = uiH("div", { className: "lf-env-chips" });
   for (const env of cc.envs.list) {
     const on = cc.deploy.has(env.id);
     const live = ids.filter((id) => (cc.envs.deployed[id] || []).includes(env.id)).length;
-    const chip = lfH("button", { type: "button", disabled: busy, className: `lf-env-chip lf-env-${env.isProduction ? "prod" : env.type}${on ? " is-on" : ""}`, "aria-pressed": String(on),
+    const chip = uiH("button", { type: "button", disabled: busy, className: `lf-env-chip lf-env-${env.isProduction ? "prod" : env.type}${on ? " is-on" : ""}`, "aria-pressed": String(on),
       title: `${env.name} (${env.type})${live ? ` · ${live} of these flows deployed there now` : ""}` },
-      lfH("span", { className: "lf-env-check", textContent: on ? "✓" : "" }),
-      lfH("span", { textContent: env.name }),
-      env.isProduction ? lfH("span", { className: "lf-env-tag", textContent: "PROD" }) : null,
-      live ? lfH("span", { className: "lf-env-live", title: "Deployed there now" }) : null);
+      uiH("span", { className: "lf-env-check", textContent: on ? "✓" : "" }),
+      uiH("span", { textContent: env.name }),
+      env.isProduction ? uiH("span", { className: "lf-env-tag", textContent: "PROD" }) : null,
+      live ? uiH("span", { className: "lf-env-live", title: "Deployed there now" }) : null);
     chip.addEventListener("click", () => {
       if (on) cc.deploy.delete(env.id); else cc.deploy.add(env.id);
       if (!ccDeployProd().length) cc.prodOk = false;
@@ -282,12 +282,12 @@ function ccRenderDeploy() {
   box.appendChild(chips);
   const prod = ccDeployProd();
   if (prod.length) {
-    const ok = lfH("input", { type: "checkbox", checked: cc.prodOk, disabled: busy });
+    const ok = uiH("input", { type: "checkbox", checked: cc.prodOk, disabled: busy });
     ok.addEventListener("change", () => { cc.prodOk = ok.checked; ccRender(); });
-    box.appendChild(lfH("div", { className: "lf-strip lf-strip-danger" },
-      lfH("strong", { textContent: `⚠ Deploying to production: ${prod.map((e) => e.name).join(", ")}` }),
-      lfH("span", { className: "api-hint", textContent: "Users there get the new versions as soon as the deploy finishes." }),
-      lfH("label", { className: "api-check" }, ok, lfH("span", { textContent: `Yes, deploy to ${prod.map((e) => e.name).join(", ")}` }))));
+    box.appendChild(uiH("div", { className: "lf-strip lf-strip-danger" },
+      uiH("strong", { textContent: `⚠ Deploying to production: ${prod.map((e) => e.name).join(", ")}` }),
+      uiH("span", { className: "api-hint", textContent: "Users there get the new versions as soon as the deploy finishes." }),
+      uiH("label", { className: "api-check" }, ok, uiH("span", { textContent: `Yes, deploy to ${prod.map((e) => e.name).join(", ")}` }))));
   }
   return box;
 }
@@ -348,7 +348,7 @@ async function ccDeploy(run) {
   if (!flows.length) { run.deployRows.push({ ok: true, title: "Nothing to deploy", note: "No flow or automation was committed in this run." }); return; }
   const name = (id) => { const i = ccItem(id); return i ? i.name : id; };
   for (const env of envs) {
-    const res = await send({ type: "LF_DEPLOY", orgId: cc.orgId, envId: env.id, assetIds: flows.map((f) => f.id), flows: flows.map((f) => ({ id: f.id, type: f.type, packageId: f.packageId, headVersionId: (run.done.get(f.id) || {}).headVersionId || null })) });
+    const res = await send({ type: "FLOW_DEPLOY", orgId: cc.orgId, envId: env.id, assetIds: flows.map((f) => f.id), flows: flows.map((f) => ({ id: f.id, type: f.type, packageId: f.packageId, headVersionId: (run.done.get(f.id) || {}).headVersionId || null })) });
     const label = `${env.name}${env.isProduction ? " (PROD)" : ""}`;
     if (!res.ok) { run.deployRows.push({ ok: false, title: `Deploy to ${label}`, note: res.error }); continue; }
     const good = res.results.filter((x) => x.ok);
@@ -366,21 +366,21 @@ function ccRenderResults(root) {
   const run = cc.run;
   const items = cc.plan.items.filter((i) => cc.selected.has(i.id));
   const failedItem = run.failed ? ccItem(run.failed.id) : null;
-  root.appendChild(lfH("div", { className: run.failed ? "banner banner-warning" : "banner banner-deployed",
+  root.appendChild(uiH("div", { className: run.failed ? "banner banner-warning" : "banner banner-deployed",
     textContent: (() => { const worked = [...run.done.values()].filter((d) => !d.skipped).length, skipped = run.done.size - worked;
       const tail = skipped ? `, ${skipped} already up to date` : "";
       return run.failed ? `Stopped at ${failedItem ? failedItem.name : "an asset"}: ${ccPlural(worked, "asset", "assets")} ${run.commit ? "committed" : "saved"}${tail}, the rest untouched.` : `${run.commit ? "Committed" : "Saved"} ${ccPlural(worked, "asset", "assets")}, bottom to top${tail}.`; })() }));
-  const row = (mark, tone, title, note, actions) => lfH("div", { className: "lf-res" },
-    lfH("span", { className: `lf-mark lf-mark-${tone}`, textContent: mark }),
-    lfH("span", { className: "lf-res-text" }, lfH("strong", { textContent: title }), lfH("span", { className: "api-hint", textContent: note || "" })),
-    actions || lfH("span"));
+  const row = (mark, tone, title, note, actions) => uiH("div", { className: "lf-res" },
+    uiH("span", { className: `lf-mark lf-mark-${tone}`, textContent: mark }),
+    uiH("span", { className: "lf-res-text" }, uiH("strong", { textContent: title }), uiH("span", { className: "api-hint", textContent: note || "" })),
+    actions || uiH("span"));
   for (const item of items) {
     const result = run.done.get(item.id);
     const failed = run.failed && run.failed.id === item.id;
     if (result) {
-      const actions = lfH("span", { className: "lf-res-actions" }, lfH("button", { className: "btn-ghost", textContent: "Open", onclick: () => lfOpenInDesigner2(item.id) }));
+      const actions = uiH("span", { className: "lf-res-actions" }, uiH("button", { className: "btn-ghost", textContent: "Open", onclick: () => ccOpenInDesigner(item.id) }));
       if (result.undo) {
-        const undo = lfH("button", { className: "btn-ghost", textContent: "Undo", title: "Put this asset back to what it was before this run, as a new version. Flows above it keep pointing at the version they have." });
+        const undo = uiH("button", { className: "btn-ghost", textContent: "Undo", title: "Put this asset back to what it was before this run, as a new version. Flows above it keep pointing at the version they have." });
         undo.addEventListener("click", async () => {
           undo.disabled = true;
           undo.textContent = "Undoing…";
@@ -397,9 +397,9 @@ function ccRenderResults(root) {
     }
   }
   for (const d of run.deployRows) root.appendChild(row(d.ok ? "✓" : "!", d.ok ? "ok" : "fail", d.title, d.note));
-  root.appendChild(lfH("div", { className: "deploy-actions" }, lfH("button", { textContent: run.failed ? "Back to the list" : "Done", onclick: () => ccLoad() })));
+  root.appendChild(uiH("div", { className: "deploy-actions" }, uiH("button", { textContent: run.failed ? "Back to the list" : "Done", onclick: () => ccLoad() })));
 }
 
-function lfOpenInDesigner2(id) {
+function ccOpenInDesigner(id) {
   chrome.tabs.create({ url: `https://build.novacura.com/admin/design/designer/organizations/${cc.orgId}/items/${id}` });
 }

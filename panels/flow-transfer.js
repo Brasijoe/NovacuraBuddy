@@ -48,7 +48,7 @@ function ftKind(type) {
   return { ...kind, title: t && t !== kind.label.toLowerCase() ? `${kind.label} (type "${t}")` : kind.label };
 }
 
-/** The coloured letter icon for an asset type (shared with the Linked Flows tab). */
+/** The coloured letter icon for an asset type. */
 function ftKindIcon(type) {
   const kind = ftKind(type);
   const icon = document.createElement("span");
@@ -635,7 +635,6 @@ async function ftLoadPlan() {
   const seq = ++ftPlanSeq;
   ftPlan = null;
   ftApplyState();
-  ftApplyKeepLinked();
   const response = await actionOrShowError({ type: "FT_PLAN", pkg: ftPkg, orgId: ftEl("ftOrg").value, packageId: ftEl("ftPackage").value || null, layout: ftLayout });
   if (seq !== ftPlanSeq) return; // the target changed meanwhile
   if (!response) return;
@@ -809,36 +808,10 @@ async function ftRunImport() {
     choices: ftChoices, connectorMap, names, baseUrl, masterPassword: baseUrl ? masterPasswordOf() : undefined
   });
   if (!response) return;
-  const keepLinked = !ftEl("ftKeepLinkedBox").hidden && ftEl("ftKeepLinked").checked;
-  ftShowResult(response.outcome, keepLinked ? await ftLinkCopies(response.outcome) : null);
+  ftShowResult(response.outcome);
 }
 
-/** "Keep linked" is offered for a copy into another package of the organisation it came from:
- *  linked copies live in different packages of one organisation (Linked Flows tab). */
-function ftApplyKeepLinked() {
-  const pkg = ftPkg;
-  const sameOrg = !!pkg && ftMode === "copy" && !!pkg.source && pkg.source.orgId === ftEl("ftOrg").value;
-  const flows = sameOrg ? FlowTree.rootIdsOf(pkg).filter((id) => pkg.assets[id] && pkg.assets[id].type !== "module") : [];
-  const box = ftEl("ftKeepLinkedBox");
-  const show = flows.length > 0;
-  if (box.hidden === show) ftEl("ftKeepLinked").checked = false; // fresh choice whenever it (re)appears
-  box.hidden = !show;
-}
-
-/** After a copy with "Keep linked": links each copied flow with its original. */
-async function ftLinkCopies(outcome) {
-  const pkg = ftPkg;
-  const out = [];
-  for (const r of outcome.results.filter((x) => x.isRoot && x.type !== "module" && x.choice !== "use")) {
-    const original = pkg.assets[r.id];
-    const response = await send({ type: "LF_LINK", orgId: outcome.orgId, sourceId: r.id, adoptIds: [r.targetId], newPackageIds: [] });
-    const row = response.ok ? response.outcome.results.find((x) => x.id === r.targetId) : null;
-    out.push({ name: original ? original.name : r.name, ok: !!row && row.outcome === "linked", linkId: response.ok ? response.outcome.linkId : null, reason: !response.ok ? response.error : row && row.outcome !== "linked" ? row.reason : null });
-  }
-  return out;
-}
-
-function ftShowResult(outcome, links) {
+function ftShowResult(outcome) {
   const pkg = ftPkg;
   const results = new Map(outcome.results.map((r) => [r.id, r]));
   ftHideViews();
@@ -872,11 +845,6 @@ function ftShowResult(outcome, links) {
   box.append(title, target, tree);
   if (outcome.unmappedConnectors.length) {
     box.appendChild(ftChipRow(ftChip(`No connector: ${outcome.unmappedConnectors.join(", ")}`, "warn", "Set the connector on these steps in the Designer")));
-  }
-  for (const l of links || []) {
-    box.appendChild(ftChipRow(l.ok
-      ? ftChip(`${l.name}: linked with the original ⛓ ${l.linkId}`, "ok", "See it in the Linked Flows tab")
-      : ftChip(`${l.name}: not linked. ${l.reason || ""}`.trim(), "warn")));
   }
   const note = document.createElement("p");
   note.className = "ft-note";
