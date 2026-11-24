@@ -9,3 +9,4 @@
 .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .history-table th { text-align: left; color: var(--ink-muted); font-weight: 600; border-bottom: 1px solid var(--surface-raised); padding: 4px 6px; }
 .history-table td { border-bottom: 1px solid var(--surface-raised); padding: 4px 6px; overflow-wrap: anywhere; }
+#qrName[readonly] { color: var(--ink-muted); background: var(--surface-raised); cursor: not-allowed; }

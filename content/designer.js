@@ -745,3 +745,173 @@ function ptRender() {
 }
 
 setInterval(() => { try { ptRender(); } catch { /* never disturb the Designer */ } }, 700);
+
+
+// --- Pin step -------------------------------------------------------------------------------
+// The side panel's "Pin step" tab asks for what the step window open in the Designer shows: title,
+// code editors (full text) and the visible fields. The panel shows it as its own copy; the Designer
+// is only read, never changed. (A live clone of the page's markup cannot cross into the side panel:
+// it is another document without the Designer's styles, and the code editors draw only visible lines.)
+function pinLabelFor(el, win) {
+  const aria = el.getAttribute("aria-label") || el.getAttribute("placeholder");
+  if (el.id) { const l = win.querySelector(`label[for="${CSS.escape(el.id)}"]`); if (l && l.textContent.trim()) return l.textContent.trim().slice(0, 80); }
+  const wrap = el.closest("label");
+  if (wrap) { const t = wrap.textContent.replace(el.value || "", "").trim(); if (t) return t.slice(0, 80); }
+  let node = el;
+  for (let depth = 0; node && node !== win && depth < 4; depth++, node = node.parentElement) {
+    let prev = node.previousElementSibling;
+    while (prev) {
+      const t = prev.textContent.trim();
+      if (t && t.length <= 80 && !prev.querySelector("input,textarea,select,.monaco-editor")) return t;
+      if (prev.querySelector("input,textarea,select,.monaco-editor")) break;
+      prev = prev.previousElementSibling;
+    }
+  }
+  return (aria || "").trim().slice(0, 80);
+}
+
+function pinRead() {
+  const wins = ptDialogs();
+  const win = wins[wins.length - 1];
+  if (!win) return null;
+  dispatchEvent(new CustomEvent("novacura-buddy-code-ask"));
+  const heading = win.querySelector('[aria-label="Edit title"]') || win.querySelector("h1, h2, h3, [class*='title' i], [class*='header' i]");
+  const editors = [];
+  for (const e of ptEditors) {
+    const dom = win.querySelector(`[data-nb-ed="${e.idx}"]`);
+    if (!dom || !e.text.trim()) continue;
+    editors.push({ label: pinLabelFor(dom, win), language: e.language, text: e.text });
+  }
+  const fields = [];
+  for (const el of win.querySelectorAll("input, textarea, select, app-single-line-code-input")) {
+    if (el.closest(".monaco-editor") || (el.type && ["password", "hidden", "file"].includes(el.type))) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    let value;
+    if (el.type === "checkbox" || el.type === "radio") value = el.checked ? "yes" : "no";
+    else if (el.tagName === "SELECT") value = el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : "";
+    else if (el.tagName === "APP-SINGLE-LINE-CODE-INPUT") value = el.textContent.replace(/\u00a0/g, " ").trim();
+    else value = el.value;
+    if (value === "" || value == null) continue;
+    fields.push({ label: pinLabelFor(el, win), value: String(value).slice(0, 5000) });
+  }
+  // The step's own name (its Name field) tells steps apart; the window heading is often the same for all of one type.
+  const nameField = fields.find((f) => /^\s*(name|step name|label|title|titel|bezeichnung)\s*:?\s*$/i.test(f.label));
+  return {
+    title: nameField ? nameField.value.trim().slice(0, 120) : (heading ? heading.textContent.trim().slice(0, 120) : ""),
+    heading: heading ? heading.textContent.trim().slice(0, 120) : "",
+    page: document.title,
+    url: location.href,
+    editors, fields,
+    text: (win.innerText || "").trim().slice(0, 20000),
+    at: Date.now()
+  };
+}
+
+function pinFlowId() { const m = MC_DESIGNER_URL_RE.exec(location.pathname); return m ? m[2] : location.pathname; }
+
+const pinWait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Applies the step window that is open (the Designer's own Apply/OK button, as a click), then opens
+ *  the step named `title` by clicking it on the canvas. Nothing is saved to the flow by Buddy itself. */
+async function pinReopen(title) {
+  const win = ptDialogs().pop();
+  if (win) {
+    const btn = [...win.querySelectorAll("button")].find((b) => /^\s*(apply|ok|done|übernehmen)\s*$/i.test(b.textContent) && !b.disabled);
+    if (!btn) return { ok: false, error: "The open step has no Apply button Buddy can find; it was left open." };
+    btn.click();
+    for (let i = 0; i < 20 && ptDialogs().length; i++) await pinWait(150);
+    await pinWait(300);
+  }
+  if (ptDialogs().length) return { ok: false, error: "A step window is still open (Apply may be blocked by an error in the step). Close it and try again." };
+  // Position independent: use the Designer's own search (toolbar magnifier). Picking a result selects the step and pans the
+  // canvas to it wherever it is; Enter then opens the selected step's window.
+  const want = mcNorm(title).replace(/\s+/g, "");
+  const field = () => document.querySelector('app-search input[placeholder="Search"]');
+  if (!field()) {
+    const open = document.querySelector('button:has([aria-label="Search"])');
+    if (!open) return { ok: false, error: "The Designer's search button was not found." };
+    open.click();
+    for (let i = 0; i < 15 && !field(); i++) await pinWait(100);
+  }
+  if (!field()) return { ok: false, error: "The Designer's search did not open." };
+  const input = field();
+  // Keep the search panel out of sight while it is driven (it is the Designer's own panel; nothing in it changes).
+  const hidden = [];
+  for (let el = input.closest("app-search"), n = 0; el && n < 3 && el !== document.body; el = el.parentElement, n++) { hidden.push([el, el.style.opacity]); el.style.opacity = "0"; }
+  const unhide = () => { for (const [el, v] of hidden) el.style.opacity = v; };
+  try {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, title);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  const rows = () => [...document.querySelectorAll("app-search-result button")];
+  const nameOf = (b) => { const sp = b.querySelector("span"); return sp ? mcNorm(sp.textContent).replace(/\s+/g, "") : ""; };
+  let hits = [];
+  for (let i = 0; i < 50; i++) { await pinWait(60); hits = rows().filter((b) => nameOf(b) === want); if (hits.length) break; }
+  if (!hits.length) return { ok: false, error: `The Designer's search found no step named "${title}".` };
+  // A step shows up once as a name match (one line) and again for text inside it (a second line): take the name match.
+  const hit = hits.find((b) => b.children.length === 1) || hits[0];
+  hit.click(); // selects the step and pans the canvas to it
+  } finally { unhide(); }
+  await pinWait(350);
+  const enter = (t) => document.body.dispatchEvent(new KeyboardEvent(t, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true }));
+  enter("keydown"); enter("keyup");
+  let got = null;
+  for (let i = 0; i < 15 && got === null; i++) { await pinWait(100); const w = ptDialogs().pop(); const h = w && (w.querySelector('[aria-label="Edit title"]') || w.querySelector("h1, h2, h3")); got = h ? mcNorm(h.textContent).replace(/\s+/g, "") : null; }
+  if (got === want) return { ok: true, clicked: title };
+  return { ok: false, error: got === null ? `Selected "${title}" in the Designer, but its window did not open. Press Enter on the canvas.` : `Opened a different step ("${got}") instead of "${title}".` };
+}
+
+/** Without a step window: the Designer's bottom toolbar, every visible text input and the open overlays (search box and results),
+ *  to find out how the step search works. Read-only. */
+function pinDumpPage() {
+  const lines = [];
+  const outline = (el, depth, budget) => {
+    if (lines.length >= budget || depth > 10) return;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).filter(Boolean).join(" ").slice(0, 60);
+    const attrs = ["id", "role", "aria-label", "placeholder", "type", "title", "src"].filter((a) => el.getAttribute(a)).map((a) => `${a}="${el.getAttribute(a).slice(0, 50)}"`).join(" ");
+    const val = "value" in el && el.value ? ` value="${String(el.value).slice(0, 40)}"` : "";
+    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
+    lines.push(`${"  ".repeat(depth)}${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${attrs}${val} ${own}`.trimEnd());
+    for (const c of el.children) outline(c, depth + 1, budget);
+  };
+  const vis = (el) => { const r = el.getBoundingClientRect(); const c = getComputedStyle(el); return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none"; };
+  lines.push("== BOTTOM TOOLBAR (visible buttons/inputs in the lowest 140px) ==");
+  for (const el of document.querySelectorAll("button, input, [role=button], [role=textbox], [role=search]")) {
+    if (!vis(el) || (mc.host && mc.host.contains(el))) continue;
+    const r = el.getBoundingClientRect();
+    if (r.top < innerHeight - 140) continue;
+    const img = el.querySelector("img, svg, [style*='.svg']");
+    lines.push(`${el.tagName.toLowerCase()}.${(typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 3).join(".") : "")} aria-label="${el.getAttribute("aria-label") || ""}" title="${el.getAttribute("title") || ""}" placeholder="${el.getAttribute("placeholder") || ""}" text="${el.textContent.trim().slice(0, 40)}" img="${img ? (img.getAttribute("src") || img.getAttribute("style") || "svg").slice(0, 60) : ""}" at=${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+  }
+  lines.push("== VISIBLE TEXT INPUTS ==");
+  for (const el of document.querySelectorAll("input, textarea, [contenteditable=true]")) if (vis(el) && !el.closest(".monaco-editor")) { const r = el.getBoundingClientRect(); lines.push(`${el.tagName.toLowerCase()} placeholder="${el.getAttribute("placeholder") || ""}" aria-label="${el.getAttribute("aria-label") || ""}" value="${(el.value || "").slice(0, 40)}" at=${Math.round(r.left)},${Math.round(r.top)}`); }
+  lines.push("== OVERLAYS ==");
+  for (const el of document.querySelectorAll(".cdk-overlay-container > *, .cdk-overlay-pane, [role=listbox], [role=menu], [role=dialog]")) if (vis(el) && !(mc.host && mc.host.contains(el))) outline(el, 0, 300);
+  return `URL: ${location.pathname}\n${lines.join("\n")}`;
+}
+
+/** A compact outline of the open step window (tags, classes, own text), for finding out how the Designer marks a step's name. Read-only. */
+function pinDump() {
+  const win = ptDialogs().pop();
+  if (!win) return pinDumpPage();
+  const lines = [];
+  const walk = (el, depth) => {
+    if (lines.length >= 400 || depth > 14) return;
+    const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent.trim()).filter(Boolean).join(" ").slice(0, 60);
+    const attrs = ["id", "role", "aria-label", "placeholder", "type", "title"].filter((a) => el.getAttribute(a)).map((a) => `${a}="${el.getAttribute(a).slice(0, 40)}"`).join(" ");
+    const val = "value" in el && el.value && !el.closest(".monaco-editor") ? ` value="${String(el.value).slice(0, 40)}"` : "";
+    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 4).join(".") : "";
+    lines.push(`${"  ".repeat(depth)}${el.tagName.toLowerCase()}${cls ? "." + cls : ""} ${attrs}${val} ${own}`.trimEnd());
+    for (const c of el.children) walk(c, depth + 1);
+  };
+  walk(win, 0);
+  const canvas = mc.canvas ? mc.canvas.texts.slice(0, 40).map((t) => t.text).join(" | ") : "(no canvas texts)";
+  return `URL: ${location.pathname}\nWINDOW:\n${lines.join("\n")}\nCANVAS TEXTS: ${canvas}`;
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message && message.type === "PIN_DUMP") { sendResponse({ ok: true, text: pinDump() }); return; }
+  if (!message || (message.type !== "PIN_READ" && message.type !== "PIN_REOPEN")) return;
+  if (message.type === "PIN_REOPEN") { pinReopen(message.title).then(sendResponse).catch((e) => sendResponse({ ok: false, error: e.message })); return true; }
+  try { sendResponse({ ok: true, flow: pinFlowId(), step: pinRead() }); } catch (e) { sendResponse({ ok: false, error: e.message }); }
+});

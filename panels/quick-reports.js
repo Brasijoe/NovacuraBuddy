@@ -78,6 +78,9 @@ function buildQrRow(report) {
   editBtn.onclick = () => openQrEditor(report.id);
   head.append(name, pill, deployBtn, moduleBtn, editBtn);
 
+  const linksEl = document.createElement("div");
+  linksEl.className = "qr-ifs-links";
+
   const preview = document.createElement("div");
   preview.className = "qr-preview";
   preview.textContent = report.content.replace(/\s+/g, " ").trim().slice(0, 160);
@@ -116,6 +119,13 @@ function buildQrRow(report) {
       onDeployed: (result) => {
         deployPanel.close();
         confirm(`✓ Deployed to ${result.instanceName} — Quick Report id ${result.quickReportId}.`);
+        const deployedUrl = IfsLinks.ifsObjectUrl(result.baseUrl, "quickReport", { quickReportId: result.quickReportId });
+        if (deployedUrl) {
+          const a = document.createElement("a");
+          a.href = deployedUrl; a.target = "_blank"; a.rel = "noopener"; a.className = "qr-ifs-link";
+          a.textContent = " Open in IFS ↗";
+          confirmation.appendChild(a);
+        }
         const moduleBox = buildQrModuleBox(() => result.baseUrl);
         li.appendChild(moduleBox.element);
         moduleBoxEl = moduleBox.element;
@@ -166,6 +176,20 @@ function buildQrRow(report) {
     pill.hidden = !deployments.length;
     pill.textContent = `Deployed (${deployments.length})`;
     pill.title = deployments.map(qrDeploymentLabel).join("\n");
+    linksEl.innerHTML = "";
+    for (const d of deployments) {
+      const instance = qrInstanceFor(d.instanceKey);
+      const url = IfsLinks.ifsObjectUrl(instance ? instance.baseUrl : d.instanceKey, "quickReport", { quickReportId: d.quickReportId });
+      if (!url) continue;
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.className = "qr-ifs-link";
+      a.textContent = deployments.length > 1 ? `Open in IFS ↗ (${qrInstanceName(d.instanceKey)})` : "Open in IFS ↗";
+      a.title = `Open Quick Report ${d.quickReportId} in ${qrInstanceName(d.instanceKey)}`;
+      linksEl.appendChild(a);
+    }
     moduleBtn.hidden = !deployments.length;
     if (!deployments.length && pickerPanel.isOpen) pickerPanel.close();
     if (creatingModule) return;
@@ -176,7 +200,7 @@ function buildQrRow(report) {
   qrRows.set(report.id, { applyState });
   applyState();
 
-  li.append(head, preview, form, picker);
+  li.append(head, linksEl, preview, form, picker);
   return li;
 }
 

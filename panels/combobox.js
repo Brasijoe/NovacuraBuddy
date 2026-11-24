@@ -111,12 +111,12 @@
 
   /** Search field above a checklist: hides the entries whose text does not match, as you type. */
   function makeListSearchable(container) {
-    if (container.dataset.searchable) return;
+    if (container.dataset.searchable || container.dataset.ownSearch) return;
     container.dataset.searchable = "1";
     const input = document.createElement("input");
     input.type = "search";
     input.className = "list-search";
-    input.placeholder = "Search…";
+    input.placeholder = container.dataset.searchAlways ? "Search by id or description…" : "Search…";
     input.autocomplete = "off";
     input.hidden = true;
     container.before(input);
@@ -125,7 +125,7 @@
       for (const item of container.children) item.hidden = !!q && !item.textContent.toLowerCase().includes(q);
     };
     const update = () => {
-      input.hidden = container.children.length < LIST_MIN || container.hidden;
+      input.hidden = container.children.length < (container.dataset.searchAlways ? 2 : LIST_MIN) || container.hidden;
       apply();
     };
     input.addEventListener("input", apply);

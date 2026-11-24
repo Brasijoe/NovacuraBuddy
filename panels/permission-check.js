@@ -182,7 +182,7 @@ function pcDropdown(row, assignable, onChange, store = "selected", label = "perm
       refresh();
       onChange();
     };
-    label.append(box, document.createTextNode(` ${p.name === p.id ? p.id : `${p.id} — ${p.name}`}`));
+    label.append(box, document.createTextNode(` ${p.name === p.id ? p.id : `${p.id} - ${p.name}`}`));
     list.appendChild(label);
   }
   if (!assignable.length) list.textContent = "No permission sets available.";

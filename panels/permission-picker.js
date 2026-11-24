@@ -1,25 +1,11 @@
 /** Instance select + permission-set checklist, shared by the Quick Report and Custom LU deploy
  *  forms. Instances come from Basic Data; ticks are pre-set from the per-instance memory. */
-function renderPermissionPicker(container, { send, onError, emptySetsText, onChange }) {
+function renderPermissionPicker(container, { send, onError, emptySetsText, onChange, presetBaseUrl }) {
   const select = document.createElement("select");
   const sets = document.createElement("div");
   sets.className = "checklist";
-  const search = document.createElement("input");
-  search.type = "search";
-  search.placeholder = "Search permission sets…";
-  search.setAttribute("aria-label", "Search permission sets");
-  search.hidden = true;
-  container.append(select, search, sets);
-
-  /** Real-time filter; ticked sets stay ticked (and selected) while hidden. */
-  function applyFilter() {
-    const terms = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    for (const label of sets.querySelectorAll("label")) {
-      const text = label.textContent.toLowerCase();
-      label.hidden = !terms.every((t) => text.includes(t));
-    }
-  }
-  search.oninput = applyFilter;
+  sets.dataset.searchAlways = "1"; // shared panels/combobox.js adds the search field above the list
+  container.append(select, sets);
 
   (async () => {
     const response = await send({ type: "LIST_INSTANCES" });
@@ -32,6 +18,10 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
     }
     select.append(new Option("Choose an IFS instance…", ""));
     for (const instance of instances) select.append(new Option(instance.name, instance.baseUrl));
+    if (presetBaseUrl && instances.some((i) => i.baseUrl === presetBaseUrl)) {
+      select.value = presetBaseUrl;
+      select.onchange();
+    }
   })();
 
   let selectToken = 0; // bumped on every change so a slow response for a previous instance is ignored
@@ -39,8 +29,6 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
     const token = ++selectToken;
     onChange(false);
     sets.textContent = "";
-    search.value = "";
-    search.hidden = true;
     if (!select.value) return;
     sets.textContent = "Loading permission sets…";
     const response = await send({ type: "PERMISSION_SETS", baseUrl: select.value, masterPassword: "" });
@@ -55,10 +43,9 @@ function renderPermissionPicker(container, { send, onError, emptySetsText, onCha
       box.type = "checkbox";
       box.value = ps.id;
       box.checked = remembered.has(ps.id);
-      label.append(box, document.createTextNode(` ${ps.name}`));
+      label.append(box, document.createTextNode(` ${ps.name === ps.id ? ps.id : `${ps.id} - ${ps.name}`}`));
       sets.appendChild(label);
     }
-    search.hidden = !response.sets.length;
     onChange(true);
   };
 

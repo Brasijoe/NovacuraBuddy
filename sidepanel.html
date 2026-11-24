@@ -45,6 +45,7 @@
           <div class="tab-menu-row"><button id="tab-custom-lus" class="tab-item" role="tab">Custom LUs</button><span class="info-tip" data-tip="Design Custom Logical Units with attributes, deploy them to an IFS instance, or add attributes to LUs that already exist there."></span></div>
           <div class="tab-menu-row"><button id="tab-permission-sets" class="tab-item" role="tab">Compare Permission Sets <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Compares permission sets (their projection and action grants) between two IFS instances. Tick the sets, see what differs, then create missing sets, merge both ways, or use one instance as the reference and copy or sync to the other. Nothing is written before you confirm the preview with a second click."></span></div>
           <div class="tab-menu-row"><button id="tab-flow-deps" class="tab-item" role="tab">Flow Dependencies</button><span class="info-tip" data-tip="Scans an IFS installation for everything that calls Novacura Flow (run.novacura.com or app.novacura.com): events, event actions, workflows, routing addresses and page commands. Results open in a new browser tab. Read-only: the scan never changes anything in IFS."></span></div>
+          <div class="tab-menu-row"><button id="tab-entity-check" class="tab-item" role="tab">Entity Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds the IFS projections (entities) the open flow, a whole package or an organisation uses and shows whether each one is enabled in an IFS instance. Disabled ones can be switched on per projection, after your confirmation."></span></div>
           <div class="tab-menu-row"><button id="tab-permission-check" class="tab-item" role="tab">Permission Check <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Finds every IFS projection the flow open in the Designer calls and compares them with what an IFS user is allowed to use. Per connector (they can run as the user or the IAM client user), for one user or some permission sets. Read-only so far; adding the missing permissions comes next."></span></div>
         </div>
       </div>
@@ -60,7 +61,9 @@
           <div class="tab-menu-row"><button id="tab-step-recorder" class="tab-item" role="tab">Step Recorder <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Records what you do in the Flow web client (app.novacura.com): every click, input and selection becomes a numbered step with a screenshot and a ready sentence in German, English or French. Pause to skip private screens; password fields are never captured."></span></div>
           <div class="tab-menu-row"><button id="tab-module-compare" class="tab-item" role="tab">Module Compare</button><span class="info-tip" data-tip="After an IFS upgrade: generates every IFS module of an organisation or package fresh from the upgraded IFS instance, diffs it against the module in Flow and shows which functions and types your flows use are affected, rated by severity. Modules can be updated from the results."></span></div>
           <div class="tab-menu-row"><button id="tab-event-triggers" class="tab-item" role="tab">Event Triggers</button><span class="info-tip" data-tip="Triggers a Flow automation from an IFS event. Pick an automation with an active webhook, the IFS instance and an event; the tab then creates the routing address (pointing at the automation), the routing rule (application message, the event as message function, the queue) and the event action in IFS. Nothing is created before you confirm the preview, existing objects are reused and nothing is ever deleted."></span></div>
+          <div class="tab-menu-row"><button id="tab-step-pin" class="tab-item" role="tab">Pin Step <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Keeps a read-only copy of the step window open in the Flow Designer (its code and settings) here in the side panel, so you can look at it while you edit another step. Nothing is changed in the flow or the Designer."></span></div>
           <div class="tab-menu-row"><button id="tab-linked-flows" class="tab-item" role="tab">Linked Flows</button><span class="info-tip" data-tip="Keeps copies of one flow in several packages the same: link them, then push the version you changed to the others."></span></div>
+          <div class="tab-menu-row"><button id="tab-flow-analysis" class="tab-item" role="tab">Flow Analysis <span class="wip-tag">WIP</span></button><span class="info-tip" data-tip="Shows what changed in the open flow, and in everything it uses, since the version deployed on an environment (Test, Prod…): changed assets with their versions, changed steps, and field by field what differs, with a line diff for scripts. Read-only."></span></div>
           <div class="tab-menu-row"><button id="tab-commit-chain" class="tab-item" role="tab">Commit Dependencies</button><span class="info-tip" data-tip="Commits the open flow and everything it uses, bottom to top: modules and sub-flows first, then the flows that use them, each pointing at the new versions below. You see what needs a commit first and can undo every commit. Optionally deploys afterwards."></span></div>
         </div>
       </div>
@@ -158,6 +161,16 @@
       <div class="section-head"><h2>QuickReports module</h2><span class="info-tip" data-tip="Creates or updates one Flow module called QuickReports (top level, no package) from the QuickReports projection of the chosen IFS instance. It needs a Flow login, so open the Flow Designer once. With the switch on, only the Quick Reports you deployed to that instance with NovacuraBuddy stay in the module. The module is committed, not added to any flow."></span></div>
       <select id="qrModuleInstance"></select>
       <div id="qrModuleBox"></div>
+      <hr class="section-divider" />
+      <div class="cm-card" id="qruCard">
+        <div class="section-head"><h2>Scan org for Quick Report usage</h2><span class="info-tip" data-tip="Reads every flow of a Flow organisation (all packages and the App Library) and lists the IFS Quick Reports they call through the QuickReports module: Quick Report, IFS id, name and the flows that use it, each flow linked to the Designer. The name comes from the IFS instance you choose. Read-only: nothing is written to Flow or IFS."></span></div>
+        <label class="cm-field">1. Organisation <select id="qruOrgSelect"></select></label>
+        <div id="qruOrgHint" class="empty-state" hidden></div>
+        <label class="cm-field">2. IFS instance (for the names) <select id="qruInstanceSelect"></select></label>
+        <button id="qruScanBtn" class="btn-primary fd-scan-btn" disabled>Scan</button>
+        <div id="qruHint" class="empty-state" hidden></div>
+        <p id="qruLast" class="list-count" hidden></p>
+      </div>
       <hr class="section-divider" />
       <ul id="qrList" class="qr-list"></ul>
     </section>
@@ -435,6 +448,39 @@
       <div id="etResult" hidden></div>
     </section>
 
+    <section id="panel-entity-check" role="tabpanel" hidden>
+      <div class="banner banner-warning"><span><strong>WIP:</strong> reading and the status are safe. Switching a projection on or off in IFS uses the Projection Explorer actions but is not yet tested against a live IFS; each switch asks for a confirmation and is read back.</span></div>
+      <div class="cm-toolbar">
+        <span id="ecSession" class="ft-chip ft-chip-muted">Checking Flow session…</span>
+        <button id="ecRefreshBtn" class="btn-ghost" title="Reload the Flow session, organisations, packages and IFS instances">&#8635; Refresh</button>
+      </div>
+
+      <div class="cm-card" id="ecScopeCard">
+        <div class="section-head"><h2>1. What to scan</h2><span class="info-tip" data-tip="The flow open in the Designer tab (with every module and sub-flow it uses), all flows and modules of one package (plus the App Library), or everything in an organisation. Only reads Flow."></span></div>
+        <label class="fd-default"><input type="radio" name="ecScope" value="current" checked /> The open flow</label>
+        <label class="fd-default"><input type="radio" name="ecScope" value="package" /> A package</label>
+        <label class="fd-default"><input type="radio" name="ecScope" value="org" /> A whole organisation</label>
+        <select id="ecOrg" hidden></select>
+        <select id="ecPackage" hidden><option value="">Choose a package…</option></select>
+      </div>
+
+      <div class="cm-card">
+        <div class="section-head"><h2>2. IFS instance and permission sets</h2><span class="info-tip" data-tip="The instance whose projections are checked. The state shown is the one IFS has right now (Active in the Projection Explorer); the switches start from it. Tick permission sets (optional): when you enable a projection here, it is also granted to the ticked sets."></span></div>
+        <div id="ecPicker"></div>
+        <button id="ecScanBtn" class="btn-primary fd-scan-btn" disabled>Scan and check</button>
+        <p id="ecHint" class="api-hint" hidden></p>
+      </div>
+
+      <div class="cm-card" id="ecResultCard" hidden>
+        <div class="section-head"><h2>3. Entities</h2><span class="info-tip" data-tip="Every projection the scan found. Enabled / Disabled is the state in IFS; Not found means the instance has no such projection. Use the switch to enable or disable one: you confirm each change, and it is read back from IFS afterwards."></span></div>
+        <div id="ecSummary" class="ft-chips"></div>
+        <div class="search-row"><input id="ecSearch" placeholder="Search entities, components, flows…" autocomplete="off" /></div>
+        <div id="ecFilters" class="ft-chips"></div>
+        <p id="ecCount" class="list-count"></p>
+        <div id="ecList" class="ec-list"></div>
+      </div>
+    </section>
+
     <section id="panel-permission-check" role="tabpanel" hidden>
       <div class="banner banner-warning"><span><strong>WIP:</strong> applying permissions is not yet fully verified against a live IFS; Read Only grants are not supported.</span></div>
       <div class="section-head"><h2>Projections the open flow calls</h2><span class="info-tip" data-tip="Reads the flow open in the Designer tab and every module and sub-flow it uses, and lists the IFS projections they call. Nothing is changed in Flow or IFS."></span></div>
@@ -462,7 +508,7 @@
       <select id="pscInstB" aria-label="Instance B"></select>
       <div class="section-head"><h3>Permission sets</h3><span class="info-tip" data-tip="All customer permission sets of both instances (IFS-delivered ones are left out). The tag says where each exists. Tick as many as you like; the filter only narrows the list, and All / None act on the visible rows."></span></div>
       <div class="search-row"><input id="pscFilter" placeholder="Filter permission sets…" autocomplete="off" /><button id="pscAll" class="btn-ghost">All</button><button id="pscNone" class="btn-ghost">None</button></div>
-      <div id="pscSets" class="checklist"></div>
+      <div id="pscSets" class="checklist" data-own-search="1"></div>
       <p id="pscCount" class="list-count"></p>
       <div class="section-head"><h3>Action</h3><span class="info-tip" data-tip="Merge: each instance gets the projections only the other has. Copy from reference: the target gets what the reference has, nothing is removed. Sync to reference: like copy, and can also remove what the reference does not have. The reference is the template instance. Action grants are compared but not changed yet."></span></div>
       <select id="pscMode" aria-label="Action">
@@ -492,9 +538,51 @@
       <div id="ccRoot" class="lf-work"></div>
     </section>
 
+    <section id="panel-flow-analysis" role="tabpanel" hidden>
+      <div class="cm-toolbar">
+        <span id="faSessionHint" class="api-hint" hidden></span>
+        <button id="faRefreshBtn" class="btn-ghost" title="Read the open flow and its assets again">&#8635; Refresh</button>
+      </div>
+      <div class="cm-card">
+        <div class="section-head"><h2>1. Open flow</h2><span class="info-tip" data-tip="The flow open in the Flow Designer tab, with the organisation and package. Together with every asset it uses (modules, components, sub-flows, at any depth) it is what gets compared."></span></div>
+        <dl id="faContext" class="fa-ctx" hidden>
+          <dt>Organisation</dt><dd id="faOrg"></dd>
+          <dt>Flow</dt><dd id="faFlow"></dd>
+          <dt>Package</dt><dd id="faPackage"></dd>
+        </dl>
+        <p id="faOpenHint" class="api-hint">Open an app, page or automation in the Flow Designer.</p>
+      </div>
+      <div class="cm-card" id="faEnvCard">
+        <div class="section-head"><h2>2. Compare with</h2><span class="info-tip" data-tip="The environment whose deployed version the open flow is compared with. Only reads: the deployed version, the versions of everything it uses, and their content. Nothing is changed or deployed."></span></div>
+        <label class="cm-field">Environment <select id="faEnv" disabled></select></label>
+        <label class="fa-check"><input type="checkbox" id="faIgnoreSys" checked /> Ignore _SYS packages <span class="info-tip" data-tip="Leaves out assets of packages whose name starts with _SYS (system packages)."></span></label>
+        <p id="faEnvNote" class="api-hint" hidden></p>
+        <button id="faCompareBtn" class="btn-primary" disabled>Compare with deployed version</button>
+      </div>
+      <div class="cm-card" id="faResult" hidden></div>
+    </section>
+
+    <section id="panel-step-pin" role="tabpanel" hidden>
+      <div class="cm-toolbar">
+        <label class="fa-check"><input type="checkbox" id="spOn" checked /> Pinning on <span class="info-tip" data-tip="Switch off to hide the pinned steps and stop pinning. Your pins are kept and come back when you switch it on again."></span></label>
+        <label class="fa-check">Text size <input type="range" id="spSize" min="9" max="18" value="12" /></label>
+      </div>
+      <div id="spPanel">
+        <div class="cm-card">
+          <div class="section-head"><h2>1. Open step</h2><span class="info-tip" data-tip="The step window currently open in the Flow Designer. Pin it to keep a copy of its code and settings here. Pins belong to the flow they were made in (up to 6 per flow). Open applies the open step and opens the pinned one (experimental); the pin then remembers which step you came from, so you can go back."></span></div>
+          <p id="spOpenNote" class="api-hint">Open a step in the Flow Designer.</p>
+          <div class="sp-actions"><button id="spPinBtn" class="btn-primary" disabled>Pin current step</button><button id="spDumpBtn" class="btn-ghost" title="Copies an outline of the open step window and the step names on the canvas, for troubleshooting">Copy diagnostics</button></div>
+        </div>
+        <p id="spOffNote" class="api-hint" hidden>Pinning is off. Your pinned steps are kept.</p>
+        <div class="sp-listhead"><button id="spUnpinAll" class="btn-ghost" title="Removes every pinned step of this flow">Unpin all</button></div>
+        <div id="spList"></div>
+      </div>
+    </section>
+
     <section id="panel-basic-data" role="tabpanel" hidden>
       <div class="section-head"><h2>IFS instances</h2><span class="info-tip" data-tip="The IFS environments Novacura Buddy works with. Click one to select it for the Projection Tracker tab; Test asks IFS for a fresh token. Client secrets are encrypted with your master password and stay in this browser."></span></div>
       <ul id="instanceList" class="instance-list"></ul>
+      <div class="section-head"><h2 id="instanceFormTitle">Add instance</h2><span class="info-tip" data-tip="Fill in the fields to add an IFS environment. Click Edit on an instance above to change its name, URL, token endpoint or client ID; leave the client secret empty to keep the saved one. The master password is needed to check the connection."></span></div>
       <form id="instanceForm" class="instance-form">
         <input id="instanceName" placeholder="Name" required />
         <input id="instanceBaseUrl" placeholder="https://ifs.example.com" required />
@@ -502,7 +590,7 @@
         <input id="instanceClientId" placeholder="Client ID" required />
         <input id="instanceClientSecret" placeholder="Client secret" type="password" required />
         <div class="search-row"><input id="masterPassword" placeholder="Master password" type="password" required /><span class="info-tip" data-tip="Encrypts the saved IFS and GitHub secrets in this browser. You enter it once per browser session (Unlock at the top) to use them; it is never stored."></span></div>
-        <button type="submit" class="btn-primary">Add instance</button>
+        <div class="search-row"><button type="submit" class="btn-primary">Add instance</button><button type="button" id="instanceCancelEdit" class="btn-ghost" hidden>Cancel</button></div>
       </form>
       <hr class="section-divider" />
       <div class="section-head"><h2>GitHub (Quick Reports)</h2><span class="info-tip" data-tip="Quick Reports and Custom LUs are saved as files in this repo, each user in their own folder. The token needs read and write access to the repo's contents and is encrypted with your master password."></span></div>
@@ -543,6 +631,7 @@
     <script src="lib/custom-lu-model.js"></script>
     <script src="panels/cl-deploy-form.js"></script>
     <script src="panels/quick-reports.js"></script>
+    <script src="panels/qr-usage.js"></script>
     <script src="panels/custom-lus.js"></script>
     <script src="panels/flow-deps.js"></script>
     <script src="panels/update-banner.js"></script>
@@ -560,13 +649,18 @@
     <script src="panels/classic-migration.js"></script>
     <script src="panels/linked-flows.js"></script>
     <script src="panels/commit-chain.js"></script>
+    <script src="lib/flow-analysis.js"></script>
+    <script src="panels/flow-analysis.js"></script>
     <script src="panels/module-compare.js"></script>
     <script src="panels/flow-docs.js"></script>
     <script src="panels/permission-check.js"></script>
+    <script src="lib/entity-check.js"></script>
+    <script src="panels/entity-check.js"></script>
     <script src="lib/ifs-links.js"></script>
     <script src="panels/event-triggers.js"></script>
     <script src="lib/permission-set-compare.js"></script>
     <script src="panels/permission-set-compare.js"></script>
+    <script src="panels/step-pin.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

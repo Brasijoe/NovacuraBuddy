@@ -1,5 +1,5 @@
 const TAB_KEY = "activeTab";
-const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "classic-migration", "step-recorder", "module-compare", "linked-flows", "commit-chain", "permission-check", "event-triggers", "permission-sets", "basic-data"];
+const TABS = ["tracker", "recorder", "quick-reports", "custom-lus", "flow-deps", "flow-docs", "api-modules", "flows", "classic-migration", "step-recorder", "module-compare", "linked-flows", "commit-chain", "flow-analysis", "permission-check", "entity-check", "event-triggers", "step-pin", "permission-sets", "basic-data"];
 
 function showTab(name) {
   for (const tab of TABS) {
@@ -19,6 +19,7 @@ function showTab(name) {
   document.getElementById("tabSubheader").textContent = openGroup ? `${openGroup.querySelector(".tab-group-btn").firstChild.textContent.trim()} › ${itemLabel}` : itemLabel;
   try { localStorage.setItem(TAB_KEY, name); } catch { /* per-viewer convenience only */ }
   if (name === "quick-reports" && !qrLoadedOnce) refreshQuickReports();
+  if (name === "quick-reports") qruOnShow();
   if (name === "custom-lus" && !clLoadedOnce) refreshCustomLus();
   if (name === "flow-deps") fdOnShow();
   if (name === "flow-docs") fdocOnShow();
@@ -26,8 +27,11 @@ function showTab(name) {
   if (name === "module-compare") mcOnShow();
   if (name === "step-recorder") srOnShow(); else if (typeof srOnHide === "function") srOnHide();
   if (name === "commit-chain") ccOnShow();
+  if (name === "flow-analysis") faOnShow();
   if (name === "classic-migration") cmOnShow();
   if (name === "event-triggers") etOnShow();
+  if (name === "entity-check") ecOnShow();
+  if (name === "step-pin") spOnShow(); else spOnHide();
 }
 
 // After unlocking the saved credentials, reload what the open tab could not read while locked.
@@ -125,9 +129,10 @@ initCustomLusPanel();
 initApiModulesPanel();
 initFlowTransferPanel();
 initLinkedFlowsPanel();
+initStepPinPanel();
 refreshUpdateBanner();
 refreshUnmatchedHosts();
-setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshCommitChainState(); }, 5000);
+setInterval(() => { refreshProjections(); refreshLockStatus(); refreshUnmatchedHosts(); refreshQrDesignerState(); refreshApiDesignerState(); refreshFlowTransferState(); refreshLinkedFlowsState(); refreshModuleCompareState(); refreshQruState(); refreshCommitChainState(); refreshFlowAnalysisState(); }, 5000);
 
 
 // Connector labels in the Flow Designer on/off (content/designer.js reads the same setting).
