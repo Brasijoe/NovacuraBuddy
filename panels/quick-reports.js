@@ -5,6 +5,7 @@ let qrRenderedSig = null; // identity of what the list currently shows; unchange
 let qrOpenPanel = null; // the one expanded panel in the list (deploy form or module picker): { close() }
 let qrDeployments = new Map(); // report id -> its deployments, newest first (one per instance)
 let qrDesigner = { open: false, hasFlowToken: false };
+let qrFolderState = QrFolders.empty(); // customer folders (see lib/qr-folders.js)
 const qrRows = new Map(); // report id -> { applyState() } for the rows currently shown
 const qrModuleBoxes = new Set(); // { applyState() } of every QuickReports module control on screen
 
@@ -42,22 +43,153 @@ function qrExpander(btn, panel, label) {
   return expander;
 }
 
+async function updateQrFolders(next) {
+  qrFolderState = next;
+  qrRenderedSig = null;
+  renderQrList();
+  await QrFolders.save(next);
+}
+
 function renderQrList() {
-  const shown = qrSearch ? qrSearch.search(document.getElementById("qrSearch").value) : [];
+  const term = document.getElementById("qrSearch").value;
+  const searching = !!term.trim();
+  const shown = qrSearch ? qrSearch.search(term) : [];
   document.getElementById("qrCount").textContent = qrReports.length ? `${shown.length} of ${qrReports.length}` : "";
   const list = document.getElementById("qrList");
-  const sig = JSON.stringify(shown.map((r) => [r.id, r.name, r.sqlSha, r.jsonSha]));
+  const sig = JSON.stringify([shown.map((r) => [r.id, r.name, r.sqlSha, r.jsonSha]), qrFolderState, searching]);
   if (sig === qrRenderedSig) return;
   qrRenderedSig = sig;
   qrOpenPanel = null;
   qrRows.clear();
   list.innerHTML = "";
-  for (const report of shown) list.appendChild(buildQrRow(report));
+  if (!qrFolderState.folders.length) {
+    for (const report of shown) list.appendChild(buildQrRow(report));
+    return;
+  }
+  // While searching, folders without a hit disappear and the others open up so hits are visible.
+  for (const g of QrFolders.group(qrFolderState, shown, { hideEmpty: searching })) list.appendChild(buildQrFolder(g, searching));
+}
+
+/** One expandable customer folder (or the "No folder" group): a header you can drop reports on,
+ *  and the report rows below it. */
+function buildQrFolder({ folder, reports }, searching) {
+  const id = folder ? folder.id : "";
+  const collapsed = !searching && !!(folder ? qrFolderState.collapsed[folder.id] : qrFolderState.collapsed["__none"]);
+  const li = document.createElement("li");
+  li.className = "qr-folder" + (folder ? "" : " qr-folder-none");
+
+  const head = document.createElement("div");
+  head.className = "qr-folder-head";
+  const toggle = document.createElement("button");
+  toggle.className = "qr-folder-toggle btn-ghost";
+  toggle.setAttribute("aria-expanded", String(!collapsed));
+  const caret = document.createElement("span");
+  caret.className = "qr-caret";
+  caret.textContent = collapsed ? "▸" : "▾";
+  const title = document.createElement("span");
+  title.className = "qr-folder-name";
+  title.textContent = folder ? folder.name : "No folder";
+  const count = document.createElement("span");
+  count.className = "qr-folder-count";
+  count.textContent = String(reports.length);
+  toggle.append(caret, title, count);
+  toggle.onclick = () => updateQrFolders(QrFolders.setCollapsed(qrFolderState, folder ? folder.id : "__none", !collapsed));
+  head.appendChild(toggle);
+
+  if (folder) {
+    const rename = document.createElement("button");
+    rename.className = "btn-ghost";
+    rename.textContent = "Rename";
+    rename.onclick = () => {
+      const input = document.createElement("input");
+      input.value = folder.name;
+      input.className = "qr-folder-input";
+      toggle.replaceWith(input);
+      rename.hidden = true;
+      input.focus();
+      input.select();
+      let done = false;
+      const finish = (apply) => {
+        if (done) return;
+        done = true;
+        if (!apply || input.value.trim() === folder.name) return updateQrFolders(qrFolderState);
+        try { updateQrFolders(QrFolders.renameFolder(qrFolderState, folder.id, input.value)); }
+        catch (e) { showError(e.message, true); updateQrFolders(qrFolderState); }
+      };
+      input.onkeydown = (e) => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+      input.onblur = () => finish(true);
+    };
+    const del = document.createElement("button");
+    del.className = "btn-ghost";
+    del.textContent = "Delete";
+    del.title = "Deletes the folder only; its reports move to “No folder”";
+    let armed = false;
+    del.onclick = () => {
+      if (!armed) { armed = true; del.textContent = "Sure? Reports stay"; return; }
+      updateQrFolders(QrFolders.deleteFolder(qrFolderState, folder.id));
+    };
+    del.onblur = () => { armed = false; del.textContent = "Delete"; };
+    head.append(rename, del);
+  }
+
+  const inner = document.createElement("ul");
+  inner.className = "qr-list qr-folder-body";
+  inner.hidden = collapsed;
+  if (!reports.length) {
+    const hint = document.createElement("li");
+    hint.className = "empty-state qr-folder-empty";
+    hint.textContent = "Drag Quick Reports here.";
+    inner.appendChild(hint);
+  }
+  for (const report of reports) inner.appendChild(buildQrRow(report));
+  li.append(head, inner);
+
+  // Drop target: the whole folder card.
+  li.addEventListener("dragover", (e) => {
+    if (!e.dataTransfer || !e.dataTransfer.types.includes("application/x-qr-report")) return;
+    e.preventDefault();
+    li.classList.add("is-drop");
+  });
+  li.addEventListener("dragleave", (e) => { if (!li.contains(e.relatedTarget)) li.classList.remove("is-drop"); });
+  li.addEventListener("drop", (e) => {
+    li.classList.remove("is-drop");
+    const rid = e.dataTransfer && e.dataTransfer.getData("application/x-qr-report");
+    if (!rid) return;
+    e.preventDefault();
+    updateQrFolders(QrFolders.moveReport(qrFolderState, rid, id || null));
+  });
+  return li;
+}
+
+/** "New folder" button + inline name field in the list toolbar. */
+function initQrFolderCreate() {
+  const btn = document.getElementById("qrNewFolderBtn");
+  const row = document.getElementById("qrNewFolderRow");
+  const input = document.getElementById("qrNewFolderInput");
+  const close = () => { row.hidden = true; input.value = ""; };
+  const create = () => {
+    try {
+      updateQrFolders(QrFolders.addFolder(qrFolderState, input.value).state);
+      close();
+    } catch (e) { showError(e.message, true); }
+  };
+  btn.onclick = () => { row.hidden = !row.hidden; if (!row.hidden) input.focus(); };
+  document.getElementById("qrNewFolderOk").onclick = create;
+  document.getElementById("qrNewFolderCancel").onclick = close;
+  input.onkeydown = (e) => { if (e.key === "Enter") create(); if (e.key === "Escape") close(); };
 }
 
 function buildQrRow(report) {
   const li = document.createElement("li");
   li.className = "qr-item";
+  li.draggable = true;
+  li.title = "Drag onto a customer folder to file this report";
+  li.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("application/x-qr-report", report.id);
+    e.dataTransfer.effectAllowed = "move";
+    li.classList.add("is-dragging");
+  });
+  li.addEventListener("dragend", () => li.classList.remove("is-dragging"));
 
   const head = document.createElement("div");
   head.className = "qr-head";
@@ -362,9 +494,17 @@ function initQuickReportsPanel() {
     if (change && change.newValue && change.newValue.reports) setQrReports(change.newValue.reports, change.newValue.fetchedAt);
     // Every finished deploy (side panel or editor tab) lands in qrDeployments.
     if (area === "local" && changes.qrDeployments) refreshQrDeployments();
+    // Folders edited on another PC (sync) or the editor tab.
+    if (changes[QrFolders.KEY] && changes[QrFolders.KEY].newValue) {
+      qrFolderState = QrFolders.normalize(changes[QrFolders.KEY].newValue);
+      qrRenderedSig = null;
+      renderQrList();
+    }
   });
   refreshQrDeployments();
   refreshQrDesignerState();
+  QrFolders.load().then((state) => { qrFolderState = state; qrRenderedSig = null; renderQrList(); });
+  initQrFolderCreate();
   document.getElementById("qrSearch").addEventListener("input", renderQrList);
   document.getElementById("qrRefreshBtn").addEventListener("click", () => { clearError(true); refreshQuickReports(); });
   const topBox = buildQrModuleBox(() => document.getElementById("qrModuleInstance").value);
