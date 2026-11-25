@@ -35,6 +35,7 @@ importScripts(
   "lib/cl-service.js",
   "lib/update-check.js",
   "lib/flow-deps.js",
+  "lib/xml-to-json-flat.js",
   "lib/event-triggers.js",
   "lib/flow-documentation.js",
   "lib/permission-check.js",

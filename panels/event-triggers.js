@@ -150,6 +150,7 @@ function etRenderPlan(plan, instanceName) {
   const title = document.createElement("p");
   title.textContent = `In ${instanceName}:`;
   box.append(title);
+  row("Transformer", plan.transformerName, plan.transformerExists);
   row("Routing address", plan.addressName, plan.addressExists);
   row("Routing rule", plan.ruleName, plan.ruleExists);
   const action = document.createElement("p");
