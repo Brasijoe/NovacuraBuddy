@@ -35,7 +35,7 @@ function ecUpdateControls() {
 async function ecLoad() {
   ecEl("ecRefreshBtn").disabled = true;
   try {
-    const [ctx, orgs] = await Promise.all([send({ type: "LF_CONTEXT" }), send({ type: "FT_ORGS" })]);
+    const [ctx, orgs] = await Promise.all([send({ type: "FLOW_CONTEXT" }), send({ type: "FT_ORGS" })]);
     if (!ecPicker) ecPicker = renderPermissionPicker(ecEl("ecPicker"), { send, onError: ecHint, emptySetsText: "No customer permission sets found.", onChange: () => ecUpdateControls() });
     ecHasFlow = !!(ctx.ok && ctx.itemId);
     ecHasToken = !!(ctx.ok && ctx.hasFlowToken && orgs.ok);

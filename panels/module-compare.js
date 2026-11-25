@@ -66,7 +66,7 @@ let mcOrgsLoaded = false;
  *  the 5s poll (refreshModuleCompareState) tries again. */
 async function mcLoadOrgs() {
   const orgSelect = mcEl("mcOrgSelect");
-  const [ctx, orgs] = await Promise.all([send({ type: "LF_CONTEXT" }), send({ type: "FT_ORGS" })]);
+  const [ctx, orgs] = await Promise.all([send({ type: "FLOW_CONTEXT" }), send({ type: "FT_ORGS" })]);
   const previous = orgSelect.value;
   const designerOrg = ctx.ok ? ctx.orgId : null;
   if (!orgs.ok || !orgs.orgs.length) {

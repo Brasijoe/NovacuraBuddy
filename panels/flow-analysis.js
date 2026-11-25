@@ -35,7 +35,7 @@ function faOnShow() {
 /** From the 5s poll: follows the Designer tab (open flow, organisation) while the tab is shown. */
 async function refreshFlowAnalysisState(first) {
   if (!faVisible() || fa.loading || (fa.run && fa.run.running)) return;
-  const ctx = await send({ type: "LF_CONTEXT" });
+  const ctx = await send({ type: "FLOW_CONTEXT" });
   if (!ctx.ok) return;
   fa.hasToken = ctx.hasFlowToken;
   const changed = ctx.itemId !== fa.itemId || ctx.orgId !== fa.orgId;
@@ -127,7 +127,7 @@ function faVersionLabel(versionId, info) {
   const label = i.number !== null && i.number !== undefined ? `v${i.number}` : faShort(versionId);
   return faH("span", { className: "fa-ver" }, faH("strong", { textContent: label }), bits.length ? ` (${bits.join(", ")}` : "", i.by ? faH("span", { className: "fa-initials", title: i.by, textContent: FlowAnalysis.initialsOf(i.by) }) : "", bits.length ? ")" : "");
 }
-const faH = lfH;
+const faH = uiH;
 
 function faRenderDiffLines(lines) {
   const box = faH("div", { className: "fa-code" });
