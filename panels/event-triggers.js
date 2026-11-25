@@ -129,13 +129,77 @@ async function etLoadIfsLists(baseUrl, gesture) {
   etUpdatePlanBtn();
 }
 
+/* --- Event variables: automation input variables -> columns of the event --- */
+
+let etMapToken = 0;
+
+/** The mapping rows chosen so far: [{ id, column, which }] (only rows with a column). */
+function etMappings() {
+  return [...etEl("etMapRows").querySelectorAll(".et-map-row")]
+    .map((row) => ({ id: row.dataset.variable, column: row.querySelector(".et-map-col").value, which: row.querySelector(".et-map-which").value }))
+    .filter((m) => m.column);
+}
+
+/** Reads the automation's input variables (Flow) and the event's columns (IFS) and shows one row per
+ *  variable with a suggested column. Read-only. */
+async function etLoadMapping() {
+  const token = ++etMapToken;
+  const card = etEl("etMapCard");
+  const rowsBox = etEl("etMapRows");
+  const a = etSelectedAutomation();
+  const ev = etSelectedEvent();
+  const baseUrl = etEl("etInstance").value;
+  rowsBox.innerHTML = "";
+  if (!a || !ev || !baseUrl) { card.hidden = true; return; }
+  card.hidden = false;
+  etEl("etMapHint").textContent = "Reading the automation's input and the event's columns…";
+  const inputs = await send({ type: "ET_AUTOMATION_INPUTS", automationId: a.id, orgId: et.orgId });
+  if (token !== etMapToken) return;
+  if (!inputs.ok) { etEl("etMapHint").textContent = inputs.error; return; }
+  const cols = await send({ type: "ET_EVENT_COLUMNS", baseUrl, eventLuName: ev.luName, eventId: ev.id, variables: inputs.variables.map((v) => v.name) });
+  if (token !== etMapToken) return;
+  if (!cols.ok) { etEl("etMapHint").textContent = explainLocked(cols); return; }
+  if (!inputs.variables.length) { etEl("etMapHint").textContent = `The automation has no single input variables (input type: ${inputs.typeExpression}). Nothing to map.`; return; }
+  const existing = new Map(cols.parameters.map((p) => [p.id, p.plsqlMethod]));
+  etEl("etMapHint").textContent = `${inputs.variables.length} input variables, ${cols.columns.length} event columns. The column is a suggestion: change or clear it as needed.`;
+  for (const v of inputs.variables) {
+    const row = document.createElement("div");
+    row.className = "et-map-row";
+    row.dataset.variable = v.name;
+    const label = document.createElement("p");
+    label.className = "list-count";
+    label.textContent = `${v.name} (${v.type}${v.optional ? ", optional" : ""})`;
+    const colSelect = document.createElement("select");
+    colSelect.className = "et-map-col";
+    colSelect.append(new Option("Not mapped", ""));
+    for (const c of cols.columns) colSelect.append(new Option(`${c.name} (${c.dataType || "?"})${c.old || c.new ? " · active" : ""}`, c.name));
+    const which = document.createElement("select");
+    which.className = "et-map-which";
+    which.dataset.plain = "1";
+    which.append(new Option("New value", "NEW"), new Option("Old value", "OLD"));
+    const already = existing.get(v.name);
+    if (already) {
+      // An existing event parameter is never changed: show it and leave the row unmapped.
+      label.textContent += ` — already an event parameter (${already}), kept`;
+      colSelect.disabled = true;
+      which.disabled = true;
+    } else {
+      colSelect.value = cols.suggestions[v.name] || "";
+    }
+    for (const el of [colSelect, which]) el.addEventListener("change", etResetPlan);
+    row.append(label, colSelect, which);
+    rowsBox.append(row);
+  }
+}
+
 function etInput() {
   const a = etSelectedAutomation();
   const e = etSelectedEndpoint();
   const ev = etSelectedEvent();
   return {
     automationName: a.name, endpoint: e.url, method: etEl("etMethod").value,
-    eventLuName: ev.luName, eventId: ev.id, queue: etEl("etQueue").value
+    eventLuName: ev.luName, eventId: ev.id, queue: etEl("etQueue").value,
+    mappings: etMappings()
   };
 }
 
@@ -144,14 +208,20 @@ function etRenderPlan(plan, instanceName) {
   box.innerHTML = "";
   const row = (label, name, exists) => {
     const p = document.createElement("p");
-    p.textContent = `${label}: ${name} — ${exists ? "exists already, will be reused" : "will be created"}`;
+    p.textContent = `${label}: ${name} — ${exists ? "exists already: header data stays, transformer / destination address are saved again" : "will be created"}`;
     box.append(p);
   };
   const title = document.createElement("p");
   title.textContent = `In ${instanceName}:`;
   box.append(title);
+  row("Transformer", plan.transformerName, plan.transformerExists);
   row("Routing address", plan.addressName, plan.addressExists);
   row("Routing rule", plan.ruleName, plan.ruleExists);
+  for (const m of etMappings()) {
+    const p = document.createElement("p");
+    p.textContent = `Event variable: ${m.id} ← ${m.which === "OLD" ? "old" : "new"} value of ${m.column}`;
+    box.append(p);
+  }
   const action = document.createElement("p");
   action.textContent = `Event action: ${plan.description} — will be created`;
   box.append(action);
@@ -185,7 +255,7 @@ etEl("etLinkBtn").addEventListener("click", async () => {
   out.innerHTML = "";
   for (const r of response.results) {
     const p = document.createElement("p");
-    p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : "failed — " + r.error}`;
+    p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : r.status === "updated" ? "already existed, transformer / destination address saved again" : "failed — " + r.error}`;
     out.append(p);
   }
   // Direct links to the routing address and rule in IFS (created or reused).
@@ -205,10 +275,11 @@ etEl("etLinkBtn").addEventListener("click", async () => {
 });
 
 etEl("etLoadBtn").addEventListener("click", etLoadAutomations);
-etEl("etAutomation").addEventListener("change", () => { etFillEndpoints(); etUpdatePlanBtn(); });
+etEl("etAutomation").addEventListener("change", () => { etFillEndpoints(); etUpdatePlanBtn(); etLoadMapping(); });
 etEl("etEndpoint").addEventListener("change", () => { etShowEndpointInfo(); etUpdatePlanBtn(); });
 etEl("etInstance").addEventListener("change", () => { et.ifsFor = null; etEl("etIfsFields").hidden = true; etResetPlan(); if (etEl("etInstance").value) etLoadIfsLists(etEl("etInstance").value, true); });
-for (const id of ["etEvent", "etQueue", "etMethod"]) etEl(id).addEventListener("change", () => { etResetPlan(); });
+for (const id of ["etQueue", "etMethod"]) etEl(id).addEventListener("change", () => { etResetPlan(); });
+etEl("etEvent").addEventListener("change", () => { etResetPlan(); etLoadMapping(); });
 etEl("etKey").addEventListener("input", etUpdatePlanBtn);
 
 chrome.runtime.onMessage.addListener((message) => {

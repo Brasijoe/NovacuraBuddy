@@ -35,6 +35,7 @@ importScripts(
   "lib/cl-service.js",
   "lib/update-check.js",
   "lib/flow-deps.js",
+  "lib/xml-to-json-flat.js",
   "lib/event-triggers.js",
   "lib/flow-documentation.js",
   "lib/permission-check.js",
@@ -1037,6 +1038,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
           const [queues, events] = await Promise.all([EventTriggers.listQueues(client), EventTriggers.listEvents(client)]);
           return sendResponse({ ok: true, queues, events });
+        }
+        case "ET_AUTOMATION_INPUTS": { // Event Triggers: the input variables of an automation (read-only)
+          const { [LAST_FLOW_ORG_KEY]: lastOrgId } = await chrome.storage.local.get(LAST_FLOW_ORG_KEY);
+          const orgId = message.orgId || (designerTabState ? designerTabState.orgId : lastOrgId);
+          if (!orgId || !flowToken.get()) throw new Error("Open a flow in the Flow Designer tab first: the input is read from Flow.");
+          return sendResponse({ ok: true, ...(await EventTriggers.listAutomationInputs({ flowFetch: boundFlowFetch(), orgId, automationId: message.automationId })) });
+        }
+        case "ET_EVENT_COLUMNS": { // Event Triggers: the columns of an IFS event, with their activation state (read-only)
+          const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
+          const [columns, parameters] = await Promise.all([EventTriggers.listEventColumns(client, message.eventLuName, message.eventId), EventTriggers.listEventParameters(client, message.eventLuName, message.eventId)]);
+          const suggestions = Object.fromEntries((message.variables || []).map((v) => [v, EventTriggers.suggestColumn(v, columns)]));
+          return sendResponse({ ok: true, columns, parameters, suggestions });
         }
         case "ET_PLAN": { // Event Triggers: what would be created and what exists already (read-only)
           const client = IfsClient.forInstance({ instanceStore, baseUrl: message.baseUrl, masterKey: await masterKey() });
