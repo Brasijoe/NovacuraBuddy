@@ -208,7 +208,7 @@ function etRenderPlan(plan, instanceName) {
   box.innerHTML = "";
   const row = (label, name, exists) => {
     const p = document.createElement("p");
-    p.textContent = `${label}: ${name} — ${exists ? "exists already, will be reused" : "will be created"}`;
+    p.textContent = `${label}: ${name} — ${exists ? "exists already: header data stays, transformer / destination address are saved again" : "will be created"}`;
     box.append(p);
   };
   const title = document.createElement("p");
@@ -255,7 +255,7 @@ etEl("etLinkBtn").addEventListener("click", async () => {
   out.innerHTML = "";
   for (const r of response.results) {
     const p = document.createElement("p");
-    p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : "failed — " + r.error}`;
+    p.textContent = `${r.step}: ${r.status === "created" ? "created" : r.status === "exists" ? "already existed, reused" : r.status === "updated" ? "already existed, transformer / destination address saved again" : "failed — " + r.error}`;
     out.append(p);
   }
   // Direct links to the routing address and rule in IFS (created or reused).
