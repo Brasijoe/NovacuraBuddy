@@ -343,6 +343,99 @@ function cdWatch() {
   CD.observer.observe(root, { childList: true, subtree: true });
 }
 
+/* ---- Download the whole trace -------------------------------------------------------------------------
+ * "Download trace" saves every row of the Trace Logs (all types, with the details of the logged calls) and the
+ * Variables tab as one JSON file that is easy to paste into an AI: a flat list of entries in log order, each with
+ * type, source, result and details, plus the variables as they are now, and the PL/SQL of the Database steps that
+ * "Add PL/SQL & REST info" found. Read-only; the client's own masking (tokens) is kept. */
+const CD_UI_TEXT = /\b(Copy with values|Copy Postman|Copied ✓|Copy failed|Copying…)\b/g;
+const cdClean = (t) => String(t || "").replace(CD_UI_TEXT, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+function cdCellText(el) {
+  if (!el) return "";
+  const copy = el.cloneNode(true);
+  copy.querySelectorAll(".nb-copy").forEach((n) => n.remove());
+  return copy.textContent.replace(/\s+/g, " ").trim();
+}
+
+/** The rows the table shows right now: [{ key, entry }]. */
+function cdTraceRowsNow() {
+  const panels = [...document.querySelectorAll(".diagnosticLogTable .mud-expand-panel")];
+  const items = panels.length ? panels : [...document.querySelectorAll(".diagnosticLogTableRow")];
+  return items.map((item) => {
+    const row = item.matches(".diagnosticLogTableRow") ? item : item.querySelector(".diagnosticLogTableRow") || item;
+    const cells = [...row.children].map(cdCellText);
+    const entry = {
+      type: cdCellText(item.querySelector(".typeCell")) || cells[1] || "",
+      source: cdCellText(item.querySelector(".sourceCell")),
+      result: cdCellText(item.querySelector(".resultCell")),
+      cells
+    };
+    const full = cdClean(item.innerText || "");
+    const headText = cdClean(row.innerText || "");
+    const details = full && full !== headText ? full.replace(headText, "").trim() : "";
+    if (details) entry.details = details;
+    return { key: JSON.stringify([cells, entry.details || ""]), entry };
+  });
+}
+
+/** Every row of the table: scrolls the log from top to bottom (the table may draw only the rows in view), merging the
+ *  views where they overlap, then puts the scroll position back. */
+async function cdTraceAll() {
+  const box = cdLogScrollBox();
+  const start = box ? box.scrollTop : 0;
+  let all = cdTraceRowsNow();
+  if (box && box.scrollHeight > box.clientHeight + 1) {
+    box.scrollTop = 0;
+    await sleep(150);
+    all = cdTraceRowsNow();
+    for (let guard = 0; guard < 400 && box.scrollTop + box.clientHeight < box.scrollHeight - 2; guard++) {
+      const before = box.scrollTop;
+      box.scrollTop = before + Math.max(80, Math.floor(box.clientHeight * 0.8));
+      await sleep(120);
+      if (box.scrollTop === before) break;
+      const view = cdTraceRowsNow();
+      let k = Math.min(all.length, view.length);
+      while (k > 0 && !all.slice(all.length - k).every((r, i) => r.key === view[i].key)) k--;
+      all = all.concat(view.slice(k));
+    }
+    box.scrollTop = start;
+  }
+  return all.map((r, i) => ({ n: i + 1, ...r.entry }));
+}
+
+async function cdDownloadTrace() {
+  const entries = await cdTraceAll();
+  const p = cdPanel();
+  const crumb = p && cdBreadcrumb(p);
+  let variables = null;
+  try { variables = await cdReadVariables(); } catch { /* the trace is still useful without them */ }
+  for (const e of entries) {
+    const hit = e.type === "Step" && CD.cache.get(e.source);
+    if (hit && hit.sql) e.sql = hit.sql;
+  }
+  const data = {
+    tool: "Novacura Buddy - client trace",
+    note: "entries = every Trace Logs row in log order (type, source, result, details = the expanded request/response of logged calls; cells = the raw table cells, e.g. time). variables = the Variables tab at export time, as Flow literals (Record fields as Record__field). sql = the PL/SQL of a Database step as designed (bind names, not values).",
+    exportedAt: new Date().toISOString(),
+    flowAndStep: crumb || null,
+    environment: cdIds(),
+    flowVersions: cdVersions(),
+    variables,
+    entryCount: entries.length,
+    entries
+  };
+  const name = (crumb && crumb.flow ? String(crumb.flow) : "flow").replace(/[^\w.-]+/g, "_").slice(0, 40);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `novacura-trace-${name}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  return entries.length;
+}
+
 /** Places the one button in the Trace Logs toolbar (next to "Clear logs"). */
 function cdDock() {
   const toolbar = document.querySelector(".diagnosticLogTraceToolbar");
@@ -350,7 +443,7 @@ function cdDock() {
   // A button left behind by an older copy of this script (extension reloaded, page not) is replaced.
   const old = toolbar.querySelector("#nb-plsql");
   if (old && old === CD.button) return;
-  toolbar.querySelectorAll("#nb-plsql, .nb-details").forEach((el) => el.remove());
+  toolbar.querySelectorAll("#nb-plsql, .nb-details, .nb-trace").forEach((el) => el.remove());
   const b = document.createElement("button");
   b.id = "nb-plsql";
   b.textContent = CD_LABEL;
@@ -366,7 +459,19 @@ function cdDock() {
   d.style.cssText = "margin-left:6px;padding:6px 10px;border:1px solid #9ca3af;border-radius:6px;background:#fff;color:#4b5563;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
   d.onclick = async (e) => { e.stopPropagation(); d.textContent = (await cdCopy(cdReport())) ? "Copied" : "Copy failed"; setTimeout(() => { d.textContent = "Copy details"; }, 2000); };
   CD.detailsButton = d;
-  toolbar.append(b, d);
+  const dl = document.createElement("button");
+  dl.className = "nb-trace";
+  dl.textContent = "Download trace";
+  dl.title = "Saves every trace row (with the details of logged calls) and the current variables as one JSON file, to analyse it or paste it into an AI. Variables may contain real data: check the file before sharing it.";
+  dl.style.cssText = "margin-left:6px;padding:6px 10px;border:1px solid #0c65f4;border-radius:6px;background:#fff;color:#0c65f4;font:12px system-ui,sans-serif;cursor:pointer;white-space:nowrap;";
+  dl.onclick = async (e) => {
+    e.stopPropagation(); e.preventDefault();
+    dl.textContent = "Reading…";
+    try { const n = await cdDownloadTrace(); cdToast(`Downloaded ${n} trace row(s)`); dl.textContent = "Downloaded"; }
+    catch (err) { cdToast(`Download failed: ${err.message}`, false); dl.textContent = "Failed"; }
+    setTimeout(() => { dl.textContent = "Download trace"; }, 2500);
+  };
+  toolbar.append(b, d, dl);
   cdApplyStatus();
 }
 
